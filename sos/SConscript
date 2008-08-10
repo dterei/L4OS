@@ -1,0 +1,23 @@
+Import("*")
+
+srclist = "main.c frames.c libsos.c pager.c timer.c network.c"
+liblist = "l4 bootinfo c ixp_osal ixp400_xscale_sw lwip nfs serial"
+
+cppdefines = env.scons_env["CPPDEFINES"]
+if env.machine.endian == "big":
+    cppdefines += [("BIG_ENDIAN", 1)]
+else:
+    cppdefines += [("LITTLE_ENDIAN", 1)]
+# enable this for verbose bootinfo parsing
+#if env.args["ENABLE_DEBUG"]:
+#    cppdefines += [("IG_VERBOSE", 1)]
+
+addressing = env.WeaverAddressing(direct=True, virt_addr=env.ADDR_BASE)
+
+obj = env.KengeProgram("sos", source = Split(srclist),
+                        weaver = env.WeaverRootProgram(addressing=addressing),
+                        LIBS = Split(liblist),
+                        CPPDEFINES=cppdefines)
+Return("obj")
+
+# vim: set filetype=python:

@@ -1,0 +1,49 @@
+Import("env")
+
+public_headers_list=[
+    ("include/", "include/ixp_osal/"),
+    ("include/modules/bufferMgt/", "include/ixp_osal/bufferMgt/"),
+    ("include/modules/ioMem/", "include/ixp_osal/ioMem/"),
+    ("include/platforms/ixp400/", "include/ixp_osal/ixp400/"),
+    ("os/l4aos/include/", "include/ixp_osal/os/"),
+    ("os/l4aos/include/ixp400/", "include/ixp_osal/os/ixp400/")
+]
+
+
+srclist = """
+    os/l4aos/src/IxOsalOsCacheMMU.c
+    os/l4aos/src/IxOsalOsMsgQ.c
+    os/l4aos/src/IxOsalOsSemaphore.c
+    os/l4aos/src/IxOsalOsServices.c
+    os/l4aos/src/IxOsalOsThread.c
+    os/l4aos/src/ixp400/IxOsalOsIxp400.c
+    os/l4aos/src/ixp400/IxOsalOsSemaphoreAsm.S
+    src/core/IxOsalTime.c
+    src/modules/bufferMgt/IxOsalBufferMgt.c
+    src/modules/ioMem/IxOsalIoMem.c
+    src/platforms/ixp400/IxOsalIxp400.c
+"""
+
+liblist = "c l4"
+
+cpppath    = env.scons_env["CPPPATH"]+["#sos", "#libs/lwip/include", "#libs/ixp_osal/os/l4aos/include"]
+cppdefines = env.scons_env["CPPDEFINES"]+["l4aos"]
+if env.machine.endian == "big":
+    cppdefines += [("BIG_ENDIAN", 1)]
+else:
+    cppdefines += [("LITTLE_ENDIAN", 1)]
+
+if hasattr(env.machine, "subplatform"):
+    subplatform = getattr(env.machine, "subplatform", None)
+    cppdefines += [("CONFIG_SUBPLAT_%s" % subplatform.upper())]
+
+lib = env.KengeLibrary("ixp_osal",
+		       source = Split(srclist),
+		       public_headers = public_headers_list,
+		       LIBS = Split(liblist),
+		       CPPDEFINES = cppdefines,
+		       CPPPATH = cpppath)
+
+Return("lib")
+
+# vim: filetype=python

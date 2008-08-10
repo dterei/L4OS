@@ -1,0 +1,8 @@
+syntax: glob
+
+*.pyc
+*~
+.sconsign.dblite
+build
+tools/build
+.DS_Store

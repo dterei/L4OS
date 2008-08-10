@@ -1,0 +1,11 @@
+Import("*")
+
+addressing = env.WeaverAddressing(direct=True)
+weaver = env.WeaverIguanaProgram(addressing = addressing)
+
+sources=Split("tty_test.c ttyout.c")
+obj = env.KengeProgram("tty_test", source=sources, weaver=weaver, LIBS=["c", "l4"])
+
+Return("obj")
+
+# vim: set filetype=python:

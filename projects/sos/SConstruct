@@ -1,0 +1,140 @@
+#
+# build file for the Advanced Operating Systems cs9242 project
+# 
+# Original Author:	Ben Leslie
+# Author:		Godfrey van der Linden(gvdl)
+#
+# Date:			2006-06-23
+
+# Author: Joshua Root
+# Date: 2008-06-24
+
+from math import ceil, log
+
+#
+# XXX: Student change this for the milestone you are building
+milestone = 1
+
+#############################################################################
+## Global configuration options
+#############################################################################
+
+def process_global_config(build_env):
+    default_max_threads = 4096
+
+    max_threads = build_env.args.setdefault("MAX_THREADS", default_max_threads)
+
+    if (max_threads < 16) or (max_threads > 32768):
+        raise UserError, "MAX_THREADS of %d is out of range" % max_threads
+
+    max_thread_bits = int(ceil(log(max_threads, 2)))
+
+    build_env.Append(CPPDEFINES =[("CONFIG_MAX_THREAD_BITS", max_thread_bits)])
+
+    # Read in the scheduling behaviour
+    sched_algorithm = build_env.args.setdefault("SCHEDULING_ALGORITHM", 'inheritance').lower()
+    build_env.Append(CPPDEFINES = [("CONFIG_STRICT_SCHEDULING", 1)])
+    if (sched_algorithm == 'inheritance'):
+        build_env.Append(CPPDEFINES = [("CONFIG_SCHEDULE_INHERITANCE", 1)])
+    elif (sched_algorithm == 'strict'):
+        pass
+    else:
+        raise UserError, "'%s' is not a valid scheduling algorithm." \
+              % sched_algorithm
+
+    if  build_env.args.get("CONTEXT_BITMASKS", False):
+        build_env.Append(CPPDEFINES=[("CONFIG_CONTEXT_BITMASKS", 1)])
+
+    feature_profiles = ["NORMAL", "EXTRA"]
+    feature_profile = get_option_arg("OKL4_FEATURE_PROFILE",
+                                     machine.default_feature_profile, feature_profiles)
+    build_env.feature_profile = feature_profile
+    if feature_profile == "EXTRA":
+        build_env.Append(CPPDEFINES=[("CONFIG_EAS", 1), 
+                                     ("CONFIG_ZONE", 1), 
+                                     ("CONFIG_MEM_PROTECTED", 1), 
+                                     ("CONFIG_MEMLOAD", 1),
+                                     ("CONFIG_REMOTE_MEMORY_COPY", 1)])
+
+# Instantiate a Kenge based environment for building and build a l4 kernel
+build = KengeBuild()
+machine = build.machine
+
+kernel_env = build.KengeEnvironment("pistachio")
+process_global_config(kernel_env)
+
+kernel_env.Package("libs/compat")
+kernel_env.Package("libs/atomic_ops")
+kernel_env.Package("libs/l4")
+if kernel_env.toolchain.type == "gnu":
+    kernel_env.Package("libs/gcc")
+l4kernel = kernel_env.Package("pistachio", aos=1)
+
+# Build the sos application.  First create a build context for the "rootserver"
+# this lets scons know which flags to use when building later libraries and
+# application files.  You have to tell the environment all of the libraries
+# that you may use with the AddLibrary function.  Each library lives in the
+# libs directory wwith the function name provided.  For the driver project you
+# will have to add the clock library too, I'd use libs/serial as an simple
+# example.
+rootserver_env = build.KengeEnvironment("l4_rootserver")
+process_global_config(rootserver_env)
+
+rootserver_env.Package("libs/compat")
+if rootserver_env.toolchain.type == "gnu":
+    rootserver_env.Package("libs/gcc")
+if rootserver_env.toolchain.type == "rvct":
+    rootserver_env.Package("libs/rvct", buildname="c")
+else:
+    rootserver_env.Package("libs/c")
+
+rootserver_env.Package("libs/l4")
+rootserver_env.Package("libs/bootinfo")
+rootserver_env.Package("libs/elf")
+rootserver_env.Package("libs/ixp_osal")
+rootserver_env.Package("libs/ixp400_xscale_sw")
+rootserver_env.Package("libs/lwip")
+rootserver_env.Package("libs/nfs")
+rootserver_env.Package("libs/serial")
+sos = rootserver_env.Package("sos");
+
+timer_syscall_milestone = 3
+
+# Use the app_env environment for building everything else that will run in the
+# userland context.  Can't add libs/sos 'cause it doesn't exist yet.
+app_env=build.KengeEnvironment("userland") #, LINKFLAGS=["-r"]
+app_env.system = "sos" # for libc
+process_global_config(app_env)
+app_env.Package("libs/l4")
+app_env.Package("libs/compat")
+app_env.Package("libs/c")
+app_env.Package("libs/elf")
+app_env.Package("libs/gcc")
+
+if milestone < timer_syscall_milestone:
+    app_name = "tty_test"
+else:
+    app_name = "sosh"
+    app_env.Package("libs/sos")
+
+# Once you get to the later milestones you will be writing lots of little test
+# tools that need to get loaded and run in your context.  Do that by calling
+# the Application function a number times in the app_env environment.
+app = app_env.Package(app_name)
+
+# Memory pools
+pools = rootserver_env.IguanaDefaultMemoryPools(sos)
+
+# Standard 'weaver' building
+
+# Elfweaver takes a comma separated list of Applications that are linked
+# together into a single bootimg.bin binary.
+elfweaver_env = build.KengeEnvironment("images")
+apps = elfweaver_env.LayoutVirtual([pools, l4kernel, sos, app])
+spec = elfweaver_env.GenWeaverXML(apps)
+elf_image, sim_image, boot_image = elfweaver_env.CreateImages(spec, apps)
+build.TestImage(boot_image)
+build.RunImage(boot_image)
+Default(boot_image) # Default build target is the bootimage.
+
+# vim:ft=python:

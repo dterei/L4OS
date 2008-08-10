@@ -1,0 +1,7 @@
+cpu: ixp4xx
+mach: ixp420_nslu2
+
+mem_bank: map=M, type=RW, addr=0x00000000, size=0x02000000
+mem_bank: map=I, type=RW, addr=0xc8000000, size=0x0000bfff
+
+log: logon=1, logfile=/tmp/sk1.log, start=0, end=20000000000

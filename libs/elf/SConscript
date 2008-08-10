@@ -1,0 +1,3 @@
+Import("env")
+lib = env.KengeLibrary("elf", LIBS=["c"])
+Return("lib")

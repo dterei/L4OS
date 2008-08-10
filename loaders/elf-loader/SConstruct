@@ -1,0 +1,49 @@
+Import("*")
+import SCons.Errors
+import os
+# awiggins (2004-12-20): This could probably be done a fair bit more cleanly.
+
+if env.arch == "alpha":
+    extralibs = ""
+    oformat = "elf64-alpha"
+elif env.arch == "powerpc64":
+    extralibs = "openfirmware"
+    oformat = "elf64-powerpc"
+elif env.arch == "arm":
+    extralibs = ""
+    oformat = "elf32-littlearm"
+else:
+    raise SCons.Errors.UserError, "elf-loader does not support architecture %s" % env.arch
+
+linkscript = "src/linker.bin.lds"
+
+kernel = env.Command("kernel.dite.img", cmd,
+                     "%s -T %s -r --oformat %s -o $TARGET -bbinary $SOURCE" %
+                     (env.subst("$LINK $LINK_ARCH_FLAGS"),
+                      Dir('.').srcnode().path + os.sep + linkscript,
+                      oformat))
+env.Depends(kernel, linkscript)
+
+libs = ["c", "elf"]
+if not extralibs == "":
+    libs.append(extralibs)
+
+linkscript = "src/arch-%s/linker.lds" % env.arch
+elf = env.KengeProgram("%s/bootimg" % env.builddir, LIBS=libs,
+                       LINKSCRIPTS=[File(linkscript).srcnode()], LINKFLAGS=["-Ttext=0x%x" % env.machine.elf_entry],
+                       EXTRAOBJECTS=kernel)
+
+if env.arch == "powerpc64":
+    elf32 = env.Command("%s.32" % elf, elf,
+        "%s -O elf32-powerpc $SOURCE $TARGET" % env["OBJCOPY"])
+    strip = env.Command("%s.strip" % elf, elf32,
+	"%s $SOURCE -o $TARGET" % env["STRIP"])
+    bin = env.Command("%s.bin" % elf, strip,
+                  "%s -O binary $SOURCE $TARGET" % env["OBJCOPY"])
+else:
+    strip = env.Command("%s.strip" % elf, elf,
+	"%s $SOURCE -o $TARGET" % env["STRIP"])
+    bin = env.Command("%s.bin" % elf, strip,
+                  "%s -O binary $SOURCE $TARGET" % env["OBJCOPY"])
+
+Return("bin")

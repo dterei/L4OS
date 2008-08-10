@@ -1,0 +1,90 @@
+Import("env")
+
+componentlist = """qmgr npeMh npeDl ethAcc ethDB ethMii
+		   featureCtrl ossl osServices"""
+
+srclist = """
+    src/qmgr/IxQMgrQCfg.c
+    src/qmgr/IxQMgrDispatcher.c
+    src/qmgr/IxQMgrInit.c
+    src/qmgr/IxQMgrAqmIf.c
+    src/qmgr/IxQMgrQAccess.c
+    src/npeMh/IxNpeMh.c
+    src/npeMh/IxNpeMhConfig.c
+    src/npeMh/IxNpeMhReceive.c
+    src/npeMh/IxNpeMhSend.c
+    src/npeMh/IxNpeMhSolicitedCbMgr.c
+    src/npeMh/IxNpeMhUnsolicitedCbMgr.c
+    src/npeDl/IxNpeDl.c
+    src/npeDl/IxNpeDlImageMgr.c
+    src/npeDl/IxNpeDlNpeMgr.c
+    src/npeDl/IxNpeDlNpeMgrUtils.c
+    src/npeDl/IxNpeMicrocode.c
+    src/ethAcc/IxEthAcc.c
+    src/ethAcc/IxEthAccCommon.c
+    src/ethAcc/IxEthAccControlInterface.c
+    src/ethAcc/IxEthAccDataPlane.c
+    src/ethAcc/IxEthAccMac.c
+    src/ethAcc/IxEthAccMii.c
+    src/ethDB/IxEthDBAPI.c
+    src/ethDB/IxEthDBAPISupport.c
+    src/ethDB/IxEthDBCore.c
+    src/ethDB/IxEthDBEvents.c
+    src/ethDB/IxEthDBFeatures.c
+    src/ethDB/IxEthDBFirewall.c
+    src/ethDB/IxEthDBHashtable.c
+    src/ethDB/IxEthDBLearning.c
+    src/ethDB/IxEthDBMem.c
+    src/ethDB/IxEthDBNPEAdaptor.c
+    src/ethDB/IxEthDBPortUpdate.c
+    src/ethDB/IxEthDBReports.c
+    src/ethDB/IxEthDBSearch.c
+    src/ethDB/IxEthDBSpanningTree.c
+    src/ethDB/IxEthDBUtil.c
+    src/ethDB/IxEthDBVlan.c
+    src/ethDB/IxEthDBWiFi.c
+    src/ethMii/IxEthMii.c
+    src/featureCtrl/IxFeatureCtrl.c
+    src/ossl/osslUtils.c
+    src/osServices/IxOsBuffPoolMgt.c
+    src/osServices/IxOsServices.c
+"""
+
+liblist = "ixp_osal"
+
+private_headers = """
+    #sos
+    #libs/lwip/include
+    #libs/ixp400_xscale_sw/src/ethAcc/include
+    #libs/ixp400_xscale_sw/src/ethDB/include
+    #libs/ixp400_xscale_sw/src/hssAcc/include
+    #libs/ixp400_xscale_sw/src/include
+    #libs/ixp400_xscale_sw/src/npeDl/include
+    #libs/ixp400_xscale_sw/src/npeMh/include
+    #libs/ixp400_xscale_sw/src/uartAcc/include
+    #libs/ixp400_xscale_sw/src/usb/include
+"""
+cpppath     = env.scons_env["CPPPATH"]+Split(private_headers)
+
+cppdefines  = env.scons_env["CPPDEFINES"]+["l4aos"]
+if hasattr(env.machine, "subplatform"):
+    subplatform = getattr(env.machine, "subplatform", None)
+    cppdefines += [("CONFIG_SUBPLAT_%s" % subplatform.upper())]
+if env.machine.endian == "big":
+    cppdefines += [("BIG_ENDIAN", 1)]
+else:
+    cppdefines += [("LITTLE_ENDIAN", 1)]
+
+cc_warnings = ["no-redundant-decls", "no-format"]
+
+
+lib = env.KengeLibrary("ixp400_xscale_sw",
+		       source      = Split(srclist),
+		       LIBS        = Split(liblist),
+		       CPPDEFINES  = cppdefines,
+		       CPPPATH     = cpppath,
+		       CC_WARNINGS = cc_warnings)
+
+Return("lib")
+
+# vim: filetype=python
