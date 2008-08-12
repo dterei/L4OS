@@ -21,17 +21,14 @@
 #define verbose 1
 
 static L4_Word_t firstFree;
-static L4_Word_t lastFree;
 
-/*
-  Initialise the frame table. The current implementation is
-  clearly not sufficient.
-*/
+/**
+ * Intialise frame table as a linked stack.
+ */
 void
 frame_init(L4_Word_t low, L4_Word_t frame)
 {
-	static L4_Word_t page;
-	static L4_Word_t high;
+	static L4_Word_t page, high;
 	static L4_Fpage_t fpage;
 	static L4_PhysDesc_t ppage;
 
@@ -55,13 +52,12 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 
 	dprintf(0, "Trying to set bounds of linked list.\n");
 	firstFree = low;
-	lastFree = high - PAGESIZE;
-	*((L4_Word_t*) lastFree) = NULLFRAME;
+	*((L4_Word_t*) (high - PAGESIZE)) = NULLFRAME;
 }
 
-/*
-  Allocate a currently unused frame 
-*/
+/**
+ * Allocate a currently unused frame.
+ */
 L4_Word_t
 frame_alloc(void)
 {
@@ -78,20 +74,12 @@ frame_alloc(void)
 	return alloc;
 }
 
-/*
-  Add a frame to the free frame list
-*/
+/**
+ * Add a frame to the free frame stack.
+ */
 void
 frame_free(L4_Word_t frame)
 {
-	*((L4_Word_t*) frame) = NULLFRAME;
-
-	if (firstFree == NULLFRAME) {
-		// No free memory, so need to redo both pointers.
-		firstFree = frame;
-		lastFree = frame;
-	} else {
-		*((L4_Word_t*) lastFree) = frame;
-		lastFree = frame;
-	}
+	*((L4_Word_t*) frame) = firstFree;
+	firstFree = frame;
 }
