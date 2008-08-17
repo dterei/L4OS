@@ -43,9 +43,9 @@ int main(void)
 
 	do {
 		printf("task:\tHello world, I'm\ttty_test!\n");
-		for (int i = ' '; i < '~' - 1; i++) {
-			printf("testing characters %c and %c\n", (char) i, (char) (i + 1));
-		}
+		//for (int i = ' '; i < '~' - 1; i++) {
+		//	printf("testing characters %c and %c\n", (char) i, (char) (i + 1));
+		//}
 		thread_block();
 		// sleep(1);	// Implement this as a syscall
 	} while(1);

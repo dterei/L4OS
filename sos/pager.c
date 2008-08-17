@@ -26,6 +26,23 @@
 #include "pager.h"
 #include "libsos.h"
 
+/* Address space Struct */
+//typedef struct AddrSpace {
+//	PageTable *pagetb = NULL;
+//	L_4_Word_t *regions = NULL;
+//} AddrSpace;
+//
+//typedef struct PageTable {
+//	PageTable2 *pages2[1024];
+//} PageTable;
+//
+//typedef struct PageTable2 {
+//	L_4_Word_t *pages[1024];
+//} PageTable2
+//
+///* Max of 256 Address Spaces */
+//static AddrSpace addrspace[256];
+
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
@@ -45,3 +62,4 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 	printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
     }
 }
+

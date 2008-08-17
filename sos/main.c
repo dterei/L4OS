@@ -241,14 +241,14 @@ main (void)
 	// Initialise initial sos environment
 	libsos_init();
 
-	// Initialse the memory frame table
-
 	// Find information about available memory
 	L4_Word_t low, high;
 	sos_find_memory(&low, &high);
 	dprintf(0, "Available memory from 0x%08lx to 0x%08lx - %luMB\n", 
 			low, high, (high - low) / ONE_MEG);
-	frame_init((low + HEAP_SIZE), high); // Initialise the frame table
+
+	// Initialse the memory frame table
+	frame_init((low + HEAP_SIZE), high);
 	dprintf(0, "Okay, managed to init frame table.\n");
 
 	// Spawn the setup thread which completes the rest of the initialisation,
@@ -264,3 +264,4 @@ main (void)
 
 	return 0;
 }
+
