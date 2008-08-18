@@ -314,6 +314,9 @@ bi_name_t new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 {
 	dprintf(0, "test: new_ms: %u, %u, %u, %u, %u, %u\n", owner, base, size,
 			flags, attr, data->rec_num);
+	// need to translate owner to an address space id. Should we be storing with
+	// each address space an int with the owner in it?
+	// then just malloc a new region and add it to the list
 	return owner;
 }
 
@@ -355,6 +358,12 @@ int map(uintptr_t vaddr, uintptr_t size, uintptr_t paddr,
 int attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t * data)
 {
+	// how do we determine which memory section they are talking about? data->rec_num
+	// is meant to be the same in both attach and new_ms apparently so that we can
+	// tell this, but from our testing they aren't the same, should we be setting the
+	// data->rec_num?
+	
+	// then need to store the rights with the region.
 	dprintf(0, "test: attach: %d, %d, %d, %d\n", pd, ms, rights,
 			data->rec_num);
 	return 0;
@@ -483,6 +492,10 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
                     char* name, size_t name_len,
                     const bi_user_data_t* data)
 {
+	// need to setup address space here, create a new address space with L4
+	// then setup any regions we need for heap and stack. PageTable isn't touched
+	// yet as we are using lazy allocation so we just want all the regions setup
+	// correctly so that it will page fault and we can then map it in.
     void *sp = data->user_data;
     dprintf(0, "bootinfo_new_thread starting thread: %s, %d\n", name, bi_owner);
 
