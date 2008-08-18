@@ -26,22 +26,24 @@
 #include "pager.h"
 #include "libsos.h"
 
+/* Page Table Struct */
+typedef struct {
+	L4_Word_t *pages[1024];
+} PageTable2;
+
+typedef struct {
+	PageTable2 *pages2[1024];
+} PageTable;
+
 /* Address space Struct */
-//typedef struct AddrSpace {
-//	PageTable *pagetb = NULL;
-//	L_4_Word_t *regions = NULL;
-//} AddrSpace;
-//
-//typedef struct PageTable {
-//	PageTable2 *pages2[1024];
-//} PageTable;
-//
-//typedef struct PageTable2 {
-//	L_4_Word_t *pages[1024];
-//} PageTable2
-//
-///* Max of 256 Address Spaces */
-//static AddrSpace addrspace[256];
+typedef struct {
+	PageTable *pagetb;
+	L4_Word_t *regions;
+} AddrSpace;
+
+
+/* Max of 256 Address Spaces */
+static AddrSpace addrspace[256];
 
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
