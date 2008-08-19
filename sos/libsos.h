@@ -16,62 +16,10 @@
 #include <l4/thread.h>
 #include <bootinfo/bootinfo.h>
 
-int init(const bi_user_data_t * data);
-int cleanup(const bi_user_data_t * data);
-int init_mem(uintptr_t virt_base, uintptr_t virt_end,
-		uintptr_t phys_base, uintptr_t phys_end,
-		const bi_user_data_t * data);
-int init_mem2(uintptr_t virt_base, uintptr_t virt_end,
-		uintptr_t phys_base, uintptr_t phys_end,
-		const bi_user_data_t * data);
-bi_name_t new_pd(bi_name_t owner, const bi_user_data_t * data);
-bi_name_t new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
+bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data);
-int add_virt_mem(bi_name_t pool, uintptr_t base, uintptr_t end,
-		const bi_user_data_t * data);
-int add_phys_mem(bi_name_t pool, uintptr_t base, uintptr_t end,
-		const bi_user_data_t * data);
-bi_name_t new_thread(bi_name_t owner, uintptr_t ip, uintptr_t user_main,
-		int priority, char * name, size_t name_len,
-		const bi_user_data_t * data);
-int run_thread(bi_name_t thread, const bi_user_data_t * data);
-int map(uintptr_t vaddr, uintptr_t size, uintptr_t paddr,
-		int scrub, unsigned mode, const bi_user_data_t * data);
-int attach(bi_name_t pd, bi_name_t ms, int rights,
-		const bi_user_data_t * data);
-int grant(bi_name_t pd, bi_name_t obj, int rights,
-		const bi_user_data_t * data);
-int argv(bi_name_t thread, char * arg, size_t arg_len,
-		const bi_user_data_t * data);
-int register_server(bi_name_t thread, bi_name_t ms,
-		const bi_user_data_t * data);
-int register_callback(bi_name_t pd, bi_name_t ms,
-		const bi_user_data_t * data);
-int register_stack(bi_name_t thread, bi_name_t ms,
-		const bi_user_data_t * data);
-bi_name_t new_cap(bi_name_t obj, bi_cap_rights_t rights,
-		const bi_user_data_t * data);
-int grant_cap(bi_name_t pd, bi_name_t cap, const bi_user_data_t* data);
-int export_object(bi_name_t pd, bi_name_t obj,
-		bi_export_type_t export_type, char * key, size_t key_len,
-		const bi_user_data_t * data);
-int export_struct(bi_name_t pd, bi_export_type_t export_type,
-		char * key, size_t key_len, uintptr_t first, intptr_t second,
-		uintptr_t third, uintptr_t fourth, uintptr_t fifth, uintptr_t sixth,
-		const bi_user_data_t * data);
-int register_env(bi_name_t pd, bi_name_t ms,
-		const bi_user_data_t * data);
-bi_name_t ew_pool(int is_virtual, const bi_user_data_t * data);
-int grant_interrupt(bi_name_t thread, word_t interrupt,
-		const bi_user_data_t * data);
-int security_control(bi_name_t pd, bi_name_t obj,
-		bi_security_control_type_t security_type,
-		const bi_user_data_t * data);
-bi_name_t new_zone(bi_name_t pool, const bi_user_data_t * data);
-int add_zone_window(bi_name_t pool, size_t base,
-		const bi_user_data_t * data);
-int kernel_info(int max_spaces, int max_mutexes, int max_root_caps,
+int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t * data);
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)

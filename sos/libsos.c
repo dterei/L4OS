@@ -47,6 +47,7 @@ static L4_Word_t last_thread_s;
 /* Address of the bootinfo buffer. */
 extern void *__okl4_bootinfo;
 
+
 /* Initialise the L4 Environment library */
 int
 libsos_init(void)
@@ -274,41 +275,8 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
     return tid;
 }
 
-int init(const bi_user_data_t * data)
-{
-	dprintf(0, "test: init\n");
-	return 0;
-}
 
-int cleanup(const bi_user_data_t * data)
-{
-	dprintf(0, "test: cleanup\n");
-	return 0;
-}
-
-int init_mem(uintptr_t virt_base, uintptr_t virt_end,
-		uintptr_t phys_base, uintptr_t phys_end,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: init_mem\n");
-	return 0;
-}
-
-int init_mem2(uintptr_t virt_base, uintptr_t virt_end,
-		uintptr_t phys_base, uintptr_t phys_end,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: init_mem2\n");
-	return 0;
-}
-
-bi_name_t new_pd(bi_name_t owner, const bi_user_data_t * data)
-{
-	dprintf(0, "test: new_pd\n");
-	return owner;
-}
-
-bi_name_t new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
+bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data)
 {
@@ -317,45 +285,14 @@ bi_name_t new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	// need to translate owner to an address space id. Should we be storing with
 	// each address space an int with the owner in it?
 	// then just malloc a new region and add it to the list
+	
+
+
 	return owner;
 }
 
-int add_virt_mem(bi_name_t pool, uintptr_t base, uintptr_t end,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: add_virt_mem\n");
-	return 0;
-}
 
-int add_phys_mem(bi_name_t pool, uintptr_t base, uintptr_t end,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: add_phys_mem\n");
-	return 0;
-}
-
-bi_name_t new_thread(bi_name_t owner, uintptr_t ip, uintptr_t user_main,
-		int priority, char * name, size_t name_len,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: new_thread\n");
-	return owner;
-}
-
-int run_thread(bi_name_t thread, const bi_user_data_t * data)
-{
-	dprintf(0, "test: run_thread\n");
-	return 0;
-}
-
-int map(uintptr_t vaddr, uintptr_t size, uintptr_t paddr,
-		int scrub, unsigned mode, const bi_user_data_t * data)
-{
-	dprintf(0, "test: map\n");
-	return 0;
-}
-
-int attach(bi_name_t pd, bi_name_t ms, int rights,
+int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t * data)
 {
 	// how do we determine which memory section they are talking about? data->rec_num
@@ -366,119 +303,6 @@ int attach(bi_name_t pd, bi_name_t ms, int rights,
 	// then need to store the rights with the region.
 	dprintf(0, "test: attach: %d, %d, %d, %d\n", pd, ms, rights,
 			data->rec_num);
-	return 0;
-}
-
-int grant(bi_name_t pd, bi_name_t obj, int rights,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: grant\n");
-	return 0;
-}
-
-int argv(bi_name_t thread, char * arg, size_t arg_len,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: argv\n");
-	return 0;
-}
-
-int register_server(bi_name_t thread, bi_name_t ms,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: register_server\n");
-	return 0;
-}
-
-int register_callback(bi_name_t pd, bi_name_t ms,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: register_callback\n");
-	return 0;
-}
-
-int register_stack(bi_name_t thread, bi_name_t ms,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: register_stack\n");
-	return 0;
-}
-
-bi_name_t new_cap(bi_name_t obj, bi_cap_rights_t rights,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: new_cap\n");
-	return obj;
-}
-
-int grant_cap(bi_name_t pd, bi_name_t cap, const bi_user_data_t* data)
-{
-	dprintf(0, "test: grant_cap\n");
-	return 0;
-}
-
-int export_object(bi_name_t pd, bi_name_t obj,
-		bi_export_type_t export_type, char * key, size_t key_len,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: export_object\n");
-	return 0;
-}
-
-int export_struct(bi_name_t pd, bi_export_type_t export_type,
-		char * key, size_t key_len, uintptr_t first, intptr_t second,
-		uintptr_t third, uintptr_t fourth, uintptr_t fifth, uintptr_t sixth,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: export_struct\n");
-	return 0;
-}
-
-int register_env(bi_name_t pd, bi_name_t ms,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: register_env\n");
-	return 0;
-}
-
-bi_name_t ew_pool(int is_virtual, const bi_user_data_t * data)
-{
-	dprintf(0, "test: ew_pool\n");
-	return 0;
-}
-
-int grant_interrupt(bi_name_t thread, word_t interrupt,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: grant_interrupt\n");
-	return 0;
-}
-
-int security_control(bi_name_t pd, bi_name_t obj,
-		bi_security_control_type_t security_type,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: security_control\n");
-	return 0;
-}
-
-bi_name_t new_zone(bi_name_t pool, const bi_user_data_t * data)
-{
-	dprintf(0, "test: new_zone\n");
-	return pool;
-}
-
-int add_zone_window(bi_name_t pool, size_t base,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: add_zone_window\n");
-	return 0;
-}
-
-int kernel_info(int max_spaces, int max_mutexes, int max_root_caps,
-		const bi_user_data_t * data)
-{
-	dprintf(0, "test: kernel_info\n");
 	return 0;
 }
 
@@ -521,33 +345,8 @@ sos_start_binfo_executables(void *userstack)
     bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
     bi_callbacks.new_thread = bootinfo_new_thread;
 
-    //bi_callbacks.init = init;
-    //bi_callbacks.cleanup = cleanup;
-    //bi_callbacks.init_mem = init_mem;
-    //bi_callbacks.init_mem2 = init_mem2;
-    bi_callbacks.new_pd = new_pd;
-    bi_callbacks.new_ms = new_ms;
-    //bi_callbacks.add_virt_mem = add_virt_mem;
-    //bi_callbacks.add_phys_mem = add_phys_mem;
-    //bi_callbacks.new_thread = new_thread;
-    //bi_callbacks.run_thread = run_thread;
-    //bi_callbacks.map = map;
-    bi_callbacks.attach = attach;
-    //bi_callbacks.grant = grant;
-    //bi_callbacks.argv = argv;
-    //bi_callbacks.register_server = register_server;
-    //bi_callbacks.register_callback = register_callback;
-    //bi_callbacks.register_stack = register_stack;
-    //bi_callbacks.new_cap = new_cap;
-    //bi_callbacks.grant_cap = grant_cap;
-    //bi_callbacks.export_object = export_object;
-    //bi_callbacks.export_struct = export_struct;
-    //bi_callbacks.register_env = register_env;
-    //bi_callbacks.grant_interrupt = grant_interrupt;
-    //bi_callbacks.security_control = security_control;
-    //bi_callbacks.new_zone = new_zone;
-    //bi_callbacks.add_zone_window = add_zone_window;
-    //bi_callbacks.kernel_info = kernel_info;
+    bi_callbacks.new_ms = bootinfo_new_ms;
+    bi_callbacks.attach = bootinfo_attach;
     
     result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
     if (result)

@@ -26,36 +26,6 @@
 #include "pager.h"
 #include "libsos.h"
 
-/* Page Table Struct */
-typedef struct {
-	L4_Word_t *pages[1024];
-} PageTable2;
-
-typedef struct {
-	PageTable2 *pages2[1024];
-} PageTable;
-
-/* Region Struct */
-struct Region;
-
-typedef struct {
-	uintptr_t vbase; // start of region in virtual address space/page table
-	uintptr_t vsize; // size of region " "
-	uintptr_t pbase; // start of region in physical memory / frame table
-	uintptr_t psize; // size of region " "
-	int rights; // access rights of region (read, write, execute)
-	struct Region *next; // next region in list;
-} Region;
-
-/* Address space Struct */
-typedef struct {
-	PageTable *pagetb;
-	Region *regions;
-} AddrSpace;
-
-
-/* Max of 256 Address Spaces */
-//static AddrSpace addrspace[256];
 
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
