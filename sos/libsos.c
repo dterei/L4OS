@@ -28,6 +28,7 @@
 #include <serial/serial.h>
 
 #include "libsos.h"
+#include "pager.h"
 
 // Hack externs from timer.c
 extern void utimer_init(void);
@@ -180,6 +181,13 @@ sos_get_new_tid(void)
     return L4_GlobalId(++last_thread_s, 1);
 }
 
+// get the next thread id that will be issued
+L4_ThreadId_t
+sos_peek_new_tid(void)
+{
+    return L4_GlobalId(last_thread_s+1, 1);
+}
+
 // Create a new thread
 static inline L4_ThreadId_t
 create_thread(L4_ThreadId_t tid, L4_ThreadId_t scheduler)
@@ -286,7 +294,28 @@ bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	// each address space an int with the owner in it?
 	// then just malloc a new region and add it to the list
 	
+	// create new region
+	Region *newreg = (Region *)malloc(sizeof(Region));
+	newreg->pbase = base;
+	newreg->psize = size;
+	newreg->vbase = 0;
+	newreg->vsize = 0;
+	newreg->rights = 0;
+	newreg->next = NULL;
 
+	// add to address space
+	// HACK: Assume the address space to attach to is the next one to be created
+	Region *rspot = NULL;
+	if (addrspace[last_thread_s+1].regions == NULL)
+	{
+		addrspace[last_thread_s+1].regions = newreg;
+	}
+	else
+	{
+		while ((rspot = rspot->next) != NULL)
+			;
+		rspot = newreg;
+	}
 
 	return owner;
 }

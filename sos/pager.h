@@ -14,16 +14,16 @@ typedef struct {
 } PageTable;
 
 /* Region Struct */
-struct Region;
-
-typedef struct {
+struct Region {
 	uintptr_t vbase; // start of region in virtual address space/page table
 	uintptr_t vsize; // size of region " "
 	uintptr_t pbase; // start of region in physical memory / frame table
 	uintptr_t psize; // size of region " "
 	int rights; // access rights of region (read, write, execute)
 	struct Region *next; // next region in list;
-} Region;
+};
+
+typedef struct Region Region;
 
 /* Address space Struct */
 typedef struct {
@@ -33,7 +33,7 @@ typedef struct {
 
 
 /* Max of 256 Address Spaces */
-//extern AddrSpace addrspace[256];
+extern AddrSpace addrspace[256];
 
 extern void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 

@@ -83,6 +83,9 @@ extern void sos_logf(const char *msg, ...);
 //
 extern L4_ThreadId_t sos_get_new_tid(void);
 
+// get the next thread id that will be issued
+extern L4_ThreadId_t sos_peek_new_tid(void);
+
 //
 // sos_my_tid(void)
 // Convenience function for accessing a root task thread's id.
