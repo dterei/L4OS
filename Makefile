@@ -10,10 +10,12 @@ TARGET      = $(TFTPROOT)/bootimg.bin
 SCONSRESULT = build/images/image.boot.bin
 
 
-ifeq ($(OS), Darwin)
-    SERIAL_PORT = $(firstword $(wildcard /dev/cu.usbserial-*))
-else
-    SERIAL_PORT = $(firstword $(wildcard /dev/ttyUSB*))
+ifeq ($(SERIAL_PORT),)
+    ifeq ($(OS), Darwin)
+        SERIAL_PORT = $(firstword $(wildcard /dev/cu.usbserial-*))
+    else
+        SERIAL_PORT = $(firstword $(wildcard /dev/ttyUSB*))
+    endif
 endif
 
 ifeq ($(SERIAL_PORT),)
