@@ -26,7 +26,7 @@
 #include "pager.h"
 #include "libsos.h"
 
-AddrSpace addrspace[256];
+AddrSpace addrspace[MAX_ADDRSPACES];
 
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)

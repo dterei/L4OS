@@ -4,13 +4,17 @@
 #include <l4/types.h>
 #include <l4/message.h>
 
+#define MAX_ADDRSPACES 256
+#define PAGETABLE_SIZE1 1024
+#define PAGETABLE_SIZE2 1024
+
 /* Page Table Struct */
 typedef struct {
-	L4_Word_t *pages[1024];
+	L4_Word_t *pages[PAGETABLE_SIZE2];
 } PageTable2;
 
 typedef struct {
-	PageTable2 *pages2[1024];
+	PageTable2 *pages2[PAGETABLE_SIZE1];
 } PageTable;
 
 /* Region Struct */
@@ -33,7 +37,7 @@ typedef struct {
 
 
 /* Max of 256 Address Spaces */
-extern AddrSpace addrspace[256];
+extern AddrSpace addrspace[MAX_ADDRSPACES];
 
 extern void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
