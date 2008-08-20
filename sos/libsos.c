@@ -48,6 +48,8 @@ static L4_Word_t last_thread_s;
 /* Address of the bootinfo buffer. */
 extern void *__okl4_bootinfo;
 
+// That odd (Iguana) way of identifying memory sections.
+static int current_ms = 1;
 
 /* Initialise the L4 Environment library */
 int
@@ -96,9 +98,10 @@ bootinfo_init_mem(uintptr_t virt_base, uintptr_t virt_end,
         uintptr_t phys_base, uintptr_t phys_end,
         const bi_user_data_t * data)
 {
-    sSosMemoryBot = phys_base;
-    sSosMemoryTop  = phys_end;
-    return 0;
+	sSosMemoryBot = phys_base;
+	sSosMemoryTop  = phys_end;
+	current_ms += 3;
+	return 0;
 }
 
 /* Find the largest available chunk of physical RAM */
@@ -283,13 +286,13 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
     return tid;
 }
 
-
-bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
+bi_name_t
+bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data)
 {
-	dprintf(0, "test: new_ms: %u, %u, %u, %u, %u, %u\n", owner, base, size,
-			flags, attr, data->rec_num);
+	dprintf(0, "test: new_ms: %u, %u, %u, %u, %u, %u (%d, %d)\n", owner, base, size,
+			flags, attr, data->rec_num, last_thread_s, current_ms);
 	// need to translate owner to an address space id. Should we be storing with
 	// each address space an int with the owner in it?
 	// then just malloc a new region and add it to the list
@@ -305,6 +308,7 @@ bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 
 	// add to address space
 	// HACK: Assume the address space to attach to is the next one to be created
+	// Where is addrspace actually being initialised?
 	Region *rspot = NULL;
 	if (addrspace[last_thread_s+1].regions == NULL)
 	{
@@ -317,11 +321,12 @@ bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		rspot = newreg;
 	}
 
+	current_ms++;
 	return owner;
 }
 
-
-int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
+int
+bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t * data)
 {
 	// how do we determine which memory section they are talking about? data->rec_num
@@ -330,11 +335,33 @@ int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	// data->rec_num?
 	
 	// then need to store the rights with the region.
-	dprintf(0, "test: attach: %d, %d, %d, %d\n", pd, ms, rights,
+	dprintf(0, "test: attach: %d, %d, %d, %d (%d)\n", pd, ms, rights,
 			data->rec_num);
 	return 0;
 }
 
+/*
+ * Only need new_cap, new_pool, and new_pd in order to
+ * increase the current_ms.
+ */
+bi_name_t
+bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
+		const bi_user_data_t * data) {
+	current_ms++;
+	return 0; // No idea what it's actually meant to return.
+}
+
+bi_name_t
+bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {
+	current_ms++;
+	return 0; // No idea what it's actually meant to return.
+}
+
+bi_name_t
+bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
+	current_ms++;
+	return owner;
+}
 
 /* we abuse the bootinfo interface a bit by creating a new task on each
  * new thread operation
@@ -364,6 +391,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
         return BI_NAME_INVALID;
     }
 
+	 current_ms++;
     return newtid.raw;
 }
 
@@ -372,10 +400,13 @@ sos_start_binfo_executables(void *userstack)
 {
     int result;
     bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
-    bi_callbacks.new_thread = bootinfo_new_thread;
 
+    bi_callbacks.new_thread = bootinfo_new_thread;
     bi_callbacks.new_ms = bootinfo_new_ms;
     bi_callbacks.attach = bootinfo_attach;
+	 bi_callbacks.new_cap = bootinfo_new_cap;
+	 bi_callbacks.new_pool = bootinfo_new_pool;
+	 bi_callbacks.new_pd = bootinfo_new_pd;
     
     result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
     if (result)

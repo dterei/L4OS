@@ -21,6 +21,11 @@ bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data);
 int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t * data);
+bi_name_t bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
+		const bi_user_data_t * data);
+bi_name_t bootinfo_new_pool(int is_virtual, const bi_user_data_t * data);
+bi_name_t bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data);
+
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)
 //

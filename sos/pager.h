@@ -35,11 +35,9 @@ typedef struct {
 	Region *regions;
 } AddrSpace;
 
-
 /* Max of 256 Address Spaces */
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
 extern void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
 #endif // _PAGER_H
-
