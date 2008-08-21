@@ -16315,7 +16315,7 @@ PAGEFAULT_USER_major	build/pistachio/include/kernel/traceids.h	/^    PAGEFAULT_U
 PAGEFAULT_USER_major	pistachio/include/traceids.h	/^    PAGEFAULT_USER_major                = 1,$/;"	e	enum:trace_major_ids
 PAGEMASK	arch/mips/pistachio/kdb/cp0.cc	117;"	d	file:
 PAGESIZE	libs/c/test/test_libs_c.c	720;"	d	file:
-PAGESIZE	sos/libsos.h	156;"	d
+PAGESIZE	sos/libsos.h	158;"	d
 PAGETABLE_SIZE1	sos/pager.h	8;"	d
 PAGETABLE_SIZE2	sos/pager.h	9;"	d
 PAGE_ATTRIB_INIT	arch/ia32/pistachio/src/init.cc	142;"	d	file:
@@ -17733,7 +17733,7 @@ SOCK_RAW	libs/c/include/sys/socket.h	69;"	d
 SOCK_SEQPACKET	libs/c/include/sys/socket.h	70;"	d
 SOCK_STREAM	libs/c/include/sys/socket.h	71;"	d
 SOCK_STREAM	libs/lwip/include/lwip/sockets.h	59;"	d
-SOS_IRQ_NOTIFY_BIT	sos/libsos.h	159;"	d
+SOS_IRQ_NOTIFY_BIT	sos/libsos.h	161;"	d
 SOS_NETPRINT	sos/main.c	66;"	d	file:
 SOS_NETPRINT	tty_test/ttyout.c	22;"	d	file:
 SOURCE_DEBUG	build/l4_rootserver/include/lwip/debug.h	60;"	d
@@ -18774,7 +18774,7 @@ TEST_FIXTURE_UNLOCK_EVENT_QUEUE	libs/ixp400_xscale_sw/src/ethDB/include/IxEthDB_
 TEST_MAIN_DIR	libs/ixp_osal/Makefile	/^TEST_MAIN_DIR := test$/;"	m
 TEST_OBJ	libs/ixp_osal/Makefile	/^TEST_OBJ := $(test_OBJ:%=$(OBJ_BASE_DIR)\/test\/%)  $/;"	m
 TEST_START	libs/ixp400_xscale_sw/src/atmsch/IxAtmSchUtils_p.h	74;"	d
-TFTPROOT	Makefile	/^TFTPROOT    = \/srv\/tftp\/$/;"	m
+TFTPROOT	Makefile	/^    TFTPROOT = \/srv\/tftp$/;"	m
 TF_ACK_DELAY	build/l4_rootserver/include/lwip/tcp_pcb.h	103;"	d
 TF_ACK_DELAY	libs/lwip/include/lwip/tcp_pcb.h	103;"	d
 TF_ACK_NOW	build/l4_rootserver/include/lwip/tcp_pcb.h	104;"	d
@@ -18787,7 +18787,7 @@ TF_INFR	build/l4_rootserver/include/lwip/tcp_pcb.h	105;"	d
 TF_INFR	libs/lwip/include/lwip/tcp_pcb.h	105;"	d
 TF_RESET	build/l4_rootserver/include/lwip/tcp_pcb.h	106;"	d
 TF_RESET	libs/lwip/include/lwip/tcp_pcb.h	106;"	d
-THREADBITS	sos/libsos.h	132;"	d
+THREADBITS	sos/libsos.h	134;"	d
 THREAD_COUNT	arch/ia32/pistachio/include/config.h	146;"	d
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana/sys_threadstate.c	68;"	d	file:
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana_server/sys_threadstate.c	66;"	d	file:
@@ -19165,6 +19165,8 @@ There	tools/pyelf/tests/data/mips32_exec.readelf.S	/^There are 36 section header
 There	tools/pyelf/tests/data/mips64_exec.readelf.S	/^There are 11 section headers, starting at offset 0x26a60:$/;"	l
 There	tools/pyelf/tests/data/null_elf.readelf.S	/^There are no sections in this file.$/;"	l
 Thread	tools/pyelf/weaver/bootinfo.py	/^class Thread(BootInfoObject):$/;"	c
+ThreadList	sos/libsos.c	/^typedef struct ThreadListT *ThreadList;$/;"	t	typeref:struct:ThreadListT	file:
+ThreadListT	sos/libsos.c	/^struct ThreadListT {$/;"	s	file:
 ThreadPool	tools/SCons/Job.py	/^    class ThreadPool:$/;"	c	class:Serial
 Token	tools/pyelf/antlr/antlr.py	/^class Token(object):$/;"	c
 TokenBuffer	tools/pyelf/antlr/antlr.py	/^class TokenBuffer(object):$/;"	c
@@ -23695,6 +23697,8 @@ bool	libs/c/include/stdbool.h	75;"	d
 bool_attr	tools/ezxml.py	/^def bool_attr(attr):$/;"	f
 bool_attr	tools/pyelf/weaver/ezxml.py	/^def bool_attr(attr):$/;"	f
 bootinfo_attach	sos/libsos.c	/^bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,$/;"	f
+bootinfo_cleanup	sos/libsos.c	/^bootinfo_cleanup(const bi_user_data_t *data) {$/;"	f
+bootinfo_id	sos/libsos.c	/^static bi_name_t bootinfo_id = 1;$/;"	v	file:
 bootinfo_init_mem	sos/libsos.c	/^bootinfo_init_mem(uintptr_t virt_base, uintptr_t virt_end,$/;"	f	file:
 bootinfo_new_cap	sos/libsos.c	/^bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,$/;"	f
 bootinfo_new_ms	sos/libsos.c	/^bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,$/;"	f
@@ -23702,6 +23706,7 @@ bootinfo_new_pd	sos/libsos.c	/^bootinfo_new_pd(bi_name_t owner, const bi_user_da
 bootinfo_new_pool	sos/libsos.c	/^bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {$/;"	f
 bootinfo_new_thread	sos/libsos.c	/^bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,$/;"	f	file:
 bootinfo_parse	libs/bootinfo/src/bootinfo.c	/^bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks,$/;"	f
+bootinfo_run_thread	sos/libsos.c	/^bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {$/;"	f
 breakErr	libs/ixp400_xscale_sw/include/IxUART.h	/^    UINT32  breakErr;$/;"	m	struct:__anon156
 breakErr	libs/ixp400_xscale_sw/src/include/IxUART.h	/^    UINT32  breakErr;$/;"	m	struct:__anon461
 broadcast_ipi	arch/ia32/pistachio/include/apic.h	/^INLINE void local_apic_t<base>::broadcast_ipi(u8_t vector, bool self)$/;"	f	class:local_apic_t
@@ -24745,7 +24750,6 @@ current_domain_mask	build/pistachio/include/kernel/arch/globals.h	/^    word_t c
 current_domain_mask	build/pistachio/object/pistachio/include/arch/fass.h	105;"	d
 current_domain_mask	build/pistachio/object/pistachio/include/arch/globals.h	/^    word_t current_domain_mask;$/;"	m	struct:__anon864
 current_locale	libs/c/src/locale.c	/^struct lconv current_locale = {$/;"	v	typeref:struct:lconv
-current_ms	sos/libsos.c	/^static int current_ms = 1;$/;"	v	file:
 current_pools	tools/pyelf/weaver/image.py	/^    def current_pools(self):$/;"	m	class:Image
 current_pos	build/l4_rootserver/include/stdio.h	/^    long int current_pos;$/;"	m	struct:__file
 current_pos	build/userland/include/stdio.h	/^    long int current_pos;$/;"	m	struct:__file
@@ -25265,7 +25269,7 @@ dpl	arch/ia32/libs/l4/include/segment.h	/^            L4_Word_t dpl           : 
 dpl	arch/ia32/pistachio/include/arch_idt.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_idtdesc_t::__anon44::__anon45
 dpl	arch/ia32/pistachio/include/segdesc.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_segdesc_t::__anon29::__anon30
 dprintf	arch/ia32/pistachio/cpu/acpi/src/timer-apic.cc	135;"	d	file:
-dprintf	sos/libsos.h	37;"	d
+dprintf	sos/libsos.h	39;"	d
 drainMode	libs/ixp400_xscale_sw/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon136
 drainMode	libs/ixp400_xscale_sw/src/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon441
 drop	build/l4_rootserver/include/lwip/stats.h	/^  u16_t drop;    \/* Dropped packets. *\/$/;"	m	struct:stats_proto
@@ -28010,6 +28014,7 @@ id	pistachio/include/smallalloc.h	/^    word_t id;$/;"	m	class:small_alloc_block
 id	pistachio/include/smallalloc.h	/^INLINE word_t small_alloc_t::id (void * object)$/;"	f	class:small_alloc_t
 id	pistachio/kdb/include/tracepoints.h	/^    word_t      id;$/;"	m	class:tracepoint_t
 id	platform/pc99/pistachio/include/82093.h	/^    u8_t id() { return get(IOAPIC_ID) >> 24; };$/;"	f	class:i82093_t
+id	sos/pager.h	/^	int id;          \/\/ what bootinfo uses to identify the region$/;"	m	struct:Region
 id_lookup_t	build/pistachio/include/kernel/idtable.h	/^class id_lookup_t$/;"	c
 id_lookup_t	pistachio/include/idtable.h	/^class id_lookup_t$/;"	c
 id_table	build/pistachio/include/kernel/idtable.h	/^    addr_t* id_table;$/;"	m	class:id_lookup_t
@@ -28512,6 +28517,7 @@ ip	libs/bootinfo/src/bootinfo_priv.h	/^    word_t ip;$/;"	m	struct:__anon732
 ip	libs/lwip/include/lwip/stats.h	/^  struct stats_proto ip;$/;"	m	struct:stats_	typeref:struct:stats_::stats_proto
 ip	pistachio/include/rootserver.h	/^    word_t ip; \/** initial instruction pointer, virtal address. *\/$/;"	m	struct:root_server_t
 ip	pistachio/include/tcb_syscall_data.h	/^        addr_t          ip;$/;"	m	struct:tcb_syscall_data_t::__anon1014
+ip	sos/libsos.c	/^	uintptr_t ip;        \/\/ ip for when thread is started$/;"	m	struct:ThreadListT	file:
 ip4_addr1	build/l4_rootserver/include/lwip/ip_addr.h	82;"	d
 ip4_addr1	libs/lwip/include/ipv4/lwip/ip_addr.h	82;"	d
 ip4_addr2	build/l4_rootserver/include/lwip/ip_addr.h	83;"	d
@@ -33469,6 +33475,7 @@ next	pistachio/kdb/include/cmd.h	/^    cmd_t * next (void) { return (cmd_t *) cm
 next	pistachio/kdb/include/tracepoints.h	/^    inline tracepoint_t * next (void)$/;"	f	class:tracepoint_list_t
 next	pistachio/kdb/src/macro_set.cc	/^addr_t macro_set_t::next (void)$/;"	f	class:macro_set_t
 next	platform/pxa/pistachio/src/kernel_counter.cc	/^    struct ll *next;$/;"	m	struct:ll	typeref:struct:ll::ll	file:
+next	sos/libsos.c	/^	ThreadList next;$/;"	m	struct:ThreadListT	file:
 next	sos/pager.h	/^	struct Region *next; \/\/ next region in list;$/;"	m	struct:Region	typeref:struct:Region::Region
 next	tools/SCons/Node/__init__.py	/^    def next(self):$/;"	m	class:Walker
 next	tools/pexpect/pexpect.py	/^    def next (self):    # File-like object.$/;"	m	class:spawn
@@ -34562,6 +34569,7 @@ pd	libs/bootinfo/src/bootinfo_priv.h	/^    word_t pd;$/;"	m	struct:__anon743
 pd	libs/bootinfo/src/bootinfo_priv.h	/^    word_t pd;$/;"	m	struct:__anon744
 pd	libs/bootinfo/src/bootinfo_priv.h	/^    word_t pd;$/;"	m	struct:__anon745
 pd	libs/bootinfo/src/bootinfo_priv.h	/^    word_t pd;$/;"	m	struct:__anon746
+pd	sos/libsos.c	/^	bi_name_t pd;        \/\/ pd (i.e. as) as assigned by bootinfo$/;"	m	struct:ThreadListT	file:
 pdbGenerator	tools/SCons/Tool/mslink.py	/^def pdbGenerator(env, target, source, for_signature):$/;"	f
 pdir	build/pistachio/include/kernel/space.h	/^    pgent_t *           pdir;$/;"	m	class:generic_space_t
 pdir	build/pistachio/include/kernel/space.h	/^    pgent_t *           pdir[CONFIG_NUM_DOMAINS];$/;"	m	class:generic_space_t
@@ -36430,7 +36438,7 @@ rightmost_separator	tools/SCons/Util.py	/^    def rightmost_separator(path, sep,
 rights	libs/bootinfo/src/bootinfo_priv.h	/^    word_t rights;$/;"	m	struct:__anon736
 rights	libs/bootinfo/src/bootinfo_priv.h	/^    word_t rights;$/;"	m	struct:__anon737
 rights	libs/bootinfo/src/bootinfo_priv.h	/^    word_t rights;$/;"	m	struct:__anon742
-rights	sos/pager.h	/^	int rights; \/\/ access rights of region (read, write, execute)$/;"	m	struct:Region
+rights	sos/pager.h	/^	int rights;      \/\/ access rights of region (read, write, execute)$/;"	m	struct:Region
 ringlist_t	build/pistachio/include/kernel/queueing.h	/^template <class T> class ringlist_t$/;"	c
 ringlist_t	pistachio/include/queueing.h	/^template <class T> class ringlist_t$/;"	c
 rmglob	tools/util.py	/^    def rmglob(arg, top, names):$/;"	f	function:pyc_clean
@@ -37766,6 +37774,7 @@ sos_thread_new_priority	sos/libsos.c	/^sos_thread_new_priority(L4_Word_t prio, v
 sos_tid2task	sos/libsos.h	/^static inline L4_Word_t sos_tid2task(L4_ThreadId_t tid)$/;"	f
 sos_usleep	sos/libsos.c	/^void sos_usleep(uint32_t microseconds)$/;"	f
 sos_write	tty_test/ttyout.c	/^sos_write(const void *vData, long int position, size_t count, void *handle)$/;"	f
+sosid	sos/libsos.c	/^	L4_ThreadId_t sosid; \/\/ the id we (as sos) will give it$/;"	m	struct:ThreadListT	file:
 source	build/pistachio/include/kernel/tcb_syscall_data.h	/^        tcb_t          *source;$/;"	m	struct:tcb_syscall_data_t::__anon936
 source	pistachio/include/tcb_syscall_data.h	/^        tcb_t          *source;$/;"	m	struct:tcb_syscall_data_t::__anon1014
 sourceAddress	libs/ixp400_xscale_sw/src/dmaAcc/IxDmaAcc_p.h	/^    UINT32 sourceAddress;      \/**< Source address for dma transfer$/;"	m	struct:__anon319
@@ -37806,6 +37815,7 @@ sp	build/pistachio/object/pistachio/include/arch/thread.h	/^    stmib   sp,     
 sp	build/pistachio/object/pistachio/include/arch/thread.h	/^    sub     sp,     sp,     #PT_SIZE$/;"	v
 sp	pistachio/include/rootserver.h	/^    word_t sp; \/** initial stack pointer, virtual address. *\/$/;"	m	struct:root_server_t
 sp	pistachio/include/tcb_syscall_data.h	/^        addr_t          sp;$/;"	m	struct:tcb_syscall_data_t::__anon1014
+sp	sos/libsos.c	/^	void *sp;            \/\/ stack for when thread is started$/;"	m	struct:ThreadListT	file:
 spPduCount	libs/ixp400_xscale_sw/src/atmdAcc/IxAtmdRxTransport_p.h	/^    unsigned int spPduCount;        \/**< rx pdu received *\/$/;"	m	struct:__anon316
 space	arch/ia32/pistachio/src/space.cc	/^    space_t * space;$/;"	m	struct:__anon48	file:
 space	arch/mips/pistachio/src/exception.cc	/^    word_t space;$/;"	m	struct:__anon63	file:
@@ -39083,12 +39093,14 @@ threadid_t	build/pistachio/include/l4/utcb.h	/^typedef L4_ThreadId_t threadid_t;
 threadid_t	build/userland/include/l4/utcb.h	/^typedef L4_ThreadId_t threadid_t;$/;"	t
 threadid_t	libs/l4/include/utcb.h	/^typedef L4_ThreadId_t threadid_t;$/;"	t
 threadid_t	pistachio/include/thread.h	/^class threadid_t$/;"	c
+threads	sos/libsos.c	/^static ThreadList threads = NULL;$/;"	v	file:
 threshold	arch/ia32/libs/l4/include/tracebuffer.h	/^    L4_Word32_t threshold;$/;"	m	struct:__anon21
 ticks_disabled	platform/imx31/pistachio/src/interrupt.cc	/^bool ticks_disabled;$/;"	v
 ticks_disabled	platform/ixp4xx/pistachio/src/timer.cc	/^bool ticks_disabled;$/;"	v
 ticks_disabled	platform/pxa/pistachio/src/timer.cc	/^bool ticks_disabled;$/;"	v
 ticks_disabled	platform/s3c2410/pistachio/src/interrupt.cc	/^bool ticks_disabled;$/;"	v
 tid	libs/ixp400_xscale_sw/src/codelets/ethAcc/IxEthAccCodeletSymbols.c	/^IxOsalThread tid;$/;"	v
+tid	sos/libsos.c	/^	bi_name_t tid;       \/\/ thread id as assigned by bootinfo$/;"	m	struct:ThreadListT	file:
 tid_format_value	build/pistachio/object/pistachio/include/kdb/tid_format.h	/^enum tid_format_value {$/;"	g
 tid_format_value	pistachio/kdb/include/tid_format.h	/^enum tid_format_value {$/;"	g
 tid_format_version	build/pistachio/object/pistachio/include/kdb/tid_format.h	/^enum tid_format_version {$/;"	g

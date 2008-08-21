@@ -25,6 +25,8 @@ bi_name_t bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
 		const bi_user_data_t * data);
 bi_name_t bootinfo_new_pool(int is_virtual, const bi_user_data_t * data);
 bi_name_t bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data);
+int bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data);
+int bootinfo_cleanup(const bi_user_data_t *data);
 
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)

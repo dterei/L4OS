@@ -4,12 +4,15 @@ TOOLCHAIN   = toolchain=nslu2.toolchain
 DEBUG       = ENABLE_DEBUG=True ENABLE_KDB_CONS=True ENABLE_KDB_CLI=True KDB_BREAKIN=True
 SCONS       = tools/build.py $(MCHN_FLAGS) $(PROJ_FLAGS) $(TOOLCHAIN) $(DEBUG)
 TLA         = baz
-TFTPROOT    = /local/$(USER)/tftpboot
-#TFTPROOT    = /srv/tftp/
 TARGET      = $(TFTPROOT)/bootimg.bin
 SCONSRESULT = build/images/image.boot.bin
 
+# Only try to assign TFTPROOT if it hasn't already been.
+ifeq ($(TFTPROOT),)
+    TFTPROOT = /srv/tftp
+endif
 
+# Ditto SERIAL_PORT.
 ifeq ($(SERIAL_PORT),)
     ifeq ($(OS), Darwin)
         SERIAL_PORT = $(firstword $(wildcard /dev/cu.usbserial-*))
