@@ -49,7 +49,17 @@ static L4_Word_t last_thread_s;
 extern void *__okl4_bootinfo;
 
 // That odd (Iguana) way of identifying memory sections.
-static int current_ms = 1;
+static unsigned int current_ms = 1;
+
+// Orphaned memory sections (ones that haven't been
+// attached to anything)
+typedef struct OrphanListT *OrphanList;
+struct OrphanListT {
+	Region *region;
+	OrphanList next;
+};
+
+OrphanList orphans = NULL;
 
 /* Initialise the L4 Environment library */
 int
@@ -291,12 +301,12 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data)
 {
-	dprintf(0, "test: new_ms: %u, %u, %u, %u, %u, %u (%d, %d)\n", owner, base, size,
+	dprintf(0, "*** new_ms: %u, %u, %u, %u, %u, %u (%d, %u)\n", owner, base, size,
 			flags, attr, data->rec_num, last_thread_s, current_ms);
 	// need to translate owner to an address space id. Should we be storing with
 	// each address space an int with the owner in it?
 	// then just malloc a new region and add it to the list
-	
+
 	// create new region
 	Region *newreg = (Region *)malloc(sizeof(Region));
 	newreg->pbase = base;
@@ -304,11 +314,20 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	newreg->vbase = 0;
 	newreg->vsize = 0;
 	newreg->rights = 0;
+	newreg->ms = current_ms;
 	newreg->next = NULL;
+
+	// add to the list of orphans (because it hasn't been attached yet).
+	OrphanList newOrphan = (OrphanList) malloc(sizeof(struct OrphanListT));
+	newOrphan->next = orphans;
+	newOrphan->region = newreg;
+	orphans = newOrphan;
 
 	// add to address space
 	// HACK: Assume the address space to attach to is the next one to be created
 	// Where is addrspace actually being initialised?
+	// I don't understand why this hack exists, why last_thread_s+1?
+	/*
 	Region *rspot = NULL;
 	if (addrspace[last_thread_s+1].regions == NULL)
 	{
@@ -319,7 +338,7 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		while ((rspot = rspot->next) != NULL)
 			;
 		rspot = newreg;
-	}
+	}*/
 
 	current_ms++;
 	return owner;
@@ -333,7 +352,12 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	// is meant to be the same in both attach and new_ms apparently so that we can
 	// tell this, but from our testing they aren't the same, should we be setting the
 	// data->rec_num?
-	
+
+	// First check already-attached memory regions because this might be an
+	// update.
+
+	// If not found then look through the list of orphans.
+
 	// then need to store the rights with the region.
 	dprintf(0, "test: attach: %d, %d, %d, %d (%d)\n", pd, ms, rights,
 			data->rec_num);

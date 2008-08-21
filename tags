@@ -16315,7 +16315,7 @@ PAGEFAULT_USER_major	build/pistachio/include/kernel/traceids.h	/^    PAGEFAULT_U
 PAGEFAULT_USER_major	pistachio/include/traceids.h	/^    PAGEFAULT_USER_major                = 1,$/;"	e	enum:trace_major_ids
 PAGEMASK	arch/mips/pistachio/kdb/cp0.cc	117;"	d	file:
 PAGESIZE	libs/c/test/test_libs_c.c	720;"	d	file:
-PAGESIZE	sos/libsos.h	151;"	d
+PAGESIZE	sos/libsos.h	156;"	d
 PAGETABLE_SIZE1	sos/pager.h	8;"	d
 PAGETABLE_SIZE2	sos/pager.h	9;"	d
 PAGE_ATTRIB_INIT	arch/ia32/pistachio/src/init.cc	142;"	d	file:
@@ -17733,7 +17733,7 @@ SOCK_RAW	libs/c/include/sys/socket.h	69;"	d
 SOCK_SEQPACKET	libs/c/include/sys/socket.h	70;"	d
 SOCK_STREAM	libs/c/include/sys/socket.h	71;"	d
 SOCK_STREAM	libs/lwip/include/lwip/sockets.h	59;"	d
-SOS_IRQ_NOTIFY_BIT	sos/libsos.h	154;"	d
+SOS_IRQ_NOTIFY_BIT	sos/libsos.h	159;"	d
 SOS_NETPRINT	sos/main.c	66;"	d	file:
 SOS_NETPRINT	tty_test/ttyout.c	22;"	d	file:
 SOURCE_DEBUG	build/l4_rootserver/include/lwip/debug.h	60;"	d
@@ -18787,7 +18787,7 @@ TF_INFR	build/l4_rootserver/include/lwip/tcp_pcb.h	105;"	d
 TF_INFR	libs/lwip/include/lwip/tcp_pcb.h	105;"	d
 TF_RESET	build/l4_rootserver/include/lwip/tcp_pcb.h	106;"	d
 TF_RESET	libs/lwip/include/lwip/tcp_pcb.h	106;"	d
-THREADBITS	sos/libsos.h	127;"	d
+THREADBITS	sos/libsos.h	132;"	d
 THREAD_COUNT	arch/ia32/pistachio/include/config.h	146;"	d
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana/sys_threadstate.c	68;"	d	file:
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana_server/sys_threadstate.c	66;"	d	file:
@@ -23694,9 +23694,12 @@ bool	build/userland/include/stdbool.h	75;"	d
 bool	libs/c/include/stdbool.h	75;"	d
 bool_attr	tools/ezxml.py	/^def bool_attr(attr):$/;"	f
 bool_attr	tools/pyelf/weaver/ezxml.py	/^def bool_attr(attr):$/;"	f
-bootinfo_attach	sos/libsos.c	/^int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,$/;"	f
+bootinfo_attach	sos/libsos.c	/^bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,$/;"	f
 bootinfo_init_mem	sos/libsos.c	/^bootinfo_init_mem(uintptr_t virt_base, uintptr_t virt_end,$/;"	f	file:
-bootinfo_new_ms	sos/libsos.c	/^bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,$/;"	f
+bootinfo_new_cap	sos/libsos.c	/^bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,$/;"	f
+bootinfo_new_ms	sos/libsos.c	/^bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,$/;"	f
+bootinfo_new_pd	sos/libsos.c	/^bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {$/;"	f
+bootinfo_new_pool	sos/libsos.c	/^bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {$/;"	f
 bootinfo_new_thread	sos/libsos.c	/^bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,$/;"	f	file:
 bootinfo_parse	libs/bootinfo/src/bootinfo.c	/^bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks,$/;"	f
 breakErr	libs/ixp400_xscale_sw/include/IxUART.h	/^    UINT32  breakErr;$/;"	m	struct:__anon156
@@ -24742,7 +24745,7 @@ current_domain_mask	build/pistachio/include/kernel/arch/globals.h	/^    word_t c
 current_domain_mask	build/pistachio/object/pistachio/include/arch/fass.h	105;"	d
 current_domain_mask	build/pistachio/object/pistachio/include/arch/globals.h	/^    word_t current_domain_mask;$/;"	m	struct:__anon864
 current_locale	libs/c/src/locale.c	/^struct lconv current_locale = {$/;"	v	typeref:struct:lconv
-current_ms	sos/libsos.c	/^static int current_ms = 0;$/;"	v	file:
+current_ms	sos/libsos.c	/^static int current_ms = 1;$/;"	v	file:
 current_pools	tools/pyelf/weaver/image.py	/^    def current_pools(self):$/;"	m	class:Image
 current_pos	build/l4_rootserver/include/stdio.h	/^    long int current_pos;$/;"	m	struct:__file
 current_pos	build/userland/include/stdio.h	/^    long int current_pos;$/;"	m	struct:__file
@@ -25262,7 +25265,7 @@ dpl	arch/ia32/libs/l4/include/segment.h	/^            L4_Word_t dpl           : 
 dpl	arch/ia32/pistachio/include/arch_idt.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_idtdesc_t::__anon44::__anon45
 dpl	arch/ia32/pistachio/include/segdesc.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_segdesc_t::__anon29::__anon30
 dprintf	arch/ia32/pistachio/cpu/acpi/src/timer-apic.cc	135;"	d	file:
-dprintf	sos/libsos.h	32;"	d
+dprintf	sos/libsos.h	37;"	d
 drainMode	libs/ixp400_xscale_sw/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon136
 drainMode	libs/ixp400_xscale_sw/src/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon441
 drop	build/l4_rootserver/include/lwip/stats.h	/^  u16_t drop;    \/* Dropped packets. *\/$/;"	m	struct:stats_proto
