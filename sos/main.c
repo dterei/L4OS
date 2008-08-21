@@ -259,8 +259,9 @@ main (void)
 	(void) sos_thread_new(&init_thread, &init_stack_s[STACK_SIZE]);
 
 	/* Test M1 */
-	dprintf(0, "about to run frame_test\n");
-	frame_test();
+	//dprintf(0, "about to run frame_test\n");
+	//frame_test();
+	(void) frame_test;
 
 	syscall_loop(); // Enter the syscall loop
 	/* Not reached */

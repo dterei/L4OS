@@ -36,7 +36,7 @@ extern void utimer_sleep(uint32_t microseconds);
 
 #define verbose 1
 
-#define ONE_MEG	    (1 * 1024 * 1024)
+#define ONE_MEG (1 * 1024 * 1024)
 
 extern void _start(void);
 
@@ -45,21 +45,25 @@ static L4_Word_t sSosMemoryTop, sSosMemoryBot;
 static L4_Fpage_t utcb_fpage_s;
 static L4_Word_t utcb_base_s;
 static L4_Word_t last_thread_s;
-/* Address of the bootinfo buffer. */
+
+// Address of the bootinfo buffer
 extern void *__okl4_bootinfo;
 
-// That odd (Iguana) way of identifying memory sections.
-static unsigned int current_ms = 1;
+// That odd (Iguana/bootinfo) way of identifying memory sections.
+static bi_name_t bootinfo_id = 1;
 
-// Orphaned memory sections (ones that haven't been
-// attached to anything)
-//typedef struct OrphanListT *OrphanList;
-//struct OrphanListT {
-//	Region *region;
-//	OrphanList next;
-//};
-//
-//OrphanList orphans = NULL;
+// List of threads as identified by bootinfo.
+typedef struct ThreadListT *ThreadList;
+struct ThreadListT {
+	bi_name_t tid;       // thread id as assigned by bootinfo
+	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
+	L4_ThreadId_t sosid; // the id we (as sos) will give it
+	uintptr_t ip;        // ip for when thread is started
+	void *sp;            // stack for when thread is started
+	ThreadList next;
+};
+
+static ThreadList threads = NULL;
 
 /* Initialise the L4 Environment library */
 int
@@ -110,7 +114,7 @@ bootinfo_init_mem(uintptr_t virt_base, uintptr_t virt_end,
 {
 	sSosMemoryBot = phys_base;
 	sSosMemoryTop  = phys_end;
-	current_ms += 3;
+	bootinfo_id += 3;
 	return 0;
 }
 
@@ -301,17 +305,12 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data)
 {
-	dprintf(0, "*** new_ms: %u, %u, %u, %u, %u, %u (%d, %u)\n", owner, base, size,
-			flags, attr, data->rec_num, last_thread_s, current_ms);
-	
-	// ignore if root task
-	if (owner == 0)
-		return 0;
+	dprintf(1, "*** bootinfo_new_ms: (owner %d) = %d\n", owner, bootinfo_id);
 
-
-	// need to translate owner to an address space id. Should we be storing with
-	// each address space an int with the owner in it?
-	// then just malloc a new region and add it to the list
+	if (owner == 0) {
+		dprintf(1, "*** bootinfo_new_ms: ignoring owner of 0\n");
+		return ++bootinfo_id;
+	}
 
 	// create new region
 	Region *newreg = (Region *)malloc(sizeof(Region));
@@ -320,175 +319,167 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	newreg->vbase = 0;
 	newreg->vsize = 0;
 	newreg->rights = 0;
-	newreg->ms = current_ms;
-	newreg->next = NULL;
+	newreg->id = bootinfo_id;
 
-	// add to the list of orphans (because it hasn't been attached yet).
-	//OrphanList newOrphan = (OrphanList) malloc(sizeof(struct OrphanListT));
-	//newOrphan->next = orphans;
-	//newOrphan->region = newreg;
-	//orphans = newOrphan;
+	// Look for which thread (address space) it wants.
+	ThreadList thread;
 
-	// add to address space
-	// Assume the address space to attach to is the last one just created since
-	// that is the usual bootloader sequence. But we check the owner variables
-	// match and if they dont we then do a simple linear search.
-	
-	L4_Word_t as = last_thread_s;
-	if (addrspace[as].pd != owner)
-	{
-		as = 0;
-		for (int i = 0; i < MAX_ADDRSPACES; i++)
-		{
-			if (addrspace[i].pd == owner)
-			{
-				as = i;
-				break;
-			}
-		}
-	}
-	
-	if (as == 0)
-	{
-		return BI_NAME_INVALID;
+	for (thread = threads; thread != NULL; thread = thread->next) {
+		if (thread->pd == owner) break;
 	}
 
-	
-	Region *rspot = NULL;
-	if (addrspace[as].regions == NULL)
-	{
-		addrspace[as].regions = newreg;
-	}
-	else
-	{
-		while ((rspot = rspot->next) != NULL)
-			;
-		rspot = newreg;
+	if (thread == NULL) {
+		dprintf(0, "*** bootinfo_new_ms: didn't find relevant pd!\n");
+		return 0;
 	}
 
-	current_ms++;
-	return owner;
+	// Add region to that address space.
+	newreg->next = addrspace[thread->sosid.raw].regions;
+	addrspace[thread->sosid.raw].regions = newreg;
+
+	return ++bootinfo_id;
 }
 
 int
 bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
-		const bi_user_data_t * data)
+		const bi_user_data_t *data)
 {
-	// how do we determine which memory section they are talking about? data->rec_num
-	// is meant to be the same in both attach and new_ms apparently so that we can
-	// tell this, but from our testing they aren't the same, should we be setting the
-	// data->rec_num?
+	dprintf(1, "*** bootinfo_attach: (pd %d, ms %d) = %d\n", pd, ms, bootinfo_id);
 
-	// First check already-attached memory regions because this might be an
-	// update.
-
-	// If not found then look through the list of orphans.
-
-	// then need to store the rights with the region.
-	dprintf(0, "test: attach: %d, %d, %d, %d (%d)\n", pd, ms, rights,
-			data->rec_num);
-
-	// ignore if root task
-	if (pd == 0)
+	if (pd == 0) {
+		dprintf(1, "*** bootinfo_attach: ignoring pd of 0\n");
 		return 0;
-	
-
-	// add to address space
-	// Assume the address space to attach to is the last one just created since
-	// that is the usual bootloader sequence. But we check the owner variables
-	// match and if they dont we then do a simple linear search.
-	
-	L4_Word_t as = last_thread_s;
-	if (addrspace[as].pd != pd)
-	{
-		as = 0;
-		for (int i = 0; i < MAX_ADDRSPACES; i++)
-		{
-			if (addrspace[i].pd == pd)
-			{
-				as = i;
-				break;
-			}
-		}
-	}
-	
-	if (as == 0 || addrspace[as].regions == NULL)
-	{
-		return BI_NAME_INVALID;
 	}
 
-	// search regions for right one
-	Region *rspot = NULL;
-	for (rspot = addrspace[as].regions; rspot != NULL; rspot = rspot->next)
-	{
-		if (rspot->ms == data->rec_num)
-		{
-			rspot->rights = rights;
-			break;
-		}
+	// Look for which thread (address space) it wants.
+	ThreadList thread;
+
+	for (thread = threads; thread != NULL; thread = thread->next) {
+		if (thread->pd == pd) break;
 	}
 
-	if (rspot == NULL)
-		return BI_NAME_INVALID;
-	else
+	if (thread == NULL) {
+		dprintf(0, "*** bootinfo_attach: didn't find relevant pd!\n");
 		return 0;
+	}
+
+	// Look for the region.
+	Region *region = addrspace[thread->pd].regions;
+
+	for (; region != NULL; region = region->next) {
+		if (region->id == ms) break;
+	}
+
+	if (thread == NULL) {
+		dprintf(0, "*** bootinfo_attach: didn't find relevant ms!\n");
+		return 0;
+	}
+
+	// Make necessary changes to the region.
+	region->rights = rights;
+
+	return 0;
 }
 
-/*
- * Only need new_cap, new_pool, and new_pd in order to
- * increase the current_ms.
- */
 bi_name_t
 bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
-		const bi_user_data_t * data) {
-	current_ms++;
-	return 0; // No idea what it's actually meant to return.
+		const bi_user_data_t *data) {
+	return ++bootinfo_id;
 }
 
 bi_name_t
 bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {
-	current_ms++;
-	return 0; // No idea what it's actually meant to return.
+	return ++bootinfo_id;
 }
 
 bi_name_t
 bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
-	current_ms++;
-	return owner;
+	dprintf(1, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
+
+	// Record the existence of the new pd via the creation of a
+	// new thread info struct.  Will fill this in as we go through
+	// the various callbacks.
+	ThreadList newThread = (ThreadList) malloc(sizeof(struct ThreadListT));
+	newThread->pd = bootinfo_id;
+	newThread->next = threads;
+	threads = newThread;
+
+	return ++bootinfo_id;
 }
 
-/* we abuse the bootinfo interface a bit by creating a new task on each
- * new thread operation
- */
 static bi_name_t
 bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
                     uintptr_t user_main, int priority,
                     char* name, size_t name_len,
-                    const bi_user_data_t* data)
+                    const bi_user_data_t *data)
 {
-	// need to setup address space here, create a new address space with L4
-	// then setup any regions we need for heap and stack. PageTable isn't touched
-	// yet as we are using lazy allocation so we just want all the regions setup
-	// correctly so that it will page fault and we can then map it in.
-    void *sp = data->user_data;
-    dprintf(0, "bootinfo_new_thread starting thread: %s, %d\n", name, bi_owner);
+	dprintf(1, "*** bootinfo_new_thread: (owner %d) = %d\n", bi_owner, bootinfo_id);
 
-    // Start a new task with this program
-    // (using the kernel thread id allocator for task ids too)
-    L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(sos_get_new_tid()), L4_Pager(),
-		    (void *) ip, sp);
+	// Find pd that owns this thread (and by doing so the thread info).
+	ThreadList thread;
+	for (thread = threads; thread != NULL; thread = thread->next) {
+		if (thread->pd == bi_owner) break;
+	}
 
-	 // make sure newtid is within addressspace range should be ok though since L4 makes sure their unique
-    if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL && sos_tid2task(newtid) < MAX_ADDRSPACES) {
-        dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
-    } else {
-        dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
-        return BI_NAME_INVALID;
-    }
+	if (thread == NULL) {
+		dprintf(0, "*** bootinfo_new_thread: didn't find pd owner!\n");
+		return 0;
+	}
 
-	 current_ms++;
-	 addrspace[sos_tid2task(newtid)].pd = bi_owner;
-    return newtid.raw;
+	// Fill in some more info.
+	thread->tid = bootinfo_id;
+	thread->ip = ip;
+	thread->sp = data->user_data;
+	thread->sosid = sos_get_new_tid();
+
+	// Now would be a good time to initialise our address space.
+	addrspace[thread->sosid.raw].pagetb = NULL;
+	addrspace[thread->sosid.raw].regions = NULL;
+
+	return ++bootinfo_id;
+}
+
+int
+bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
+	dprintf(1, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
+
+	// Find the thread to run.
+	ThreadList thread;
+	for (thread = threads; thread != NULL; thread = thread->next) {
+		if (thread->tid == tid) break;
+	}
+
+	if (thread == NULL) {
+		dprintf(0, "*** bootinfo_run_thread: didn't find matching thread!\n");
+		return 0;
+	}
+
+	// Start a new task from the thread.
+	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
+			(void*) thread->ip, thread->sp);
+
+	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
+		dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
+	} else {
+		dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
+		return BI_NAME_INVALID;
+	}
+
+	return 0;
+}
+
+int
+bootinfo_cleanup(const bi_user_data_t *data) {
+	dprintf(1, "*** bootinfo_cleanup\n");
+
+	ThreadList freeMe;
+	while (threads != NULL) {
+		freeMe = threads->next;
+		free(threads);
+		threads = freeMe;
+	}
+
+	return 0;
 }
 
 void
@@ -503,7 +494,9 @@ sos_start_binfo_executables(void *userstack)
 	 bi_callbacks.new_cap = bootinfo_new_cap;
 	 bi_callbacks.new_pool = bootinfo_new_pool;
 	 bi_callbacks.new_pd = bootinfo_new_pd;
-    
+	 bi_callbacks.run_thread = bootinfo_run_thread;
+	 bi_callbacks.cleanup = bootinfo_cleanup;
+
     result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
     if (result)
         dprintf(0, "bootinfo_parse failed: %d\n", result);

@@ -23,8 +23,8 @@ struct Region {
 	uintptr_t vsize; // size of region " "
 	uintptr_t pbase; // start of region in physical memory / frame table
 	uintptr_t psize; // size of region " "
-	int rights; // access rights of region (read, write, execute)
-	int ms; // what Iguana uses to identify the region
+	int rights;      // access rights of region (read, write, execute)
+	int id;          // what bootinfo uses to identify the region
 	struct Region *next; // next region in list;
 };
 
