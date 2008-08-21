@@ -29,6 +29,17 @@
 AddrSpace addrspace[MAX_ADDRSPACES];
 
 void
+as_init()
+{
+	for (int i = 0; i < MAX_ADDRSPACES; i++)
+	{
+		addrspace[i].pagetb = NULL;
+		addrspace[i].regions = NULL;
+		addrspace[i].pd = 0;
+	}
+}
+
+void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
     // Get the faulting address

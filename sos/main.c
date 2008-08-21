@@ -247,9 +247,12 @@ main (void)
 	dprintf(0, "Available memory from 0x%08lx to 0x%08lx - %luMB\n", 
 			low, high, (high - low) / ONE_MEG);
 
-	// Initialse the memory frame table
+	// Initialise the memory frame table
 	frame_init((low + HEAP_SIZE), high);
 	dprintf(0, "Okay, managed to init frame table.\n");
+
+	// Initialise the address spaces
+	as_init();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

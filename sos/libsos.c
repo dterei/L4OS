@@ -53,13 +53,13 @@ static unsigned int current_ms = 1;
 
 // Orphaned memory sections (ones that haven't been
 // attached to anything)
-typedef struct OrphanListT *OrphanList;
-struct OrphanListT {
-	Region *region;
-	OrphanList next;
-};
-
-OrphanList orphans = NULL;
+//typedef struct OrphanListT *OrphanList;
+//struct OrphanListT {
+//	Region *region;
+//	OrphanList next;
+//};
+//
+//OrphanList orphans = NULL;
 
 /* Initialise the L4 Environment library */
 int
@@ -303,6 +303,12 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 {
 	dprintf(0, "*** new_ms: %u, %u, %u, %u, %u, %u (%d, %u)\n", owner, base, size,
 			flags, attr, data->rec_num, last_thread_s, current_ms);
+	
+	// ignore if root task
+	if (owner == 0)
+		return 0;
+
+
 	// need to translate owner to an address space id. Should we be storing with
 	// each address space an int with the owner in it?
 	// then just malloc a new region and add it to the list
@@ -318,27 +324,47 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	newreg->next = NULL;
 
 	// add to the list of orphans (because it hasn't been attached yet).
-	OrphanList newOrphan = (OrphanList) malloc(sizeof(struct OrphanListT));
-	newOrphan->next = orphans;
-	newOrphan->region = newreg;
-	orphans = newOrphan;
+	//OrphanList newOrphan = (OrphanList) malloc(sizeof(struct OrphanListT));
+	//newOrphan->next = orphans;
+	//newOrphan->region = newreg;
+	//orphans = newOrphan;
 
 	// add to address space
-	// HACK: Assume the address space to attach to is the next one to be created
-	// Where is addrspace actually being initialised?
-	// I don't understand why this hack exists, why last_thread_s+1?
-	/*
-	Region *rspot = NULL;
-	if (addrspace[last_thread_s+1].regions == NULL)
+	// Assume the address space to attach to is the last one just created since
+	// that is the usual bootloader sequence. But we check the owner variables
+	// match and if they dont we then do a simple linear search.
+	
+	L4_Word_t as = last_thread_s;
+	if (addrspace[as].pd != owner)
 	{
-		addrspace[last_thread_s+1].regions = newreg;
+		as = 0;
+		for (int i = 0; i < MAX_ADDRSPACES; i++)
+		{
+			if (addrspace[i].pd == owner)
+			{
+				as = i;
+				break;
+			}
+		}
+	}
+	
+	if (as == 0)
+	{
+		return BI_NAME_INVALID;
+	}
+
+	
+	Region *rspot = NULL;
+	if (addrspace[as].regions == NULL)
+	{
+		addrspace[as].regions = newreg;
 	}
 	else
 	{
 		while ((rspot = rspot->next) != NULL)
 			;
 		rspot = newreg;
-	}*/
+	}
 
 	current_ms++;
 	return owner;
@@ -361,7 +387,51 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	// then need to store the rights with the region.
 	dprintf(0, "test: attach: %d, %d, %d, %d (%d)\n", pd, ms, rights,
 			data->rec_num);
-	return 0;
+
+	// ignore if root task
+	if (pd == 0)
+		return 0;
+	
+
+	// add to address space
+	// Assume the address space to attach to is the last one just created since
+	// that is the usual bootloader sequence. But we check the owner variables
+	// match and if they dont we then do a simple linear search.
+	
+	L4_Word_t as = last_thread_s;
+	if (addrspace[as].pd != pd)
+	{
+		as = 0;
+		for (int i = 0; i < MAX_ADDRSPACES; i++)
+		{
+			if (addrspace[i].pd == pd)
+			{
+				as = i;
+				break;
+			}
+		}
+	}
+	
+	if (as == 0 || addrspace[as].regions == NULL)
+	{
+		return BI_NAME_INVALID;
+	}
+
+	// search regions for right one
+	Region *rspot = NULL;
+	for (rspot = addrspace[as].regions; rspot != NULL; rspot = rspot->next)
+	{
+		if (rspot->ms == data->rec_num)
+		{
+			rspot->rights = rights;
+			break;
+		}
+	}
+
+	if (rspot == NULL)
+		return BI_NAME_INVALID;
+	else
+		return 0;
 }
 
 /*
@@ -408,7 +478,8 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
     L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(sos_get_new_tid()), L4_Pager(),
 		    (void *) ip, sp);
 
-    if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
+	 // make sure newtid is within addressspace range should be ok though since L4 makes sure their unique
+    if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL && sos_tid2task(newtid) < MAX_ADDRSPACES) {
         dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
     } else {
         dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
@@ -416,6 +487,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
     }
 
 	 current_ms++;
+	 addrspace[sos_tid2task(newtid)].pd = bi_owner;
     return newtid.raw;
 }
 

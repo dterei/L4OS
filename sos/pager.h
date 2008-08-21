@@ -34,11 +34,13 @@ typedef struct Region Region;
 typedef struct {
 	PageTable *pagetb;
 	Region *regions;
+	L4_Word_t pd; // what is the pd used to identify the as during bootinfo
 } AddrSpace;
 
 /* Max of 256 Address Spaces */
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
+extern void as_init(void);
 extern void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
 #endif // _PAGER_H
