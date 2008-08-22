@@ -42,7 +42,7 @@ int main(void)
 	ttyout_init();
 
 	do {
-		printf("task:\tHello world, I'm\ttty_test!\n");
+		//printf("task:\tHello world, I'm\ttty_test!\n");
 		//for (int i = ' '; i < '~' - 1; i++) {
 		//	printf("testing characters %c and %c\n", (char) i, (char) (i + 1));
 		//}

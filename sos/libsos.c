@@ -34,7 +34,7 @@
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 1
+#define verbose 2
 
 #define ONE_MEG (1 * 1024 * 1024)
 
@@ -415,6 +415,11 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 {
 	dprintf(1, "*** bootinfo_new_thread: (owner %d) = %d\n", bi_owner, bootinfo_id);
 
+	if (bi_owner == 0) {
+		dprintf(1, "*** bootinfo_new_thread: ignoring owner of 0\n");
+		return ++bootinfo_id;
+	}
+
 	// Find pd that owns this thread (and by doing so the thread info).
 	ThreadList thread;
 	for (thread = threads; thread != NULL; thread = thread->next) {
@@ -433,8 +438,8 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	thread->sosid = sos_get_new_tid();
 
 	// Now would be a good time to initialise our address space.
-	addrspace[thread->sosid.raw].pagetb = NULL;
-	addrspace[thread->sosid.raw].regions = NULL;
+	addrspace[L4_ThreadNo(thread->sosid)].pagetb = NULL;
+	addrspace[L4_ThreadNo(thread->sosid)].regions = NULL;
 
 	return ++bootinfo_id;
 }
@@ -455,6 +460,8 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	}
 
 	// Start a new task from the thread.
+	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n", L4_ThreadNo(thread->sosid));
+
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
 			(void*) thread->ip, thread->sp);
 

@@ -27,6 +27,8 @@
 struct cookie mnt_point = {{0}};
 static struct serial *serial = NULL;
 
+#define verbose 1
+
 /* 
  * This is the directory on the NFS server that will be mounted
  * for your file system. Change it to match your NFS server config.
@@ -121,8 +123,13 @@ network_sendstring(int len, int *contents) {
 	int i;
 	char c;
 
+	printf("*** network_sendstring: ");
+
 	for (i = 0; i < len; i++) {
 		c = (char) contents[i];
 		serial_send(serial, &c, 1);
+		dprintf(0, "%c", c);
 	}
+
+	printf("\n");
 }
