@@ -10,19 +10,18 @@
 
 /* Page Table Struct */
 typedef struct {
-	L4_Word_t *pages[PAGETABLE_SIZE2];
+	L4_Word_t pages[PAGETABLE_SIZE2];
 } PageTable2;
 
 typedef struct {
 	PageTable2 *pages2[PAGETABLE_SIZE1];
-} PageTable;
+} PageTable1;
 
 /* Region Struct */
 struct Region {
 	uintptr_t vbase; // start of region in virtual address space/page table
-	uintptr_t vsize; // size of region " "
 	uintptr_t pbase; // start of region in physical memory / frame table
-	uintptr_t psize; // size of region " "
+	uintptr_t size;  // size of region
 	int rights;      // access rights of region (read, write, execute)
 	int id;          // what bootinfo uses to identify the region
 	struct Region *next; // next region in list;
@@ -30,17 +29,24 @@ struct Region {
 
 typedef struct Region Region;
 
+/* Access rights */
+#define REGION_READ 0x4
+#define REGION_WRITE 0x2
+#define REGION_EXECUTE 0x1
+
 /* Address space Struct */
 typedef struct {
-	PageTable *pagetb;
+	PageTable1 *pagetb;
 	Region *regions;
-	L4_Word_t pd; // what is the pd used to identify the as during bootinfo
 } AddrSpace;
 
 /* Max of 256 Address Spaces */
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
-extern void as_init(void);
-extern void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
+void as_init(void);
+void init_bootmem(AddrSpace *as);
+uintptr_t add_stackheap(AddrSpace *as);
+uintptr_t phys2virt(AddrSpace *as, uintptr_t phys);
+void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
 #endif // _PAGER_H

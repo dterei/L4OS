@@ -91,6 +91,13 @@ void __malloc_dump(void);
 #endif
 
 /*
+void malloc_init(uintptr_t head_base,  uintptr_t heap_end)
+{
+	__malloc_init(head_base,  heap_end);
+}
+*/
+
+/*
  * malloc: general-purpose storage allocator 
  */
 void *

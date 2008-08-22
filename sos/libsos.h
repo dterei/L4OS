@@ -16,6 +16,8 @@
 #include <l4/thread.h>
 #include <bootinfo/bootinfo.h>
 
+#define ONE_MEG (1 * 1024 * 1024)
+
 bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data);

@@ -36,8 +36,6 @@ extern void utimer_sleep(uint32_t microseconds);
 
 #define verbose 2
 
-#define ONE_MEG (1 * 1024 * 1024)
-
 extern void _start(void);
 
 static L4_Word_t sSosMemoryTop, sSosMemoryBot;
@@ -269,7 +267,7 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 {
     // HACK: Workaround for compiler bug, volatile qualifier stops the internal
     // compiler error.
-    volatile uint32_t taskId = task << THREADBITS;
+    //volatile uint32_t taskId = task << THREADBITS;
     L4_SpaceId_t spaceId = L4_SpaceId(task);
     L4_ClistId_t clistId = L4_ClistId(task);
     int res;
@@ -289,7 +287,8 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	assert(res);
 
     // Create the thread
-    L4_ThreadId_t tid = L4_GlobalId(taskId, 1);
+    //L4_ThreadId_t tid = L4_GlobalId(taskId, 1);
+    L4_ThreadId_t tid = L4_GlobalId(task, 1);
     res = L4_ThreadControl(tid, spaceId, L4_rootserver,
 	    pager, pager, 0, (void *) utcb_base_s);
     if (!res)
@@ -315,9 +314,8 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	// create new region
 	Region *newreg = (Region *)malloc(sizeof(Region));
 	newreg->pbase = base;
-	newreg->psize = size;
+	newreg->size = size;
 	newreg->vbase = 0;
-	newreg->vsize = 0;
 	newreg->rights = 0;
 	newreg->id = bootinfo_id;
 
@@ -438,8 +436,14 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	thread->sosid = sos_get_new_tid();
 
 	// Now would be a good time to initialise our address space.
-	addrspace[L4_ThreadNo(thread->sosid)].pagetb = NULL;
-	addrspace[L4_ThreadNo(thread->sosid)].regions = NULL;
+	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
+	as->pagetb = (PageTable1 *) malloc(sizeof(PageTable1));
+	as->regions = NULL;
+
+	for (int i = 0; i < PAGETABLE_SIZE1; i++)
+	{
+		as->pagetb->pages2[i] = NULL;
+	}
 
 	return ++bootinfo_id;
 }
@@ -462,8 +466,15 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	// Start a new task from the thread.
 	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n", L4_ThreadNo(thread->sosid));
 
+	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
+	init_bootmem(as);
+	uintptr_t sp = add_stackheap(as);
+
+	if (sp == 0)
+		return BI_NAME_INVALID;
+
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
-			(void*) thread->ip, thread->sp);
+			(void*) phys2virt(as, thread->ip), (void*) sp);
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
 		dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
