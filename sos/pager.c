@@ -82,10 +82,12 @@ add_stackheap(AddrSpace *as) {
 	heap->pbase = 0;
 	heap->rights = REGION_READ | REGION_WRITE;
 
-	top = (uintptr_t) (-PAGESIZE);
+	//top = (uintptr_t) (-PAGESIZE);
+	top = page_align_up(top + heap->size);
 	Region *stack = (Region *)malloc(sizeof(Region));
+	stack->vbase = top;
 	stack->size = ONE_MEG;
-	stack->vbase = top - stack->size;
+	//stack->vbase = top - stack->size;
 	stack->pbase = 0;
 	stack->rights = REGION_READ | REGION_WRITE;
 
@@ -129,18 +131,14 @@ findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
 		return NULL;
 	}
 
-	dprintf(0, "... findPageTableWord: 1\n");
 	if (level1->pages2[offset1] == NULL) {
-		dprintf(0, "... findPageTableWord: 2\n");
 		level1->pages2[offset1] = (PageTable2*) malloc(sizeof(PageTable2));
 
-		dprintf(0, "... findPageTableWord: 3\n");
 		for (int i = 0; i < PAGETABLE_SIZE2; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
 		}
 	}
 
-	dprintf(0, "... findPageTableWord: 4\n");
 	return &level1->pages2[offset1]->pages[offset2];
 }
 
@@ -148,16 +146,19 @@ void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
 	// Get the faulting address
-	//L4_Word_t addr = L4_MsgWord(msgP, 0);
-	L4_Word_t addr = L4_MsgWord(msgP, 0) & ~(PAGESIZE - 1);
+	L4_Word_t addr = L4_MsgWord(msgP, 0);
+	//L4_Word_t addr = L4_MsgWord(msgP, 0) & ~(PAGESIZE - 1);
 	L4_Word_t ip = L4_MsgWord(msgP, 1);
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 
 	L4_Word_t frame;
 	int rights;
+	int needToUnmap = 0;
 
 	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
 			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
+
+	addr &= ~(PAGESIZE - 1);
 
 	if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
 		// Root task will page fault before page table is actually
@@ -177,31 +178,38 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 		}
 
 		// Add entry to page table if it hasn't been already
-		dprintf(0, "... pager: 1\n");
 		L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
-		dprintf(0, "... pager: 2\n");
 		if (*entry == 0) {
 			*entry = frame_alloc();
+			needToUnmap = 1;
 		}
 
-		dprintf(0, "... pager: 3\n");
 		frame = *entry;
-		dprintf(0, "... pager: 4\n");
 		rights = r->rights;
 	}
 
-	// Map physical to virtual memory
-	dprintf(0, "... pager: 5\n");
-	L4_Fpage_t targetFpage = L4_FpageLog2(addr, 12);
-	//L4_Set_Rights(&targetFpage, r->rights);
-	dprintf(0, "... pager: 6\n");
-	L4_Set_Rights(&targetFpage, rights);
-	//L4_PhysDesc_t phys = L4_PhysDesc(*entry, L4_DefaultMemory);
-	dprintf(0, "... pager: 7\n");
-	L4_PhysDesc_t phys = L4_PhysDesc(frame, L4_DefaultMemory);
+	// If we did get a frame from the frame table it's mapped to the
+	// root task, so need to unmap it from the root task before trying
+	// to map it to ours.
+	//
+	// By the way, if there is already an entry in the page table do
+	// we need to unmap it too?  And do we have to map it?  Argh!
+	if (needToUnmap) {
+		L4_Fpage_t unmapMe = L4_Fpage(frame, PAGESIZE);
+		dprintf(1, "*** pager: going to try to unmap %lx\n", L4_Address(unmapMe));
 
-	dprintf(0, "... pager: 8\n");
-	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) {
+		if (!L4_UnmapFpage(L4_rootspace, unmapMe)) {
+			sos_print_error(L4_ErrorCode());
+			dprintf(0, "!!! Couldn't unmap page %lx!\n", L4_Address(unmapMe));
+		}
+	}
+
+	// Map physical to virtual memory
+	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
+	L4_Set_Rights(&fpage, rights);
+	L4_PhysDesc_t ppage = L4_PhysDesc(frame, L4_UncachedMemory);
+
+	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
 		printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
 	}

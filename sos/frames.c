@@ -10,6 +10,7 @@
 
 #include <stddef.h>
 
+#include <l4/misc.h>
 #include <l4/space.h>
 #include <l4/types.h>
 
@@ -40,7 +41,7 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	for (page = low; page < high; page += PAGESIZE) {
 		fpage = L4_Fpage(page, PAGESIZE);
 		L4_Set_Rights(&fpage, L4_ReadWriteOnly);
-		ppage = L4_PhysDesc(page, 0);
+		ppage = L4_PhysDesc(page, L4_UncachedMemory);
 		L4_MapFpage(L4_rootspace, fpage, ppage);
 	}
 
