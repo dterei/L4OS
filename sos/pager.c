@@ -29,7 +29,6 @@
 
 #define verbose 2
 
-#define malloc_init __malloc_init
 extern void __malloc_init(uintptr_t head_base,  uintptr_t heap_end);
 
 AddrSpace addrspace[MAX_ADDRSPACES];
@@ -78,12 +77,10 @@ add_stackheap(AddrSpace *as) {
 
 	top = page_align_up(top);
 	Region *heap = (Region *)malloc(sizeof(Region));
-	heap->vbase = top;
 	heap->size = ONE_MEG;
+	heap->vbase = top;
 	heap->pbase = 0;
 	heap->rights = REGION_READ | REGION_WRITE;
-
-	malloc_init(heap->vbase, heap->vbase + heap->size);
 
 	top = (uintptr_t) (-PAGESIZE);
 	Region *stack = (Region *)malloc(sizeof(Region));
@@ -96,7 +93,9 @@ add_stackheap(AddrSpace *as) {
 	heap->next = as->regions;
 	as->regions = stack;
 
-	return stack->vbase + stack->size;  // stack pointer
+	__malloc_init(heap->vbase, heap->vbase + heap->size);
+
+	return stack->vbase + stack->size; // stack pointer
 }
 
 uintptr_t
@@ -132,39 +131,47 @@ findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
-    // Get the faulting address
-    L4_Word_t addr = L4_MsgWord(msgP, 0);
-    L4_Word_t ip = L4_MsgWord(msgP, 1);
-	 AddrSpace *as = &addrspace[L4_ThreadNo(tid)];
+	// Get the faulting address
+	L4_Word_t addr = L4_MsgWord(msgP, 0);
+	L4_Word_t ip = L4_MsgWord(msgP, 1);
+	AddrSpace *as = &addrspace[L4_ThreadNo(tid)];
 
-	 // Find region it belongs in.
-	 Region *r;
-	 for (r = as->regions; r != NULL; r = r->next) {
-		 if (r->vbase >= addr && r->vbase < addr) break;
-	 }
+	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
+			L4_ThreadNo(tid), L4_SenderSpace(), addr, ip);
 
-	 if (r == NULL) {
-		 dprintf(0, "*** pager: didn't find region!\n");
-		 return;
-	 }
+	// The first 5 address spaces:
+	for (int i = 0; i < 5; i++) {
+		printf("@@@ %d: %p %p\n", i, addrspace[i].pagetb, addrspace[i].regions);
+	}
 
-	 // Add entry to page table if it hasn't been already
-	 L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
-	 if (*entry == 0) {
-		 *entry = frame_alloc();
-	 }
+	// Find region it belongs in.
+	Region *r;
+	for (r = as->regions; r != NULL; r = r->next) {
+		if (r->vbase >= addr && r->vbase < addr) break;
+	}
 
-	 // Page align the adddress
-	 addr &= ~(PAGESIZE - 1);
+	if (r == NULL) {
+		dprintf(0, "*** pager: didn't find region!\n");
+		return;
+	}
 
-	 // Map physical to virtual memory
-	 L4_Fpage_t targetFpage = L4_FpageLog2(addr, 12);
-	 L4_Set_Rights(&targetFpage, r->rights);
-	 L4_PhysDesc_t phys = L4_PhysDesc(*entry, L4_DefaultMemory);
+	// Add entry to page table if it hasn't been already
+	L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
+	if (*entry == 0) {
+		*entry = frame_alloc();
+	}
 
-	 if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) {
-		 sos_print_error(L4_ErrorCode());
-		 printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
-	 }
+	// Page align the adddress
+	addr &= ~(PAGESIZE - 1);
+
+	// Map physical to virtual memory
+	L4_Fpage_t targetFpage = L4_FpageLog2(addr, 12);
+	L4_Set_Rights(&targetFpage, r->rights);
+	L4_PhysDesc_t phys = L4_PhysDesc(*entry, L4_DefaultMemory);
+
+	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) {
+		sos_print_error(L4_ErrorCode());
+		printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
+	}
 }
 

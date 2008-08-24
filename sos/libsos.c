@@ -34,7 +34,7 @@
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 2
+#define verbose 3
 
 extern void _start(void);
 
@@ -110,6 +110,7 @@ bootinfo_init_mem(uintptr_t virt_base, uintptr_t virt_end,
         uintptr_t phys_base, uintptr_t phys_end,
         const bi_user_data_t * data)
 {
+	dprintf(2, "*** bootinfo_init_mem\n");
 	sSosMemoryBot = phys_base;
 	sSosMemoryTop  = phys_end;
 	bootinfo_id += 3;
@@ -265,38 +266,36 @@ L4_ThreadId_t
 sos_task_new(L4_Word_t task, L4_ThreadId_t pager, 
 	     void *entrypoint, void *stack)
 {
-    // HACK: Workaround for compiler bug, volatile qualifier stops the internal
-    // compiler error.
-    //volatile uint32_t taskId = task << THREADBITS;
-    L4_SpaceId_t spaceId = L4_SpaceId(task);
-    L4_ClistId_t clistId = L4_ClistId(task);
-    int res;
+	// HACK: Workaround for compiler bug, volatile qualifier stops the internal
+	// compiler error.
+	L4_SpaceId_t spaceId = L4_SpaceId(task);
+	L4_ClistId_t clistId = L4_ClistId(task);
+	int res;
 
-    res = L4_CreateClist(clistId, 32); // 32 slots
-    if (!res)
-        return ((L4_ThreadId_t) { raw : -1});
-    
-    // Setup space
-    res = L4_SpaceControl(spaceId, L4_SpaceCtrl_new, clistId, utcb_fpage_s, 0, NULL);
-    if (!res)
-        return ((L4_ThreadId_t) { raw : -2});
-	
+	res = L4_CreateClist(clistId, 32); // 32 slots
+	if (!res)
+		return ((L4_ThreadId_t) { raw : -1});
+
+	// Setup space
+	res = L4_SpaceControl(spaceId, L4_SpaceCtrl_new, clistId, utcb_fpage_s, 0, NULL);
+	if (!res)
+		return ((L4_ThreadId_t) { raw : -2});
+
 	// Give the space a cap to the root server
 	res = L4_CreateIpcCap(L4_rootserver, L4_rootclist,
-	                      L4_rootserver, clistId);
+			L4_rootserver, clistId);
 	assert(res);
 
-    // Create the thread
-    //L4_ThreadId_t tid = L4_GlobalId(taskId, 1);
-    L4_ThreadId_t tid = L4_GlobalId(task, 1);
-    res = L4_ThreadControl(tid, spaceId, L4_rootserver,
-	    pager, pager, 0, (void *) utcb_base_s);
-    if (!res)
-        return ((L4_ThreadId_t) { raw : -3});
+	// Create the thread
+	L4_ThreadId_t tid = L4_GlobalId(task, 1);
+	res = L4_ThreadControl(tid, spaceId, L4_rootserver,
+			pager, pager, 0, (void *) utcb_base_s);
+	if (!res)
+		return ((L4_ThreadId_t) { raw : -3});
 
-    L4_Start_SpIp(tid, (L4_Word_t) stack, (L4_Word_t) entrypoint);
+	L4_Start_SpIp(tid, (L4_Word_t) stack, (L4_Word_t) entrypoint);
 
-    return tid;
+	return tid;
 }
 
 bi_name_t
@@ -311,14 +310,6 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		return ++bootinfo_id;
 	}
 
-	// create new region
-	Region *newreg = (Region *)malloc(sizeof(Region));
-	newreg->pbase = base;
-	newreg->size = size;
-	newreg->vbase = 0;
-	newreg->rights = 0;
-	newreg->id = bootinfo_id;
-
 	// Look for which thread (address space) it wants.
 	ThreadList thread;
 
@@ -327,13 +318,28 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	}
 
 	if (thread == NULL) {
-		dprintf(0, "*** bootinfo_new_ms: didn't find relevant pd!\n");
-		return 0;
+		dprintf(0, "!!! bootinfo_new_ms: didn't find relevant thread!\n");
+		return ++bootinfo_id;
+	} else {
+		dprintf(1, "*** bootinfo_new_ms: found thread %d\n",
+				L4_ThreadNo(thread->sosid));
 	}
 
+	// Create new region.
+	Region *newreg = (Region *)malloc(sizeof(Region));
+	newreg->pbase = base;
+	newreg->size = size;
+	newreg->vbase = 0;
+	newreg->rights = 0;
+	newreg->id = bootinfo_id;
+
+	dprintf(1, "*** bootinfo_new_ms: created new ms with id=%d\n", newreg->id);
+
 	// Add region to that address space.
-	newreg->next = addrspace[thread->sosid.raw].regions;
-	addrspace[thread->sosid.raw].regions = newreg;
+	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
+
+	newreg->next = as->regions;
+	as->regions = newreg;
 
 	return ++bootinfo_id;
 }
@@ -357,20 +363,25 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	}
 
 	if (thread == NULL) {
-		dprintf(0, "*** bootinfo_attach: didn't find relevant pd!\n");
+		dprintf(0, "!!! bootinfo_attach: didn't find relevant thread!\n");
 		return 0;
+	} else {
+		dprintf(1, "*** bootinfo_attach: found thread %d\n",
+				L4_ThreadNo(thread->sosid));
 	}
 
 	// Look for the region.
-	Region *region = addrspace[thread->pd].regions;
+	Region *region = addrspace[L4_ThreadNo(thread->sosid)].regions;
 
 	for (; region != NULL; region = region->next) {
 		if (region->id == ms) break;
 	}
 
-	if (thread == NULL) {
-		dprintf(0, "*** bootinfo_attach: didn't find relevant ms!\n");
+	if (region == NULL) {
+		dprintf(0, "!!! bootinfo_attach: didn't find relevant ms!\n");
 		return 0;
+	} else {
+		dprintf(1, "*** bootinfo_attach: found relevant ms at %p\n", thread);
 	}
 
 	// Make necessary changes to the region.
@@ -425,7 +436,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	}
 
 	if (thread == NULL) {
-		dprintf(0, "*** bootinfo_new_thread: didn't find pd owner!\n");
+		dprintf(0, "!!! bootinfo_new_thread: didn't find pd owner!\n");
 		return 0;
 	}
 
@@ -434,6 +445,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	thread->ip = ip;
 	thread->sp = data->user_data;
 	thread->sosid = sos_get_new_tid();
+	dprintf(1, "I was just allocated threadid %lx\n", L4_ThreadNo(thread->sosid));
 
 	// Now would be a good time to initialise our address space.
 	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
@@ -459,7 +471,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	}
 
 	if (thread == NULL) {
-		dprintf(0, "*** bootinfo_run_thread: didn't find matching thread!\n");
+		dprintf(0, "!!! bootinfo_run_thread: didn't find matching thread!\n");
 		return 0;
 	}
 
@@ -475,6 +487,8 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
 			(void*) phys2virt(as, thread->ip), (void*) sp);
+
+	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
 		dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
@@ -503,21 +517,23 @@ bootinfo_cleanup(const bi_user_data_t *data) {
 void
 sos_start_binfo_executables(void *userstack)
 {
-    int result;
-    bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
+	int result;
+	bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
 
-    bi_callbacks.new_thread = bootinfo_new_thread;
-    bi_callbacks.new_ms = bootinfo_new_ms;
-    bi_callbacks.attach = bootinfo_attach;
-	 bi_callbacks.new_cap = bootinfo_new_cap;
-	 bi_callbacks.new_pool = bootinfo_new_pool;
-	 bi_callbacks.new_pd = bootinfo_new_pd;
-	 bi_callbacks.run_thread = bootinfo_run_thread;
-	 bi_callbacks.cleanup = bootinfo_cleanup;
+	bi_callbacks.new_thread = bootinfo_new_thread;
+	bi_callbacks.new_ms = bootinfo_new_ms;
+	bi_callbacks.attach = bootinfo_attach;
+	bi_callbacks.new_cap = bootinfo_new_cap;
+	bi_callbacks.new_pool = bootinfo_new_pool;
+	bi_callbacks.new_pd = bootinfo_new_pd;
+	bi_callbacks.run_thread = bootinfo_run_thread;
+	bi_callbacks.cleanup = bootinfo_cleanup;
 
-    result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
-    if (result)
-        dprintf(0, "bootinfo_parse failed: %d\n", result);
+	dprintf(1, "*** sos_start_binfo_executables: about to parse bootinfo\n");
+	result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
+	dprintf(1, "*** sos_start_binfo_executables: finished parsing bootinfo\n");
+	if (result)
+		dprintf(0, "bootinfo_parse failed: %d\n", result);
 }
 
 // Memory for the ixp400 networking layers

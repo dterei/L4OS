@@ -263,6 +263,7 @@ main (void)
 	//frame_test();
 	(void) frame_test;
 
+	dprintf(1, "*** main: about to start syscall loop\n");
 	syscall_loop(); // Enter the syscall loop
 	/* Not reached */
 

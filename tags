@@ -15255,6 +15255,7 @@ MAX_KMEM_SIZECNT	pistachio/kdb/src/kmemory.cc	92;"	d	file:
 MAX_LOCKS	libs/ixp400_xscale_sw/src/ethDB/include/IxEthDB_p.h	114;"	d
 MAX_MAILBOX_ENTRIES	pistachio/include/smp.h	116;"	d
 MAX_NETPRINT	tty_test/ttyout.c	23;"	d	file:
+MAX_NETPRINT	tty_test2/ttyout.c	23;"	d	file:
 MAX_PORT_NUMBER	libs/ixp400_xscale_sw/src/ethDB/include/IxEthDB_p.h	377;"	d
 MAX_PORT_SIZE	libs/ixp400_xscale_sw/src/ethDB/include/IxEthDB_p.h	376;"	d
 MAX_PRIO	build/pistachio/include/kernel/config.h	128;"	d
@@ -15659,8 +15660,8 @@ NFSPROC_READDIR	build/l4_rootserver/include/nfs/rpc.h	278;"	d
 NFSPROC_READDIR	libs/nfs/include/rpc.h	278;"	d
 NFSPROC_WRITE	build/l4_rootserver/include/nfs/rpc.h	400;"	d
 NFSPROC_WRITE	libs/nfs/include/rpc.h	400;"	d
-NFS_DIR	sos/network.c	38;"	d	file:
-NFS_DIR	sos/network.c	41;"	d	file:
+NFS_DIR	sos/network.c	40;"	d	file:
+NFS_DIR	sos/network.c	43;"	d	file:
 NFS_LOCAL_PORT	libs/nfs/src/transport.c	33;"	d	file:
 NFS_MACHINE_NAME	libs/nfs/src/transport.c	34;"	d	file:
 NFS_NUMBER	build/l4_rootserver/include/nfs/rpc.h	233;"	d
@@ -16137,7 +16138,7 @@ OKL4_KDB_RES_UNIMPLEMENTED	build/l4_rootserver/include/l4/kdebug.h	/^    OKL4_KD
 OKL4_KDB_RES_UNIMPLEMENTED	build/pistachio/include/l4/kdebug.h	/^    OKL4_KDB_RES_UNIMPLEMENTED = 1$/;"	e	enum:__anon955
 OKL4_KDB_RES_UNIMPLEMENTED	build/userland/include/l4/kdebug.h	/^    OKL4_KDB_RES_UNIMPLEMENTED = 1$/;"	e	enum:__anon767
 OKL4_KDB_RES_UNIMPLEMENTED	libs/l4/include/kdebug.h	/^    OKL4_KDB_RES_UNIMPLEMENTED = 1$/;"	e	enum:__anon707
-ONE_MEG	sos/libsos.c	39;"	d	file:
+ONE_MEG	sos/libsos.h	19;"	d
 ONE_MEG	sos/main.c	28;"	d	file:
 ON_CHIP_CLK	libs/ixp400_xscale_sw/include/IxSspAcc.h	/^	ON_CHIP_CLK = 0x0,$/;"	e	enum:__anon260
 ON_CHIP_CLK	libs/ixp400_xscale_sw/src/include/IxSspAcc.h	/^	ON_CHIP_CLK = 0x0,$/;"	e	enum:__anon565
@@ -16315,7 +16316,7 @@ PAGEFAULT_USER_major	build/pistachio/include/kernel/traceids.h	/^    PAGEFAULT_U
 PAGEFAULT_USER_major	pistachio/include/traceids.h	/^    PAGEFAULT_USER_major                = 1,$/;"	e	enum:trace_major_ids
 PAGEMASK	arch/mips/pistachio/kdb/cp0.cc	117;"	d	file:
 PAGESIZE	libs/c/test/test_libs_c.c	720;"	d	file:
-PAGESIZE	sos/libsos.h	158;"	d
+PAGESIZE	sos/libsos.h	160;"	d
 PAGETABLE_SIZE1	sos/pager.h	8;"	d
 PAGETABLE_SIZE2	sos/pager.h	9;"	d
 PAGE_ATTRIB_INIT	arch/ia32/pistachio/src/init.cc	142;"	d	file:
@@ -16989,7 +16990,7 @@ Package	tools/build.py	/^    def Package(self, package, buildname=None, **kargs)
 PackageOption	tools/SCons/Options/PackageOption.py	/^def PackageOption(key, help, default, searchfunc=None):$/;"	f
 PackageState	tools/SCons/Tool/JavaCommon.py	/^    class PackageState:$/;"	c
 PacketisedStats	libs/ixp400_xscale_sw/src/codelets/hssAcc/IxHssAccCodeletCom.h	/^} PacketisedStats;$/;"	t	typeref:struct:__anon332
-PageTable	sos/pager.h	/^} PageTable;$/;"	t	typeref:struct:__anon1030
+PageTable1	sos/pager.h	/^} PageTable1;$/;"	t	typeref:struct:__anon1030
 PageTable2	sos/pager.h	/^} PageTable2;$/;"	t	typeref:struct:__anon1029
 Parallel	tools/SCons/Job.py	/^    class Parallel:$/;"	c	class:Serial
 Parse	tools/SCons/Tool/msvs.py	/^    def Parse(self):$/;"	m	class:_GenerateV6DSP
@@ -17137,6 +17138,9 @@ RECEIVE	libs/ixp400_xscale_sw/src/ethAcc/include/IxEthAcc_p.h	/^    RECEIVE,$/;"
 REFERENCE_WAIT_SPIN_TIME	pistachio/src/clist.cc	69;"	d	file:
 REG	arch/mips/pistachio/kdb/frame.cc	100;"	d	file:
 REG	arch/mips/pistachio/kdb/frame.cc	98;"	d	file:
+REGION_EXECUTE	sos/pager.h	35;"	d
+REGION_READ	sos/pager.h	33;"	d
+REGION_WRITE	sos/pager.h	34;"	d
 REGISTERS	libs/ixp400_xscale_sw/src/usb/include/usbmacros.h	195;"	d
 REGRESSION	build/pistachio/include/kernel/debug.h	171;"	d
 REGRESSION	pistachio/include/debug.h	171;"	d
@@ -17733,9 +17737,10 @@ SOCK_RAW	libs/c/include/sys/socket.h	69;"	d
 SOCK_SEQPACKET	libs/c/include/sys/socket.h	70;"	d
 SOCK_STREAM	libs/c/include/sys/socket.h	71;"	d
 SOCK_STREAM	libs/lwip/include/lwip/sockets.h	59;"	d
-SOS_IRQ_NOTIFY_BIT	sos/libsos.h	161;"	d
+SOS_IRQ_NOTIFY_BIT	sos/libsos.h	163;"	d
 SOS_NETPRINT	sos/main.c	66;"	d	file:
 SOS_NETPRINT	tty_test/ttyout.c	22;"	d	file:
+SOS_NETPRINT	tty_test2/ttyout.c	22;"	d	file:
 SOURCE_DEBUG	build/l4_rootserver/include/lwip/debug.h	60;"	d
 SOURCE_DEBUG	libs/lwip/include/lwip/debug.h	60;"	d
 SPACE	arch/mips/pistachio/kdb/tlb.cc	102;"	d	file:
@@ -18787,7 +18792,7 @@ TF_INFR	build/l4_rootserver/include/lwip/tcp_pcb.h	105;"	d
 TF_INFR	libs/lwip/include/lwip/tcp_pcb.h	105;"	d
 TF_RESET	build/l4_rootserver/include/lwip/tcp_pcb.h	106;"	d
 TF_RESET	libs/lwip/include/lwip/tcp_pcb.h	106;"	d
-THREADBITS	sos/libsos.h	134;"	d
+THREADBITS	sos/libsos.h	136;"	d
 THREAD_COUNT	arch/ia32/pistachio/include/config.h	146;"	d
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana/sys_threadstate.c	68;"	d	file:
 THREAD_STATE_TCB_WORD	libs/c/src/sys-iguana_server/sys_threadstate.c	66;"	d	file:
@@ -20272,6 +20277,7 @@ _Exit	libs/c/src/sys-iguana/sys_exit.c	/^_Exit(int status)$/;"	f
 _Exit	libs/c/src/sys-l4_rootserver/sys_exit.c	/^_Exit(int status)$/;"	f
 _Exit	libs/c/src/sys-posix/sys_exit.c	/^_Exit(int status)$/;"	f
 _Exit	tty_test/ttyout.c	/^void _Exit(int status) { abort(); }$/;"	f
+_Exit	tty_test2/ttyout.c	/^void _Exit(int status) { abort(); }$/;"	f
 _FCNTL_H	build/l4_rootserver/include/fcntl.h	65;"	d
 _FCNTL_H	build/userland/include/fcntl.h	65;"	d
 _FCNTL_H	libs/c/include/fcntl.h	65;"	d
@@ -20426,6 +20432,7 @@ _TIME_T	build/l4_rootserver/include/sys/types.h	80;"	d
 _TIME_T	build/userland/include/sys/types.h	80;"	d
 _TIME_T	libs/c/include/sys/types.h	80;"	d
 _TTYOUT_H	tty_test/ttyout.h	2;"	d
+_TTYOUT_H	tty_test2/ttyout.h	2;"	d
 _UID_T	build/l4_rootserver/include/sys/types.h	105;"	d
 _UID_T	build/userland/include/sys/types.h	105;"	d
 _UID_T	libs/c/include/sys/types.h	105;"	d
@@ -22791,6 +22798,7 @@ abort	libs/c/src/sys-xen/sys_abort.c	/^abort(void)$/;"	f
 abort	libs/lwip/include/lwip/debug.h	43;"	d
 abort	loaders/elf-loader/src/arch-powerpc64/arch.c	/^abort(void)$/;"	f
 abort	tty_test/ttyout.c	/^abort(void)$/;"	f
+abort	tty_test2/ttyout.c	/^abort(void)$/;"	f
 aborted	build/pistachio/include/kernel/threadstate.h	/^        aborted                 = BLOCKED_STATE(7),$/;"	e	enum:thread_state_t::thread_state_e
 aborted	pistachio/include/threadstate.h	/^        aborted                 = BLOCKED_STATE(7),$/;"	e	enum:thread_state_t::thread_state_e
 abs_name	tools/pyelf/weaver/image.py	/^    def abs_name(self):$/;"	m	class:ImageAttrs
@@ -23012,6 +23020,7 @@ add_space	build/pistachio/include/kernel/clist.h	/^    void add_space(space_t *s
 add_space	build/pistachio/include/kernel/spaceid.h	/^    void add_space(spaceid_t id, space_t* space) {$/;"	f	class:spaceid_lookup_t
 add_space	pistachio/include/clist.h	/^    void add_space(space_t *space) { num_spaces ++; };$/;"	f	class:clist_t
 add_space	pistachio/include/spaceid.h	/^    void add_space(spaceid_t id, space_t* space) {$/;"	f	class:spaceid_lookup_t
+add_stackheap	sos/pager.c	/^add_stackheap(AddrSpace *as) {$/;"	f
 add_std_env	tools/pyelf/weaver/bootinfo.py	/^    def add_std_env(self, elf_info, segment_info, servers, virtpools,$/;"	m	class:PD
 add_string	tools/pyelf/elf/section.py	/^    def add_string(self, string):$/;"	m	class:UnpreparedElfStringTable
 add_symbol	tools/pyelf/elf/section.py	/^    def add_symbol(self, symbol):$/;"	m	class:UnpreparedElfSymbolTable
@@ -23396,6 +23405,7 @@ arp_timer	libs/lwip/netif/ethernetif.c	/^arp_timer(void *arg)$/;"	f	file:
 array	libs/ixp400_xscale_sw/src/codelets/atm/IxAtmCodeletSwLoopback.c	/^    IX_OSAL_MBUF *array[IX_ATMCODELET_SW_QUEUE_SIZE];$/;"	m	struct:__anon351	file:
 array	libs/ixp400_xscale_sw/src/codelets/atm/IxOamCodelet.c	/^    IX_OSAL_MBUF *array[IX_OAMCODELET_NUM_MBUFS_IN_SW_MBUF_Q];$/;"	m	struct:__anon359	file:
 array	tools/SCons/Action.py	/^        def array(a):$/;"	f	function:FunctionAction.strfunction
+as_init	sos/pager.c	/^as_init()$/;"	f
 asctime	libs/c/src/asctime.c	/^asctime(const struct tm *timeptr)$/;"	f
 asctime_r	libs/c/src/asctime.c	/^asctime_r(const struct tm *timeptr, char *buf)$/;"	f
 asid	arch/arm/pistachio/v6/include/space.h	/^            hw_asid_t asid;$/;"	m	struct:space_t::__anon74::__anon75
@@ -25269,7 +25279,7 @@ dpl	arch/ia32/libs/l4/include/segment.h	/^            L4_Word_t dpl           : 
 dpl	arch/ia32/pistachio/include/arch_idt.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_idtdesc_t::__anon44::__anon45
 dpl	arch/ia32/pistachio/include/segdesc.h	/^            u32_t dpl           :  2;$/;"	m	struct:ia32_segdesc_t::__anon29::__anon30
 dprintf	arch/ia32/pistachio/cpu/acpi/src/timer-apic.cc	135;"	d	file:
-dprintf	sos/libsos.h	39;"	d
+dprintf	sos/libsos.h	41;"	d
 drainMode	libs/ixp400_xscale_sw/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon136
 drainMode	libs/ixp400_xscale_sw/src/include/IxHssAcc.h	/^    IxHssAccDrainMode drainMode;         \/**< tx pin open drain mode (tx) *\/$/;"	m	struct:__anon441
 drop	build/l4_rootserver/include/lwip/stats.h	/^  u16_t drop;    \/* Dropped packets. *\/$/;"	m	struct:stats_proto
@@ -26247,6 +26257,7 @@ findAllPartial	tools/pyelf/antlr/antlr.py	/^    def findAllPartial(self, subtree
 findAllPartial	tools/pyelf/antlr/antlr.py	/^    def findAllPartial(self,sub):$/;"	m	class:BaseAST
 findIt	tools/SCons/Tool/bcc32.py	/^def findIt(program, env):$/;"	f
 findNextTimeout	libs/ixp_osal/src/core/IxOsalTime.c	/^findNextTimeout (IxOsalTimeval now)$/;"	f
+findPageTableWord	sos/pager.c	/^findPageTableWord(PageTable1 *level1, L4_Word_t addr) {$/;"	f	file:
 find_addr2skip	tools/coverage.py	/^def find_addr2skip(binary):$/;"	f
 find_all_children	tools/pyelf/weaver/ezxml.py	/^    def find_all_children(self, tagname):$/;"	m	class:ParsedElement
 find_arp_entry	libs/lwip/netif/etharp.c	/^find_arp_entry(void)$/;"	f	file:
@@ -28161,6 +28172,7 @@ init_arm_globals	arch/arm/pistachio/src/init.cc	/^extern "C" void SECTION(".init
 init_arm_interrupts	arch/arm/pistachio/src/intctrl.cc	/^void SECTION(".init") init_arm_interrupts()$/;"	f
 init_bootmem	arch/ia32/pistachio/src/init.cc	/^init_bootmem(u32_t kaddr, u32_t ksize)$/;"	f
 init_bootmem	arch/mips/pistachio/src/init.cc	/^static void SECTION (".init") init_bootmem (void)$/;"	f
+init_bootmem	sos/pager.c	/^void init_bootmem(AddrSpace *as) {$/;"	f
 init_clistids	pistachio/src/caps.cc	/^void SECTION(SEC_INIT) init_clistids(void)$/;"	f
 init_clocks	arch/ia32/pistachio/cpu/idt/src/timer-pic.cc	/^Platform::init_clocks(void)$/;"	f	class:Platform
 init_clocks	arch/ia32/pistachio/cpu/idt/src/timer-pic.cc	/^word_t timer_t::init_clocks()$/;"	f	class:timer_t
@@ -32694,6 +32706,7 @@ main	tools/pyelf/tests/run.py	/^def main():$/;"	f
 main	tools/pyelf/weaver/main.py	/^def main(args):$/;"	f
 main	tools/rvds/wrapper.py	/^def main():$/;"	f
 main	tty_test/tty_test.c	/^int main(void)$/;"	f
+main	tty_test2/tty_test2.c	/^int main(void)$/;"	f
 make	tools/pyelf/antlr/antlr.py	/^def make(*nodes):$/;"	f
 makeASTRoot	tools/pyelf/antlr/antlr.py	/^    def makeASTRoot(self,currentAST,root) :$/;"	m	class:Parser
 makeASTRoot	tools/pyelf/antlr/antlr.py	/^    def makeASTRoot(self,currentAST,root):$/;"	m	class:TreeParser
@@ -34338,6 +34351,7 @@ padding	libs/c/include/threadstate.h	/^typedef struct _pthread_mutex_t { L4_Word
 padding	libs/c/include/threadstate.h	/^typedef struct _pthread_once_t { L4_Word_t padding[6]; } pthread_once_t;$/;"	m	struct:_pthread_once_t
 paddr	libs/bootinfo/src/bootinfo_priv.h	/^    word_t paddr;$/;"	m	struct:__anon735
 page	tools/pexpect/examples/bd_client_web.py	/^def page (result = ''):$/;"	f
+page_align_up	sos/pager.c	/^page_align_up(uintptr_t adr)$/;"	f	file:
 page_directory	build/pistachio/include/kernel/tcb.h	/^    pgent_t *           page_directory;$/;"	m	class:tcb_t
 page_directory	pistachio/include/tcb.h	/^    pgent_t *           page_directory;$/;"	m	class:tcb_t
 page_fault_continuation	arch/arm/pistachio/include/ktcb.h	/^            continuation_t page_fault_continuation;$/;"	m	struct:arch_ktcb_t::__anon90::__anon93
@@ -34369,10 +34383,10 @@ pager	build/pistachio/include/kernel/tcb_syscall_data.h	/^        threadid_t    
 pager	pistachio/include/tcb.h	/^    cap_t               pager;$/;"	m	class:tcb_t
 pager	pistachio/include/tcb_syscall_data.h	/^        threadid_t      pager;$/;"	m	struct:tcb_syscall_data_t::__anon1014
 pager	sos/pager.c	/^pager(L4_ThreadId_t tid, L4_Msg_t *msgP)$/;"	f
-pages	sos/pager.h	/^	L4_Word_t *pages[PAGETABLE_SIZE2];$/;"	m	struct:__anon1029
+pages	sos/pager.h	/^	L4_Word_t pages[PAGETABLE_SIZE2];$/;"	m	struct:__anon1029
 pages2	sos/pager.h	/^	PageTable2 *pages2[PAGETABLE_SIZE1];$/;"	m	struct:__anon1030
 pagesize_e	arch/ia32/pistachio/include/ptab.h	/^    enum pagesize_e {$/;"	g	class:ia32_pgent_t
-pagetb	sos/pager.h	/^	PageTable *pagetb;$/;"	m	struct:__anon1031
+pagetb	sos/pager.h	/^	PageTable1 *pagetb;$/;"	m	struct:__anon1031
 pal_memory_pa	loaders/elf-loader/src/arch-alpha/pal.h	/^	uint64_t pal_memory_pa;$/;"	m	struct:percpu_struct
 pal_memory_size	loaders/elf-loader/src/arch-alpha/pal.h	/^	uint64_t pal_memory_size;$/;"	m	struct:percpu_struct
 pal_revision	loaders/elf-loader/src/arch-alpha/pal.h	/^	uint64_t pal_revision;$/;"	m	struct:percpu_struct
@@ -34768,6 +34782,7 @@ phyStatsTxEnb	libs/ixp400_xscale_sw/src/include/IxAtmdAccCtrl.h	/^    unsigned i
 phy_access	platform/pc99/pistachio/kdb/fwohcireg.h	/^        fwohcireg_t     phy_access;     \/* PHY cntl 0xec *\/$/;"	m	struct:ohci_registers
 phys	build/pistachio/include/kernel/rootserver.h	/^    word_t phys;$/;"	m	struct:mem_map_t
 phys	pistachio/include/rootserver.h	/^    word_t phys;$/;"	m	struct:mem_map_t
+phys2virt	sos/pager.c	/^phys2virt(AddrSpace *as, uintptr_t phys) {$/;"	f
 phys_addr	arch/mips/pistachio/include/tlb32.h	/^    addr_t phys_addr (void)$/;"	f	class:translation_t
 phys_addr	arch/mips/pistachio/include/tlb64.h	/^    addr_t phys_addr (void)$/;"	f	class:translation_t
 phys_addr_ram	arch/arm/pistachio/include/globals.h	/^    word_t phys_addr_ram;$/;"	m	struct:__anon94
@@ -35188,7 +35203,6 @@ proterr	libs/lwip/include/lwip/stats.h	/^  u16_t proterr; \/* Protocol error. *\
 provide	tools/pyelf/parsers/gnu/gnu_ld_p.py	/^    def provide(self):    $/;"	m	class:Parser
 prstat	sosh/sosh.c	/^prstat(const char *name)$/;"	f	file:
 ps	sosh/sosh.c	/^ps(int argc, char **argv)$/;"	f	file:
-psize	sos/pager.h	/^	uintptr_t psize; \/\/ size of region " "$/;"	m	struct:Region
 pspawn_wrapper	tools/SCons/SConf.py	/^    def pspawn_wrapper(self, sh, escape, cmd, args, env):$/;"	m	class:SConf
 ptab_to_space	arch/ia32/pistachio/include/space.h	/^INLINE space_t * ptab_to_space(u32_t ptab, scheduler_domain_t cpu = 0)$/;"	f
 ptbr	loaders/elf-loader/src/arch-alpha/pal.h	/^	uint64_t ptbr;$/;"	m	struct:pcb_struct
@@ -37614,6 +37628,7 @@ size	pistachio/include/tcb_syscall_data.h	/^        word_t              size;$/;
 size	pistachio/kdb/include/tracepoints.h	/^    inline word_t size (void)$/;"	f	class:tracepoint_list_t
 size	pistachio/kdb/src/macro_set.cc	/^word_t macro_set_t::size (void)$/;"	f	class:macro_set_t
 size	platform/pxa/pistachio/src/kernel_counter.cc	/^    word_t size;$/;"	m	struct:ll_head	file:
+size	sos/pager.h	/^	uintptr_t size;  \/\/ size of region$/;"	m	struct:Region
 size	tools/pyelf/elf/File.py	/^    def size(self):$/;"	m	class:File
 size	tools/pyelf/elf/structures.py	/^    def size(cls):$/;"	m	class:ElfHeader
 size	tools/pyelf/elf/structures.py	/^    def size(cls):$/;"	m	class:ElfProgramHeader
@@ -37767,6 +37782,7 @@ sos_print_error	sos/libsos.c	/^sos_print_error(L4_Word_t ec)$/;"	f
 sos_print_fpage	sos/libsos.c	/^sos_print_fpage(L4_Fpage_t fpage)$/;"	f
 sos_print_l4memory	sos/libsos.c	/^void sos_print_l4memory(void *addr, L4_Word_t len)$/;"	f
 sos_read	tty_test/ttyout.c	/^sos_read(void *vData, long int position, size_t count, void *handle)$/;"	f
+sos_read	tty_test2/ttyout.c	/^sos_read(void *vData, long int position, size_t count, void *handle)$/;"	f
 sos_start_binfo_executables	sos/libsos.c	/^sos_start_binfo_executables(void *userstack)$/;"	f
 sos_task_new	sos/libsos.c	/^sos_task_new(L4_Word_t task, L4_ThreadId_t pager, $/;"	f
 sos_thread_new	sos/libsos.c	/^sos_thread_new(void *entrypoint, void *stack)$/;"	f
@@ -37774,6 +37790,7 @@ sos_thread_new_priority	sos/libsos.c	/^sos_thread_new_priority(L4_Word_t prio, v
 sos_tid2task	sos/libsos.h	/^static inline L4_Word_t sos_tid2task(L4_ThreadId_t tid)$/;"	f
 sos_usleep	sos/libsos.c	/^void sos_usleep(uint32_t microseconds)$/;"	f
 sos_write	tty_test/ttyout.c	/^sos_write(const void *vData, long int position, size_t count, void *handle)$/;"	f
+sos_write	tty_test2/ttyout.c	/^sos_write(const void *vData, long int position, size_t count, void *handle)$/;"	f
 sosid	sos/libsos.c	/^	L4_ThreadId_t sosid; \/\/ the id we (as sos) will give it$/;"	m	struct:ThreadListT	file:
 source	build/pistachio/include/kernel/tcb_syscall_data.h	/^        tcb_t          *source;$/;"	m	struct:tcb_syscall_data_t::__anon936
 source	pistachio/include/tcb_syscall_data.h	/^        tcb_t          *source;$/;"	m	struct:tcb_syscall_data_t::__anon1014
@@ -39028,6 +39045,7 @@ threadId	libs/ixp400_xscale_sw/src/codelets/hssAcc/IxHssAccCodeletChan.c	/^    I
 threadId	libs/ixp400_xscale_sw/src/codelets/hssAcc/IxHssAccCodeletPkt.c	/^    IxOsalThread threadId;$/;"	m	struct:__anon337	file:
 threadInternal	libs/ixp_osal/os/l4aos/src/IxOsalOsThread.c	/^static void threadInternal(void)$/;"	f	file:
 thread_block	tty_test/tty_test.c	/^thread_block(void)$/;"	f	file:
+thread_block	tty_test2/tty_test2.c	/^thread_block(void)$/;"	f	file:
 thread_count	build/pistachio/include/kernel/space.h	/^    word_t              thread_count;$/;"	m	class:generic_space_t
 thread_count	pistachio/include/space.h	/^    word_t              thread_count;$/;"	m	class:generic_space_t
 thread_ctrl	build/pistachio/include/kernel/tcb_syscall_data.h	/^        thread_ctrl_t thread_ctrl;$/;"	m	union:tcb_syscall_data_t::__anon944
@@ -39475,6 +39493,7 @@ tss	arch/ia32/pistachio/include/segdesc.h	/^        tss  = 0x9$/;"	e	enum:ia32_s
 tstLoop	libs/ixp400_xscale_sw/include/IxAtmdAccCtrl.h	/^    unsigned int tstLoop:1;    \/**< [26] Test Loop Back Enable.$/;"	m	struct:__anon193::UtSysConfig_
 tstLoop	libs/ixp400_xscale_sw/src/include/IxAtmdAccCtrl.h	/^    unsigned int tstLoop:1;    \/**< [26] Test Loop Back Enable.$/;"	m	struct:__anon498::UtSysConfig_
 ttyout_init	tty_test/ttyout.c	/^ttyout_init(void) {$/;"	f
+ttyout_init	tty_test2/ttyout.c	/^ttyout_init(void) {$/;"	f
 tupleize	tools/SCons/cpp.py	/^    def tupleize(self, contents):$/;"	m	class:PreProcessor
 tv_nec	build/l4_rootserver/include/ixp400_xscale_sw/IxOsalBackwardOssl.h	65;"	d
 tv_nec	libs/ixp400_xscale_sw/include/IxOsalBackwardOssl.h	65;"	d
@@ -40245,6 +40264,8 @@ verbose	libs/lwip/sos/sosif.c	99;"	d	file:
 verbose	sos/frames.c	21;"	d	file:
 verbose	sos/libsos.c	37;"	d	file:
 verbose	sos/main.c	26;"	d	file:
+verbose	sos/network.c	30;"	d	file:
+verbose	sos/pager.c	30;"	d	file:
 vercmp	tools/SCons/Tool/intelc.py	/^def vercmp(a, b):$/;"	f
 verify	libs/ixp400_xscale_sw/src/codelets/hssAcc/IxHssAccCodeletChan.c	/^static BOOL verify = TRUE;$/;"	v	file:
 verify	libs/ixp400_xscale_sw/src/codelets/hssAcc/IxHssAccCodeletPkt.c	/^static BOOL verify = TRUE;$/;"	v	file:
@@ -40350,7 +40371,6 @@ vpi	libs/ixp400_xscale_sw/src/include/IxAtmm.h	/^    unsigned vpi;  \/**< VPI va
 vprintf	libs/c/src/vprintf.c	/^vprintf(const char *format, va_list arg)$/;"	f
 vptb	loaders/elf-loader/src/arch-alpha/pal.h	/^	uint64_t vptb;            \/* Virtual base table base.                *\/$/;"	m	struct:hwrpb_struct
 vscanf	libs/c/src/vfscanf.c	/^vscanf(const char *format, va_list arg)$/;"	f
-vsize	sos/pager.h	/^	uintptr_t vsize; \/\/ size of region " "$/;"	m	struct:Region
 vsnprintf	libs/c/src/vsnprintf.c	/^vsnprintf(char *str, size_t size, const char *format, va_list arg)$/;"	f
 vsprintf	libs/c/src/sprintf.c	/^vsprintf(char *s, const char *format, va_list arg)$/;"	f
 vsscanf	libs/c/src/vfscanf.c	/^vsscanf(const char *s, const char *format, va_list arg)$/;"	f
