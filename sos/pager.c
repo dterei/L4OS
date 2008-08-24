@@ -93,7 +93,7 @@ add_stackheap(AddrSpace *as) {
 	heap->next = as->regions;
 	as->regions = stack;
 
-	__malloc_init(heap->vbase, heap->vbase + heap->size);
+	//__malloc_init(heap->vbase, heap->vbase + heap->size);
 
 	return stack->vbase + stack->size; // stack pointer
 }
@@ -114,17 +114,33 @@ phys2virt(AddrSpace *as, uintptr_t phys) {
 
 static L4_Word_t*
 findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
-	int offset1 = addr / (PAGESIZE * PAGETABLE_SIZE2);
-	int offset2 = (addr - (offset1 * PAGESIZE * PAGETABLE_SIZE2)) / PAGESIZE;
+	addr /= PAGESIZE;
+	int offset1 = addr / PAGETABLE_SIZE2;
+	int offset2 = addr - (offset1 * PAGETABLE_SIZE2);
 
+	dprintf(1, "*** findPageTableWord: addr=0x%lx, offset1=0x%lx, offset2=0x%lx\n",
+			addr * PAGESIZE, offset1, offset2);
+
+	if (level1 == NULL) {
+		dprintf(0, "!!! findPageTableWord: level1 is NULL!\n");
+		return NULL;
+	} else if (level1->pages2 == NULL) {
+		dprintf(0, "!!! findPageTableWord: level1->pages2 is NULL!\n");
+		return NULL;
+	}
+
+	dprintf(0, "... findPageTableWord: 1\n");
 	if (level1->pages2[offset1] == NULL) {
+		dprintf(0, "... findPageTableWord: 2\n");
 		level1->pages2[offset1] = (PageTable2*) malloc(sizeof(PageTable2));
 
+		dprintf(0, "... findPageTableWord: 3\n");
 		for (int i = 0; i < PAGETABLE_SIZE2; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
 		}
 	}
 
+	dprintf(0, "... findPageTableWord: 4\n");
 	return &level1->pages2[offset1]->pages[offset2];
 }
 
@@ -132,43 +148,59 @@ void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
 	// Get the faulting address
-	L4_Word_t addr = L4_MsgWord(msgP, 0);
+	//L4_Word_t addr = L4_MsgWord(msgP, 0);
+	L4_Word_t addr = L4_MsgWord(msgP, 0) & ~(PAGESIZE - 1);
 	L4_Word_t ip = L4_MsgWord(msgP, 1);
-	AddrSpace *as = &addrspace[L4_ThreadNo(tid)];
+	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+
+	L4_Word_t frame;
+	int rights;
 
 	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
-			L4_ThreadNo(tid), L4_SenderSpace(), addr, ip);
+			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
 
-	// The first 5 address spaces:
-	for (int i = 0; i < 5; i++) {
-		printf("@@@ %d: %p %p\n", i, addrspace[i].pagetb, addrspace[i].regions);
+	if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
+		// Root task will page fault before page table is actually
+		// set up, so map 1:1.
+		frame = addr;
+		rights = L4_FullyAccessible;
+	} else {
+		// Find region it belongs in.
+		Region *r;
+		for (r = as->regions; r != NULL; r = r->next) {
+			if (addr >= r->vbase && addr < r->vbase + r->size) break;
+		}
+
+		if (r == NULL) {
+			dprintf(0, "*** pager: didn't find region!\n");
+			return;
+		}
+
+		// Add entry to page table if it hasn't been already
+		dprintf(0, "... pager: 1\n");
+		L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
+		dprintf(0, "... pager: 2\n");
+		if (*entry == 0) {
+			*entry = frame_alloc();
+		}
+
+		dprintf(0, "... pager: 3\n");
+		frame = *entry;
+		dprintf(0, "... pager: 4\n");
+		rights = r->rights;
 	}
-
-	// Find region it belongs in.
-	Region *r;
-	for (r = as->regions; r != NULL; r = r->next) {
-		if (r->vbase >= addr && r->vbase < addr) break;
-	}
-
-	if (r == NULL) {
-		dprintf(0, "*** pager: didn't find region!\n");
-		return;
-	}
-
-	// Add entry to page table if it hasn't been already
-	L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
-	if (*entry == 0) {
-		*entry = frame_alloc();
-	}
-
-	// Page align the adddress
-	addr &= ~(PAGESIZE - 1);
 
 	// Map physical to virtual memory
+	dprintf(0, "... pager: 5\n");
 	L4_Fpage_t targetFpage = L4_FpageLog2(addr, 12);
-	L4_Set_Rights(&targetFpage, r->rights);
-	L4_PhysDesc_t phys = L4_PhysDesc(*entry, L4_DefaultMemory);
+	//L4_Set_Rights(&targetFpage, r->rights);
+	dprintf(0, "... pager: 6\n");
+	L4_Set_Rights(&targetFpage, rights);
+	//L4_PhysDesc_t phys = L4_PhysDesc(*entry, L4_DefaultMemory);
+	dprintf(0, "... pager: 7\n");
+	L4_PhysDesc_t phys = L4_PhysDesc(frame, L4_DefaultMemory);
 
+	dprintf(0, "... pager: 8\n");
 	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) {
 		sos_print_error(L4_ErrorCode());
 		printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
