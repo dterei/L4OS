@@ -156,9 +156,6 @@ static inline L4_Word_t sos_tid2task(L4_ThreadId_t tid)
 //
 extern void sos_usleep(uint32_t microseconds);
 
-// XXX Hack: should look this up in USER_HW_VALID_PGSIZES
-#define PAGESIZE 4096
-
 // the notify bit that gets set when an interrupt happens
 #define SOS_IRQ_NOTIFY_BIT  31
 

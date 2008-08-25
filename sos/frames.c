@@ -15,7 +15,7 @@
 #include <l4/types.h>
 
 #include "libsos.h"
-
+#include "pager.h"
 #include "frames.h"
 
 #define NULLFRAME ((L4_Word_t) (0))
@@ -84,3 +84,4 @@ frame_free(L4_Word_t frame)
 	*((L4_Word_t*) frame) = firstFree;
 	firstFree = frame;
 }
+

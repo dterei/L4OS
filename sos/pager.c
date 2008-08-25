@@ -11,9 +11,9 @@
 
 
 //
-// Pager is called from the syscall loop whenever a page fault occurs. The
-// current implementation simply maps whichever pages are asked for.
+// Pager is called from the syscall loop whenever a page fault occurs.//
 //
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -34,6 +34,7 @@ AddrSpace addrspace[MAX_ADDRSPACES];
 static uintptr_t
 page_align_up(uintptr_t adr)
 {
+	//TODO: Can be simplified, just align usually then add a page size.
 	int pageoffset = adr % PAGESIZE;
 	if (pageoffset > 0) {
 		adr += (PAGESIZE - pageoffset);
@@ -62,6 +63,7 @@ add_stackheap(AddrSpace *as) {
 			top = r->base + r->size;
 	}
 
+	// TODO: Need to actually change malloc to use this new heap area
 	top = page_align_up(top);
 	Region *heap = (Region *)malloc(sizeof(Region));
 	heap->size = ONE_MEG;
@@ -70,6 +72,7 @@ add_stackheap(AddrSpace *as) {
 
 	// Put the stack above the heap... for no particular
 	// reason.
+	// TODO: Place stack at top of address space
 	top = page_align_up(top + heap->size);
 	Region *stack = (Region *)malloc(sizeof(Region));
 	stack->size = ONE_MEG;
@@ -82,7 +85,7 @@ add_stackheap(AddrSpace *as) {
 	as->regions = stack;
 
 	// Stack pointer - the (-PAGESIZE) thing makes it work.
-	// TODO fix this hack.
+	// TODO: fix this hack.
 	return stack->base + stack->size - PAGESIZE;
 }
 
@@ -125,7 +128,7 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
 			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
 
-	addr &= ~(PAGESIZE - 1);
+	addr &= PAGEALIGN;
 
 	if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
 		// Root task will page fault before page table is actually
@@ -164,5 +167,6 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 		sos_print_error(L4_ErrorCode());
 		printf("Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
 	}
+
 }
 

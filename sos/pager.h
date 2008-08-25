@@ -4,9 +4,19 @@
 #include <l4/types.h>
 #include <l4/message.h>
 
-#define MAX_ADDRSPACES 256
+// XXX Hack: should look this up in USER_HW_VALID_PGSIZES
+#define PAGESIZE 4096
+
 #define PAGETABLE_SIZE1 1024
 #define PAGETABLE_SIZE2 1024
+#define PAGEALIGN ~(PAGESIZE -1)
+
+#define MAX_ADDRSPACES 256
+
+/* Access rights */
+#define REGION_READ 0x4
+#define REGION_WRITE 0x2
+#define REGION_EXECUTE 0x1
 
 /* Page Table Struct */
 typedef struct {
@@ -29,11 +39,6 @@ struct Region {
 
 typedef struct Region Region;
 
-/* Access rights */
-#define REGION_READ 0x4
-#define REGION_WRITE 0x2
-#define REGION_EXECUTE 0x1
-
 /* Address space Struct */
 typedef struct {
 	PageTable1 *pagetb;
@@ -48,3 +53,4 @@ void as_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
 #endif // _PAGER_H
+

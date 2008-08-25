@@ -354,7 +354,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 
 	if (pd == 0) {
 		dprintf(1, "*** bootinfo_attach: ignoring pd of 0\n");
-		return 0;
+		return BI_NAME_INVALID;
 	}
 
 	// Look for which thread (address space) it wants.
@@ -366,7 +366,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 
 	if (thread == NULL) {
 		dprintf(0, "!!! bootinfo_attach: didn't find relevant thread!\n");
-		return 0;
+		return BI_NAME_INVALID;
 	} else {
 		dprintf(1, "*** bootinfo_attach: found thread %d\n",
 				L4_ThreadNo(thread->sosid));
@@ -381,7 +381,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 
 	if (region == NULL) {
 		dprintf(0, "!!! bootinfo_attach: didn't find relevant ms!\n");
-		return 0;
+		return BI_NAME_INVALID;
 	} else {
 		dprintf(1, "*** bootinfo_attach: found relevant ms at %p\n", thread);
 	}
@@ -439,7 +439,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 
 	if (thread == NULL) {
 		dprintf(0, "!!! bootinfo_new_thread: didn't find pd owner!\n");
-		return 0;
+		return ++bootinfo_id;
 	}
 
 	// Fill in some more info.
@@ -474,7 +474,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 
 	if (thread == NULL) {
 		dprintf(0, "!!! bootinfo_run_thread: didn't find matching thread!\n");
-		return 0;
+		return BI_NAME_INVALID;
 	}
 
 	// Start a new task from the thread.
