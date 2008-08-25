@@ -37,7 +37,7 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	high = frame + 1;
 
 	// Hungry!
-	dprintf(0, "Trying to map pages.\n");
+	dprintf(1, "*** frame_init: trying to map pages.\n");
 	for (page = low; page < high; page += PAGESIZE) {
 		fpage = L4_Fpage(page, PAGESIZE);
 		L4_Set_Rights(&fpage, L4_ReadWriteOnly);
@@ -46,12 +46,12 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	}
 
 	// Make everything free.
-	dprintf(0, "Trying to initialise linked list.\n");
+	dprintf(1, "*** frame_init: trying to initialise linked list.\n");
 	for (page = low; page < high - PAGESIZE; page += PAGESIZE) {
 		*((L4_Word_t*) page) = page + PAGESIZE;
 	}
 
-	dprintf(0, "Trying to set bounds of linked list.\n");
+	dprintf(1, "*** frame_init: trying to set bounds of linked list.\n");
 	firstFree = low;
 	*((L4_Word_t*) (high - PAGESIZE)) = NULLFRAME;
 }

@@ -27,9 +27,7 @@
 #include "pager.h"
 #include "libsos.h"
 
-#define verbose 2
-
-extern void __malloc_init(uintptr_t head_base,  uintptr_t heap_end);
+#define verbose 1
 
 AddrSpace addrspace[MAX_ADDRSPACES];
 
@@ -45,73 +43,47 @@ page_align_up(uintptr_t adr)
 }
 
 void
-as_init()
-{
-	for (int i = 0; i < MAX_ADDRSPACES; i++)
-	{
+as_init(void) {
+	for (int i = 0; i < MAX_ADDRSPACES; i++) {
 		addrspace[i].pagetb = NULL;
 		addrspace[i].regions = NULL;
 	}
 }
 
-void init_bootmem(AddrSpace *as) {
-	//uintptr_t vb = PAGESIZE;
-
-	for (Region *r = as->regions; r != NULL; r = r->next)
-	{
-		r->vbase = r->pbase;
-		//vb += r->size;
-		//vb = page_align_up(vb);
-	}
-}
-
 uintptr_t
 add_stackheap(AddrSpace *as) {
-	uintptr_t top = (uintptr_t) (-PAGESIZE);
+	uintptr_t top = 0;
 
+	// Find the highest address from bootinfo and put the
+	// heap above it.
 	for (Region *r = as->regions; r != NULL; r = r->next)
 	{
-		if ((r->vbase + r->size) > top)
-			top = r->vbase + r->size;
+		if ((r->base + r->size) > top)
+			top = r->base + r->size;
 	}
 
 	top = page_align_up(top);
 	Region *heap = (Region *)malloc(sizeof(Region));
 	heap->size = ONE_MEG;
-	heap->vbase = top;
-	heap->pbase = 0;
+	heap->base = top;
 	heap->rights = REGION_READ | REGION_WRITE;
 
-	//top = (uintptr_t) (-PAGESIZE);
+	// Put the stack above the heap... for no particular
+	// reason.
 	top = page_align_up(top + heap->size);
 	Region *stack = (Region *)malloc(sizeof(Region));
-	stack->vbase = top;
 	stack->size = ONE_MEG;
-	//stack->vbase = top - stack->size;
-	stack->pbase = 0;
+	stack->base = top;
 	stack->rights = REGION_READ | REGION_WRITE;
 
+	// Add them to the region list.
 	stack->next = heap;
 	heap->next = as->regions;
 	as->regions = stack;
 
-	//__malloc_init(heap->vbase, heap->vbase + heap->size);
-
-	return stack->vbase + stack->size; // stack pointer
-}
-
-uintptr_t
-phys2virt(AddrSpace *as, uintptr_t phys) {
-	for (Region *r = as->regions; r != NULL; r = r->next)
-	{
-		if (phys >= r->pbase && phys < (r->pbase + r->size))
-		{
-			return r->vbase + (phys - r->pbase);
-		}
-	}
-
-	dprintf(0, "*** phys2virt: asked for phys address outside region!\n");
-	return 0;
+	// Stack pointer - the (-PAGESIZE) thing makes it work.
+	// TODO fix this hack.
+	return stack->base + stack->size - PAGESIZE;
 }
 
 static L4_Word_t*
@@ -119,9 +91,6 @@ findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
 	addr /= PAGESIZE;
 	int offset1 = addr / PAGETABLE_SIZE2;
 	int offset2 = addr - (offset1 * PAGETABLE_SIZE2);
-
-	dprintf(1, "*** findPageTableWord: addr=0x%lx, offset1=0x%lx, offset2=0x%lx\n",
-			addr * PAGESIZE, offset1, offset2);
 
 	if (level1 == NULL) {
 		dprintf(0, "!!! findPageTableWord: level1 is NULL!\n");
@@ -147,13 +116,11 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
 	// Get the faulting address
 	L4_Word_t addr = L4_MsgWord(msgP, 0);
-	//L4_Word_t addr = L4_MsgWord(msgP, 0) & ~(PAGESIZE - 1);
 	L4_Word_t ip = L4_MsgWord(msgP, 1);
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 
 	L4_Word_t frame;
 	int rights;
-	int needToUnmap = 0;
 
 	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
 			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
@@ -169,49 +136,33 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 		// Find region it belongs in.
 		Region *r;
 		for (r = as->regions; r != NULL; r = r->next) {
-			if (addr >= r->vbase && addr < r->vbase + r->size) break;
+			if (addr >= r->base && addr < r->base + r->size) break;
 		}
 
 		if (r == NULL) {
-			dprintf(0, "*** pager: didn't find region!\n");
-			return;
+			dprintf(0, "Segmentation fault\n");
+			// TODO kill the thread (L4_ThreadControl)
 		}
 
-		// Add entry to page table if it hasn't been already
-		L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
-		if (*entry == 0) {
-			*entry = frame_alloc();
-			needToUnmap = 1;
+		if (r->mapDirectly) {
+			dprintf(1, "*** pager: mapping %lx (region %p) directly\n", addr, r);
+			frame = addr;
+		} else {
+			L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
+			if (*entry == 0) *entry = frame_alloc();
+			frame = *entry;
 		}
 
-		frame = *entry;
 		rights = r->rights;
 	}
 
-	// If we did get a frame from the frame table it's mapped to the
-	// root task, so need to unmap it from the root task before trying
-	// to map it to ours.
-	//
-	// By the way, if there is already an entry in the page table do
-	// we need to unmap it too?  And do we have to map it?  Argh!
-	if (needToUnmap) {
-		L4_Fpage_t unmapMe = L4_Fpage(frame, PAGESIZE);
-		dprintf(1, "*** pager: going to try to unmap %lx\n", L4_Address(unmapMe));
-
-		if (!L4_UnmapFpage(L4_rootspace, unmapMe)) {
-			sos_print_error(L4_ErrorCode());
-			dprintf(0, "!!! Couldn't unmap page %lx!\n", L4_Address(unmapMe));
-		}
-	}
-
-	// Map physical to virtual memory
 	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
 	L4_PhysDesc_t ppage = L4_PhysDesc(frame, L4_UncachedMemory);
 
 	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
-		printf(" Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
+		printf("Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
 	}
 }
 

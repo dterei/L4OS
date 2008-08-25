@@ -19,12 +19,12 @@ typedef struct {
 
 /* Region Struct */
 struct Region {
-	uintptr_t vbase; // start of region in virtual address space/page table
-	uintptr_t pbase; // start of region in physical memory / frame table
-	uintptr_t size;  // size of region
-	int rights;      // access rights of region (read, write, execute)
-	int id;          // what bootinfo uses to identify the region
-	struct Region *next; // next region in list;
+	uintptr_t base; // base of the region
+	uintptr_t size; // size of region
+	int mapDirectly;  // do we directly (1:1) map it?
+	int rights;     // access rights of region (read, write, execute)
+	int id;         // what bootinfo uses to identify the region
+	struct Region *next;
 };
 
 typedef struct Region Region;
@@ -43,10 +43,8 @@ typedef struct {
 /* Max of 256 Address Spaces */
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
-void as_init(void);
-void init_bootmem(AddrSpace *as);
 uintptr_t add_stackheap(AddrSpace *as);
-uintptr_t phys2virt(AddrSpace *as, uintptr_t phys);
+void as_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 
 #endif // _PAGER_H

@@ -37,7 +37,10 @@ sos_write(const void *vData, long int position, size_t count, void *handle)
 		L4_MsgClear(&msg);
 		L4_Set_MsgLabel(&msg, 0); // TODO #define nicely
 
-		k = count > MAX_NETPRINT ? MAX_NETPRINT : count;
+		k = MAX_NETPRINT;
+		if (k > count - i) {
+			k = count - i;
+		}
 
 		for (j = i; j < i + k; j++) {
 			L4_MsgAppendWord(&msg, realdata[j]);

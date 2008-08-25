@@ -123,13 +123,13 @@ network_sendstring(int len, int *contents) {
 	int i;
 	char c;
 
-	printf("*** network_sendstring: ");
+	dprintf(1, "*** network_sendstring: ");
 
 	for (i = 0; i < len; i++) {
 		c = (char) contents[i];
 		serial_send(serial, &c, 1);
-		dprintf(0, "%c", c);
+		dprintf(1, "%c", c);
 	}
 
-	printf("\n");
+	dprintf(1, "\n");
 }

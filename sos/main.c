@@ -23,15 +23,15 @@
 #include "pager.h"
 #include "frames.h"
 
-#define verbose 2
+#define verbose 1
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
 #define INFINITY (1 << 8)
+#define RUN_FRAME_TEST 0
 
-/* Set aside some memory for a stack for the
- * first user task 
- */
+// Set aside some memory for a stack for the
+// first user task 
 #define STACK_SIZE 0x1000
 static L4_Word_t init_stack_s[STACK_SIZE];
 static L4_Word_t user_stack_s[STACK_SIZE];
@@ -249,7 +249,6 @@ main (void)
 
 	// Initialise the memory frame table
 	frame_init((low + HEAP_SIZE), high);
-	dprintf(0, "Okay, managed to init frame table.\n");
 
 	// Initialise the address spaces
 	as_init();
@@ -259,9 +258,7 @@ main (void)
 	(void) sos_thread_new(&init_thread, &init_stack_s[STACK_SIZE]);
 
 	/* Test M1 */
-	//dprintf(0, "about to run frame_test\n");
-	//frame_test();
-	(void) frame_test;
+	if (RUN_FRAME_TEST) frame_test();
 
 	dprintf(1, "*** main: about to start syscall loop\n");
 	syscall_loop(); // Enter the syscall loop

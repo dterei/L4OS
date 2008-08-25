@@ -30,11 +30,13 @@
 #include "libsos.h"
 #include "pager.h"
 
+#define VIRTPOOL_MAP_DIRECTLY 0x3
+
 // Hack externs from timer.c
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 3
+#define verbose 1
 
 extern void _start(void);
 
@@ -327,9 +329,9 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 
 	// Create new region.
 	Region *newreg = (Region *)malloc(sizeof(Region));
-	newreg->pbase = base;
+	newreg->base = base;
 	newreg->size = size;
-	newreg->vbase = 0;
+	newreg->mapDirectly = (virtpool == VIRTPOOL_MAP_DIRECTLY);
 	newreg->rights = 0;
 	newreg->id = bootinfo_id;
 
@@ -447,7 +449,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	thread->sosid = sos_get_new_tid();
 	dprintf(1, "I was just allocated threadid %lx\n", L4_ThreadNo(thread->sosid));
 
-	// Now would be a good time to initialise our address space.
+	// Now would be a good time to initialise our address space properly.
 	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
 	as->pagetb = (PageTable1 *) malloc(sizeof(PageTable1));
 	as->regions = NULL;
@@ -479,14 +481,13 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n", L4_ThreadNo(thread->sosid));
 
 	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
-	init_bootmem(as);
 	uintptr_t sp = add_stackheap(as);
 
 	if (sp == 0)
 		return BI_NAME_INVALID;
 
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
-			(void*) phys2virt(as, thread->ip), (void*) sp);
+			(void*) thread->ip, (void*) sp);
 
 	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
 
@@ -529,9 +530,7 @@ sos_start_binfo_executables(void *userstack)
 	bi_callbacks.run_thread = bootinfo_run_thread;
 	bi_callbacks.cleanup = bootinfo_cleanup;
 
-	dprintf(1, "*** sos_start_binfo_executables: about to parse bootinfo\n");
 	result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
-	dprintf(1, "*** sos_start_binfo_executables: finished parsing bootinfo\n");
 	if (result)
 		dprintf(0, "bootinfo_parse failed: %d\n", result);
 }
