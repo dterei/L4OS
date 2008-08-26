@@ -11,8 +11,7 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-/* Your OS header file */
-#include <sos.h>
+#include <sos/sos.h>
 
 #define BUF_SIZ   128
 #define MAX_ARGS   32
@@ -119,7 +118,7 @@ ps(int argc, char **argv)
     printf ("TID SIZE   STIME   CTIME COMMAND\n");
 
     for (i=0; i<processes; i++) {
-	printf ("%3x %4x %7d %7d %s\n", process[i].tid, process[i].size,
+	printf ("%3x %4x %7d %7d %s\n", process[i].pid, process[i].size,
 	    process[i].stime, process[i].ctime, process[i].command);
     }
 

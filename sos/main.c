@@ -16,6 +16,8 @@
 
 #include <serial/serial.h>
 
+#include <sos/sos.h>
+
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
@@ -62,9 +64,6 @@ init_thread(void)
 #define L4_EXCEPTION    ((L4_Word_t) -5)
 
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
-
-#define SOS_NETPRINT 0
-#define SOS_DEBUG_FLUSH 1
 
 /*
   Syscall loop.

@@ -2,47 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <l4/types.h>
+#include <sos/pager.h>
+#include <sos/sos.h>
+#include <sos/thread.h>
 
+#include <l4/types.h>
 #include <l4/ipc.h>
 #include <l4/message.h>
 #include <l4/thread.h>
 
-
-// TODO: xxx HACK needed for printf. Need to move printf to libsos
-#include "../tty_test/ttyout.c"
-
 #define NPAGES 128
-#define SOS_DEBUG_FLUSH 1
 
-static void
-sos_debug_flush( void )
-{
-	//TODO: Should be a system call, so live in libc.
-	// No, should live in libsos
-	L4_Msg_t msg;
-	L4_MsgClear(&msg);
-	L4_Set_MsgLabel(&msg, SOS_DEBUG_FLUSH);
-	L4_MsgLoad(&msg);
-	L4_Send(L4_rootserver);
-}
-
-// Block a thread forever
-static void
-thread_block(void)
-{
-	L4_Msg_t msg;
-
-	L4_MsgClear(&msg);
-	L4_MsgTag_t tag = L4_Receive(L4_Myself());
-
-	if (L4_IpcFailed(tag)) {
-		printf("blocking thread failed: %lx\n", tag.raw);
-		*(char *) 0 = 0;
-	}
-}
-
-/* called from pt_test */
 static void
 do_pt_test( char *buf )
 {
@@ -62,7 +32,7 @@ do_pt_test( char *buf )
 }
 
 static void
-pt_test( void )
+pt_test(void)
 {
 	/* need a decent sized stack */
 	char buf1[NPAGES * 1024], *buf2 = NULL;

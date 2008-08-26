@@ -14,27 +14,12 @@
 #include <stdlib.h>
 
 #include <l4/types.h>
-
 #include <l4/ipc.h>
 #include <l4/message.h>
 #include <l4/thread.h>
 
-#include "ttyout.h"
-
-// Block a thread forever
-static void
-thread_block(void)
-{
-    L4_Msg_t msg;
-
-    L4_MsgClear(&msg);
-    L4_MsgTag_t tag = L4_Receive(L4_Myself());
-
-    if (L4_IpcFailed(tag)) {
-	printf("blocking thread failed: %lx\n", tag.raw);
-	*(char *) 0 = 0;
-    }
-}
+#include <sos/thread.h>
+#include <sos/ttyout.h>
 
 int main(void)
 {

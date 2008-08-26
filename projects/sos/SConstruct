@@ -12,8 +12,8 @@
 from math import ceil, log
 
 #
-# XXX: Student change this for the milestone you are building
-milestone = 2
+# Change this for the milestone you are building
+milestone = 3
 
 #############################################################################
 ## Global configuration options
@@ -96,6 +96,7 @@ rootserver_env.Package("libs/ixp400_xscale_sw")
 rootserver_env.Package("libs/lwip")
 rootserver_env.Package("libs/nfs")
 rootserver_env.Package("libs/serial")
+rootserver_env.Package("libs/sos")
 sos = rootserver_env.Package("sos");
 
 pager_milestone = 2
@@ -111,6 +112,7 @@ app_env.Package("libs/compat")
 app_env.Package("libs/c")
 app_env.Package("libs/elf")
 app_env.Package("libs/gcc")
+app_env.Package("libs/sos")
 
 if milestone < pager_milestone:
     app_name = "tty_test"
@@ -118,7 +120,6 @@ elif milestone < timer_syscall_milestone:
     app_name = "pt_test"
 else:
     app_name = "sosh"
-    app_env.Package("libs/sos")
 
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling

@@ -3,9 +3,17 @@
 #ifndef _SOS_H
 #define _SOS_H
 
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <l4/types.h>
 
 /* System calls for SOS */
+
+/* From previous milestones */
+#define SOS_NETPRINT 0
+#define SOS_DEBUG_FLUSH 1
 
 /* Limits */
 #define PROCESS_MAX_FILES 16
@@ -37,7 +45,6 @@ typedef struct {
 } stat_t;
 
 typedef int fildes_t;
-typedef int pid_t;
 
 /* The FD to which printf() will ultimately write() */
 extern fildes_t stdout_fd;

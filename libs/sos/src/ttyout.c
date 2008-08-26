@@ -13,13 +13,13 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "ttyout.h"
+#include <sos/sos.h>
+#include <sos/ttyout.h>
 
 #include <l4/types.h>
 #include <l4/kdebug.h>
 #include <l4/ipc.h>
 
-#define SOS_NETPRINT 0
 #define MAX_NETPRINT 31
 
 void
