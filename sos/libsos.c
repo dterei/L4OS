@@ -354,7 +354,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 
 	if (pd == 0) {
 		dprintf(1, "*** bootinfo_attach: ignoring pd of 0\n");
-		return BI_NAME_INVALID;
+		return 0;
 	}
 
 	// Look for which thread (address space) it wants.
@@ -428,7 +428,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 
 	if (bi_owner == 0) {
 		dprintf(1, "*** bootinfo_new_thread: ignoring owner of 0\n");
-		return ++bootinfo_id;
+		return 0;
 	}
 
 	// Find pd that owns this thread (and by doing so the thread info).

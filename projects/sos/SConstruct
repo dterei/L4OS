@@ -98,6 +98,7 @@ rootserver_env.Package("libs/nfs")
 rootserver_env.Package("libs/serial")
 sos = rootserver_env.Package("sos");
 
+pager_milestone = 2
 timer_syscall_milestone = 3
 
 # Use the app_env environment for building everything else that will run in the
@@ -111,8 +112,10 @@ app_env.Package("libs/c")
 app_env.Package("libs/elf")
 app_env.Package("libs/gcc")
 
-if milestone < timer_syscall_milestone:
+if milestone < pager_milestone:
     app_name = "tty_test"
+elif milestone < timer_syscall_milestone:
+    app_name = "pt_test"
 else:
     app_name = "sosh"
     app_env.Package("libs/sos")
@@ -121,10 +124,6 @@ else:
 # tools that need to get loaded and run in your context.  Do that by calling
 # the Application function a number times in the app_env environment.
 app = app_env.Package(app_name)
-
-# pt_test for testing M2
-if milestone == 2:
-	app = app_env.Package("pt_test")
 
 # Memory pools
 pools = rootserver_env.IguanaDefaultMemoryPools(sos)

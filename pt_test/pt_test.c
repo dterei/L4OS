@@ -1,7 +1,15 @@
-#include <stdlib.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-// TODO: xxx HACK needed for printf. Need to move printf to libc
+#include <l4/types.h>
+
+#include <l4/ipc.h>
+#include <l4/message.h>
+#include <l4/thread.h>
+
+
+// TODO: xxx HACK needed for printf. Need to move printf to libsos
 #include "../tty_test/ttyout.c"
 
 #define NPAGES 128
@@ -11,11 +19,27 @@ static void
 sos_debug_flush( void )
 {
 	//TODO: Should be a system call, so live in libc.
+	// No, should live in libsos
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);
 	L4_Set_MsgLabel(&msg, SOS_DEBUG_FLUSH);
 	L4_MsgLoad(&msg);
 	L4_Send(L4_rootserver);
+}
+
+// Block a thread forever
+static void
+thread_block(void)
+{
+	L4_Msg_t msg;
+
+	L4_MsgClear(&msg);
+	L4_MsgTag_t tag = L4_Receive(L4_Myself());
+
+	if (L4_IpcFailed(tag)) {
+		printf("blocking thread failed: %lx\n", tag.raw);
+		*(char *) 0 = 0;
+	}
 }
 
 /* called from pt_test */
@@ -30,7 +54,6 @@ do_pt_test( char *buf )
 		buf[i * 1024] = i;
 
 	/* flush */
-	assert(!"make a syscall to flush the user address space");
 	sos_debug_flush();
 
 	/* check */
@@ -58,8 +81,12 @@ pt_test( void )
 }
 
 int
-main( int argc, char *argv[])
+main(int argc, char *argv[])
 {
+	printf("Starting pt_test...\n");
 	pt_test();
+	printf("Finished pt_test.  Did it work?\n");
+	thread_block();
+	return 0;
 }
 

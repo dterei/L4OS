@@ -174,8 +174,15 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 void
 pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
-	//TODO: Actually flush as. Done by mapping each page to a null frame? 0? Max Ram?
+	// There is actually a magic fpage that we can use to unmap
+	// the whole address space - and I assume we're meant to
+	// unmap it from the sender space.
+	if (!L4_UnmapFpage(L4_SenderSpace(), L4_CompleteAddressSpace)) {
+		sos_print_error(L4_ErrorCode());
+		printf("!!! pager_flush: failed to unmap complete address space\n");
+	}
 
+	/*
 	// get null frame to map pages to
 	L4_Word_t nullAddr = { 0UL };
 	nullAddr &= PAGEALIGN;
@@ -193,8 +200,7 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 			printf("Can't map page at %lx to %lx for tid %lx\n",
 					paddr, nullAddr, tid.raw);
 		}
-
 	}
-
+	*/
 }
 
