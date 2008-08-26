@@ -5,6 +5,18 @@
 #include "../tty_test/ttyout.c"
 
 #define NPAGES 128
+#define SOS_DEBUG_FLUSH 1
+
+static void
+sos_debug_flush( void )
+{
+	//TODO: Should be a system call, so live in libc.
+	L4_Msg_t msg;
+	L4_MsgClear(&msg);
+	L4_Set_MsgLabel(&msg, SOS_DEBUG_FLUSH);
+	L4_MsgLoad(&msg);
+	L4_Send(L4_rootserver);
+}
 
 /* called from pt_test */
 static void
@@ -19,7 +31,7 @@ do_pt_test( char *buf )
 
 	/* flush */
 	assert(!"make a syscall to flush the user address space");
-	//sos_debug_flush();
+	sos_debug_flush();
 
 	/* check */
 	for(i = 0; i < NPAGES; i += 4)

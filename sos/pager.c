@@ -165,7 +165,35 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 
 	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
-		printf("Can't map page at %lx for tid %lx, ip = %lx\n", addr, tid.raw, ip);
+		printf("Can't map page at %lx to frame %lx for tid %lx, ip = %lx\n",
+				addr, frame, tid.raw, ip);
+	}
+
+}
+
+void
+pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
+{
+	//TODO: Actually flush as. Done by mapping each page to a null frame? 0? Max Ram?
+
+	// get null frame to map pages to
+	L4_Word_t nullAddr = { 0UL };
+	nullAddr &= PAGEALIGN;
+	L4_PhysDesc_t nullFrame = L4_PhysDesc(nullAddr, L4_UncachedMemory);
+
+	// map all pages to null frame
+	for (L4_Word_t paddr = 0UL; paddr < (L4_Word_t) (-1); paddr += PAGESIZE) {
+		paddr &= PAGEALIGN;
+
+		L4_Fpage_t page = L4_Fpage(paddr, PAGESIZE);
+		L4_Set_Rights(&page, L4_NoAccess);
+
+		if (!L4_MapFpage(L4_SenderSpace(), page, nullFrame)) {
+			sos_print_error(L4_ErrorCode());
+			printf("Can't map page at %lx to %lx for tid %lx\n",
+					paddr, nullAddr, tid.raw);
+		}
+
 	}
 
 }

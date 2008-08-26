@@ -64,6 +64,7 @@ init_thread(void)
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
 #define SOS_NETPRINT 0
+#define SOS_DEBUG_FLUSH 1
 
 /*
   Syscall loop.
@@ -158,6 +159,11 @@ syscall_loop(void)
 				/* our system calls */	
 			case SOS_NETPRINT:
 				network_sendstring(msg.tag.X.u, (int*) (msg.msg + 1));
+				send = 0;
+				break;
+
+			case SOS_DEBUG_FLUSH:
+				pager_flush(tid, &msg);	
 				send = 0;
 				break;
 
