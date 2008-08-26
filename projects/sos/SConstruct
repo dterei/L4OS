@@ -122,6 +122,10 @@ else:
 # the Application function a number times in the app_env environment.
 app = app_env.Package(app_name)
 
+# pt_test for testing M2
+if milestone == 2:
+	app = app_env.Package("pt_test")
+
 # Memory pools
 pools = rootserver_env.IguanaDefaultMemoryPools(sos)
 

@@ -1,0 +1,13 @@
+1. Add flush debug system call.
+
+2. Add test program.
+
+3. Fix heap, currently using static array, need to change it to use region.
+
+4. Fix stack to be set to top of address space.
+
+5. Find out why we need the hack of setting the sp to the stack top - PAGESIZE.
+
+6. Move sos_write out of ttyout.c and into libc so that printf can be easily
+   used in all user programs.
+
