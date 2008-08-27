@@ -24,6 +24,7 @@
 
 #include "pager.h"
 #include "frames.h"
+#include "vfs.h"
 
 #define verbose 1
 
@@ -86,6 +87,7 @@ syscall_loop(void)
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor,L4_NotifyMsgAcceptor));
 
 	int send = 0;
+	L4_Word_t rval;
 	L4_Msg_t msg;
 	L4_ThreadId_t tid = L4_nilthread;
 	L4_Word_t irq_mask = 1 << SOS_IRQ_NOTIFY_BIT;
@@ -155,7 +157,6 @@ syscall_loop(void)
 				send = 0;
 				break;
 
-				/* our system calls */	
 			case SOS_NETPRINT:
 				network_sendstring(msg.tag.X.u, (int*) (msg.msg + 1));
 				send = 0;
@@ -166,9 +167,47 @@ syscall_loop(void)
 				send = 0;
 				break;
 
-				/* error? */
+			case SOS_OPEN:
+				rval = (L4_Word_t) vfs_open(
+						(char*) sender2kernel(L4_MsgWord(&msg, 0)),
+						(fmode_t) L4_MsgWord(&msg, 1));
+				*(sender2kernel(L4_MsgWord(&msg, 2))) = rval;
+				break;
+
+			case SOS_CLOSE:
+				rval = (L4_Word_t) vfs_close(
+						(fildes_t) L4_MsgWord(&msg, 0));
+				*(sender2kernel(L4_MsgWord(&msg, 1))) = rval;
+				break;
+
+			case SOS_READ:
+				rval = (L4_Word_t) vfs_read(
+						(fildes_t) L4_MsgWord(&msg, 0),
+						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
+						(size_t) L4_MsgWord(&msg, 2));
+				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				break;
+
+			case SOS_WRITE:
+				rval = (L4_Word_t) vfs_write(
+						(fildes_t) L4_MsgWord(&msg, 0),
+						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
+						(size_t) L4_MsgWord(&msg, 2));
+				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				break;
+
+			case SOS_GETDIRENT:
+			case SOS_PROCESS_CREATE:
+			case SOS_PROCESS_DELETE:
+			case SOS_MY_ID:
+			case SOS_PROCESS_STATUS:
+			case SOS_PROCESS_WAIT:
+			case SOS_TIME_STAMP:
+			case SOS_SLEEP:
+			case SOS_SHARE_VM:
 			default:
 				// Unknown system call, so we don't want to reply to this thread
+				dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
 				sos_print_l4memory(&msg, L4_UntypedWords(tag) * sizeof(uint32_t));
 				send = 0;
 				break;

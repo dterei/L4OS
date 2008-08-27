@@ -68,7 +68,7 @@ void
 abort(void)
 {
 	L4_KDB_Enter("sos abort()ed");
-	while(1); /* We don't return after this */
+	while (1);
 }
 
 void _Exit(int status) { abort(); }

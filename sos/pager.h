@@ -3,6 +3,7 @@
 
 #include <l4/types.h>
 #include <l4/message.h>
+#include <sos/sos.h>
 
 // XXX Hack: should look this up in USER_HW_VALID_PGSIZES
 #define PAGESIZE 4096
@@ -10,8 +11,6 @@
 #define PAGETABLE_SIZE1 1024
 #define PAGETABLE_SIZE2 1024
 #define PAGEALIGN ~(PAGESIZE -1)
-
-#define MAX_ADDRSPACES 256
 
 /* Access rights */
 #define REGION_READ 0x4
@@ -52,6 +51,7 @@ uintptr_t add_stackheap(AddrSpace *as);
 void as_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
+L4_Word_t *sender2kernel(L4_Word_t ptr);
 
 #endif // _PAGER_H
 

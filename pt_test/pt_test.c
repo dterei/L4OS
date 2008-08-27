@@ -2,9 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <sos/pager.h>
 #include <sos/sos.h>
-#include <sos/thread.h>
 
 #include <l4/types.h>
 #include <l4/ipc.h>

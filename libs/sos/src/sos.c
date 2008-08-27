@@ -1,7 +1,56 @@
-/* Simple operating system interface */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+#include <l4/ipc.h>
+#include <l4/message.h>
 #include <l4/types.h>
+
 #include <sos/sos.h>
+
+#define YES_REPLY 1
+#define NO_REPLY 0
+#define MAGIC_THAT_MAKES_LABELS_WORK 4
+
+/* Standard file descriptors */
+fildes_t stdin_fd = 0;
+fildes_t stdout_fd = 1;
+fildes_t stderr_fd = 2;
+
+/* Standard syscall interface. */
+static void prepareSyscall(L4_Msg_t *msg) {
+	L4_MsgClear(msg);
+}
+
+static void makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
+	L4_Set_MsgLabel(msg, s << MAGIC_THAT_MAKES_LABELS_WORK);
+	L4_MsgLoad(msg);
+
+	if (reply == YES_REPLY) {
+		L4_Call(L4_rootserver);
+	} else {
+		L4_Send(L4_rootserver);
+	}
+}
+
+/* Misc system calls */
+
+void sos_debug_flush(void) {
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+	makeSyscall(SOS_DEBUG_FLUSH, NO_REPLY, &msg);
+}
+
+void thread_block(void) {
+	L4_Msg_t msg;
+
+	L4_MsgClear(&msg);
+	L4_MsgTag_t tag = L4_Receive(L4_Myself());
+
+	if (L4_IpcFailed(tag)) {
+		printf("!!! thread_block: failed, tag=%lx\n", tag.raw);
+	}
+}
 
 /* I/O system calls */
 
@@ -15,14 +64,33 @@
  * "path" is file name, "mode" is one of O_RDONLY, O_WRONLY, O_RDWR.
  */
 fildes_t open(const char *path, fmode_t mode) {
-	return 0;
+	fildes_t rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) path);
+	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_OPEN, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 
  * Closes an open file. Returns 0 if successful, -1 if not (invalid "file").
  */
 int close(fildes_t file) {
-	return 0;
+	int rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_CLOSE, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 
@@ -32,7 +100,18 @@ int close(fildes_t file) {
  * available. Returns -1 on error (invalid file).
  */
 int read(fildes_t file, char *buf, size_t nbyte) {
-	return 0;
+	int rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_READ, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 
@@ -41,7 +120,18 @@ int read(fildes_t file, char *buf, size_t nbyte) {
  * Returns -1 on error (invalid file).
  */
 int write(fildes_t file, const char *buf, size_t nbyte) {
-	return 0;
+	int rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_READ, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 
@@ -50,6 +140,7 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
  * -1 if error (non-existent entry).
  */
 int getdirent(int pos, char *name, size_t nbyte) {
+	printf("getdirent: system call not implemented.\n");
 	return 0;
 }
 
@@ -58,6 +149,7 @@ int getdirent(int pos, char *name, size_t nbyte) {
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 int stat(const char *path, stat_t *buf) {
+	printf("stat: system call not implemented.\n");
 	return 0;
 }
 
@@ -67,6 +159,7 @@ int stat(const char *path, stat_t *buf) {
  * file).
  */
 pid_t process_create(const char *path) {
+	printf("process_create: system call not implemented.\n");
 	return 0;
 }
 
@@ -75,11 +168,13 @@ pid_t process_create(const char *path) {
  * Returns 0 if successful, -1 otherwise (invalid process).
  */
 int process_delete(pid_t pid) {
+	printf("process_delete: system call not implemented.\n");
 	return 0;
 }
 
 /* Returns ID of caller's process. */
 pid_t my_id(void) {
+	printf("my_id: system call not implemented.\n");
 	return 0;
 }
 
@@ -88,6 +183,7 @@ pid_t my_id(void) {
  * returns number of process descriptors actually returned.
  */
 int process_status(process_t *processes, unsigned max) {
+	printf("process_status: system call not implemented.\n");
 	return 0;
 }
 
@@ -96,17 +192,19 @@ int process_status(process_t *processes, unsigned max) {
  * to exit. Returns the pid of the process which exited.
  */
 pid_t process_wait(pid_t pid) {
+	printf("process_wait: system call not implemented.\n");
 	return 0;
 }
 
 /* Returns time in microseconds since booting. */
 long time_stamp(void) {
+	printf("time_stamp: system call not implemented.\n");
 	return 0;
 }
 
 /* Sleeps for the specified number of milliseconds. */
 void sleep(int msec) {
-	;
+	printf("sleep: system call not implemented.\n");
 }
 
 /* 
@@ -122,5 +220,7 @@ void sleep(int msec) {
  * Returns 0 if successful, -1 otherwise (invalid address or size).
  */
 int share_vm(void *adr, size_t size, int writable) {
+	printf("share_vm: system call not implemented.\n");
 	return -1;
 }
+

@@ -204,3 +204,8 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 	*/
 }
 
+L4_Word_t*
+sender2kernel(L4_Word_t ptr) {
+	return NULL;
+}
+

@@ -18,7 +18,7 @@
 #include <l4/message.h>
 #include <l4/thread.h>
 
-#include <sos/thread.h>
+#include <sos/sos.h>
 #include <sos/ttyout.h>
 
 int main(void)

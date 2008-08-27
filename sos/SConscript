@@ -1,6 +1,6 @@
 Import("*")
 
-srclist = "main.c frames.c libsos.c pager.c timer.c network.c"
+srclist = "main.c frames.c libsos.c pager.c timer.c network.c vfs.c"
 liblist = "l4 sos bootinfo c ixp_osal ixp400_xscale_sw lwip nfs serial"
 
 cppdefines = env.scons_env["CPPDEFINES"]

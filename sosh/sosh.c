@@ -233,7 +233,7 @@ main(void)
     char             *argv[MAX_ARGS];
     int              i, r, done, found, new, argc;
     char             *bp, *p;
-    
+
     in = open("console", FM_READ);
     assert (in >= 0);
     
