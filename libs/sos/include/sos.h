@@ -35,7 +35,6 @@ typedef enum {
 #define N_NAME 32
 
 /* file modes */
-#define FM_UNALLOCATED 0
 #define FM_WRITE 1
 #define FM_READ  2
 #define FM_EXEC  4
@@ -46,10 +45,10 @@ typedef uint8_t fmode_t;
 #define O_RDWR   (FM_READ|FM_WRITE)
 
 /* stat file types */
-#define ST_FILE 1	/* plain file */
-#define ST_SPECIAL 2	/* special (console) file */
-typedef uint8_t st_type_t;
-
+typedef enum {
+	ST_FILE, /* plain file */
+	ST_SPECIAL, /* special (console, etc) file */
+} st_type_t;
 
 typedef struct {
   st_type_t st_type;	/* file type */
