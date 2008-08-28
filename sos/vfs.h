@@ -3,8 +3,6 @@
 
 #include <sos/sos.h>
 
-#define CONSOLE_PATH "console"
-
 /* Simple VFS-style vnode */
 typedef struct VNode_t {
 	// Properties

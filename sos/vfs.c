@@ -23,6 +23,14 @@ VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 // All special files (eg. console)
 SpecialFile specialFiles = NULL;
 
+static void
+addSpecialFile(VNode file) {
+	SpecialFile sf = (SpecialFile) malloc(sizeof(struct SpecialFile_t));
+	sf->file = file;
+	sf->next = specialFiles;
+	specialFiles = sf;
+}
+
 void
 vfs_init(void) {
 	// All vnodes are unallocated
@@ -32,25 +40,8 @@ vfs_init(void) {
 		}
 	}
 
-	// One special file is the console
-	SpecialFile console = (SpecialFile) malloc(sizeof(struct SpecialFile_t));
-	console->file = (VNode) malloc(sizeof(struct VNode_t));
-
-	console->file->path = CONSOLE_PATH;
-
-	console->file->stat.st_type = ST_SPECIAL;
-	console->file->stat.st_fmode = FM_READ | FM_WRITE;
-	console->file->stat.st_size = 0;
-	console->file->stat.st_ctime = 0;
-	console->file->stat.st_atime = 0;
-
-	console->file->open = console_open;
-	console->file->close = console_close;
-	console->file->read = console_read;
-	console->file->write = console_write;
-
-	console->next = specialFiles;
-	specialFiles = console;
+	// Only special file is the console
+	addSpecialFile(console_init());
 }
 
 fildes_t

@@ -12,9 +12,30 @@
 #include "libsos.h"
 #include "vfs.h"
 
+#define CONSOLE_PATH "console"
+
 #define verbose 2
 
 static int readers = 0;
+
+VNode console_init(void) {
+	VNode console = (VNode) malloc(sizeof(struct VNode_t));
+
+	console->path = CONSOLE_PATH;
+
+	console->stat.st_type = ST_SPECIAL;
+	console->stat.st_fmode = FM_READ | FM_WRITE;
+	console->stat.st_size = 0;
+	console->stat.st_ctime = 0;
+	console->stat.st_atime = 0;
+
+	console->open = console_open;
+	console->close = console_close;
+	console->read = console_read;
+	console->write = console_write;
+
+	return console;
+}
 
 static VNode findConsole(void) {
 	for (SpecialFile sf = specialFiles; sf != NULL; sf = sf->next) {
