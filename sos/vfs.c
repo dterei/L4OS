@@ -15,7 +15,7 @@
 #include "pager.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 0
 
 // Global record of file descriptors per address space
 VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];

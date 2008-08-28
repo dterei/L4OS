@@ -25,7 +25,7 @@
 struct cookie mnt_point = {{0}};
 static struct serial *serial = NULL;
 
-#define verbose 1
+#define verbose 2
 
 /* 
  * This is the directory on the NFS server that will be mounted
@@ -154,8 +154,11 @@ network_sendstring_int(int len, int *contents) {
 
 int
 network_register_serialhandler(void (*handler)(struct serial *serial, char c)) {
-	if (serial == NULL)
+	dprintf(1, "*** network_register_serialhandler\n");
+	if (serial == NULL) {
+		dprintf(1, "*** serial not started yet ***\n");
 		return -1;
+	}
 	
 	return serial_register_handler(serial, handler);
 }

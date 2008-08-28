@@ -2,6 +2,7 @@
 #define _CONSOLE_H
 
 #include <sos/sos.h>
+#include <serial/serial.h>
 
 #include "vfs.h"
 
@@ -24,7 +25,8 @@ typedef struct {
 	unsigned int readers;
 	unsigned int writers;
 	// struct serial *serial;
-	L4_ThreadId_t reader_tid; // should be a list really but simple for moment
+	//L4_ThreadId_t reader_tid; // should be a list really but simple for moment
+	L4_Word_t tid;
 } Console_File;
 
 // The file names of our consoles

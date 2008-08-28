@@ -45,6 +45,7 @@ init_thread(void)
     L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
     // Initialise the network for libsos_logf_init
     network_init();
+	 vfs_init();
 
     // start executables listed in the the BootInfo
     // hack: crt0 expects to be able to pop 3 words off the stack
@@ -298,7 +299,6 @@ main (void)
 	// Initialise the various monolithic things
 	frame_init((low + HEAP_SIZE), high);
 	as_init();
-	vfs_init();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

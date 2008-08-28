@@ -9,10 +9,10 @@
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 2
+#define verbose 1
 
 // The file names of our consoles
-Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL} } };
+Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, 0 } };
 
 SpecialFile console_init(SpecialFile sflist) {
 	int i;
@@ -39,7 +39,7 @@ SpecialFile console_init(SpecialFile sflist) {
 		console->write = console_write;
 
 		// setup the console struct
-		Console_Files[i].reader_tid = L4_nilthread;
+		//Console_Files[i].reader_tid = L4_nilthread;
 		//Console_Files[i].serial = serial_init();
 		console->extra = (void *) (&Console_Files[i]);
 
@@ -50,7 +50,8 @@ SpecialFile console_init(SpecialFile sflist) {
 		sflist = sf;
 	}
 
-	network_register_serialhandler(serial_read_callback);
+	int r = network_register_serialhandler(serial_read_callback);
+	dprintf(0, "register = %d\n", r);
 
 	return sflist;
 }
@@ -98,8 +99,8 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 		cf->readers--;
 
 	// remove it if waiting on read (although shouldnt be able to occur)
-	if (L4_IsThreadEqual(cf->reader_tid, tid))
-		cf->reader_tid = L4_nilthread;
+	//if (L4_IsThreadEqual(cf->reader_tid, tid))
+		//cf->reader_tid = L4_nilthread;
 
 	return 0;
 }
@@ -107,7 +108,7 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 int console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 		char *buf, size_t nbyte) {
 
-	dprintf(1, "*** console_read: %d %p %d\n", file, buf, nbyte);
+	dprintf(1, "*** console_read: %d, %d %p %d\n", file, buf, nbyte);
 
 	// XXX make sure has permissions, can prbably be moved up to vfs
 	if (!(self->stat.st_fmode & FM_READ))
@@ -115,14 +116,15 @@ int console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 
 	Console_File *cf = (Console_File *) (self->extra);
 
-	dprintf(1, "*** console_read: %s, %d, %d, %d, %d ***\n", self->path, cf->Max_Readers, cf->Max_Writers, cf->readers, cf->writers);
+	//dprintf(1, "*** console_read: %s, %d, %d, %d, %d, %d, %d ***\n", self->path, cf->Max_Readers, cf->Max_Writers, cf->readers, cf->writers, L4_ThreadNo(tid), L4_ThreadNo(cf->reader_tid));
 
 	// should check for free slots really in a generic fashion but just simply handle one reader now
-	if (cf->reader_tid != L4_nilthread)
-		return (-1);
+	//if (!L4_IsThreadEqual(cf->reader_tid, L4_nilthread))
+		//return (-1);
 
 	// register tid XXX locking?
-	cf->reader_tid = tid;
+	//cf->reader_tid = L4_GlobalId(12,1);
+	cf->tid = L4_ThreadNo(tid);
 
 	return 0;
 }
@@ -142,12 +144,15 @@ int console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
 
 void serial_read_callback(struct serial *serial, char c) {
 
+	dprintf(0, "*** serial_read_callback: %c ***\n", c);
+
 	// XXX hack, need proper way of handling finding if we are
 	// going be able to ahndle multiple serial devices.
-	Console_File *cf = Console_Files[0];
+	//Console_File *cf = &Console_Files[0];
 
-	if (cf->reader_tid = L4_nilthread)
-		return;
+
+	//if (L4_IsThreadEqual(cf->reader_tid, L4_nilthread))
+		//return;
 
 	// XXX need to store single char now and send IPC to thread.
 	// need to change console struct to actually store read
