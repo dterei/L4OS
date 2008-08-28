@@ -19,8 +19,6 @@
 #include <lwip/netif/etharp.h>
 #include <lwip/netif/sosif.h>
 
-#include <serial/serial.h>
-
 #include "libsos.h"
 #include "network.h"
 
@@ -118,8 +116,26 @@ network_init(void)
     printf("Finished %s\n\n", __FUNCTION__);
 }
 
-void
-network_sendstring(int len, int *contents) {
+int
+network_sendstring_char(int len, char *contents) {
+	int i;
+	char c;
+
+	dprintf(1, "*** network_sendstring: ");
+
+	for (i = 0; i < len; i++) {
+		c = contents[i];
+		serial_send(serial, &c, 1);
+		dprintf(1, "%c", c);
+	}
+
+	dprintf(1, "\n");
+
+	return len;
+}
+
+int
+network_sendstring_int(int len, int *contents) {
 	int i;
 	char c;
 
@@ -132,4 +148,15 @@ network_sendstring(int len, int *contents) {
 	}
 
 	dprintf(1, "\n");
+
+	return len;
 }
+
+int
+network_register_serialhandler(void (*handler)(struct serial *serial, char c)) {
+	if (serial == NULL)
+		return -1;
+	
+	return serial_register_handler(serial, handler);
+}
+

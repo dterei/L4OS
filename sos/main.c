@@ -14,8 +14,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include <serial/serial.h>
-
 #include <sos/sos.h>
 
 #include "l4.h"
@@ -158,7 +156,7 @@ syscall_loop(void)
 				break;
 
 			case SOS_NETPRINT:
-				network_sendstring(msg.tag.X.u, (int*) (msg.msg + 1));
+				network_sendstring_int(msg.tag.X.u, (int*) (msg.msg + 1));
 				send = 0;
 				break;
 
@@ -174,20 +172,20 @@ syscall_loop(void)
 		// index in to a completely different physical frame.
 
 			case SOS_OPEN:
-				rval = (L4_Word_t) vfs_open(
+				rval = (L4_Word_t) vfs_open(tid,
 						(char*) sender2kernel(L4_MsgWord(&msg, 0)),
 						(fmode_t) L4_MsgWord(&msg, 1));
 				*(sender2kernel(L4_MsgWord(&msg, 2))) = rval;
 				break;
 
 			case SOS_CLOSE:
-				rval = (L4_Word_t) vfs_close(
+				rval = (L4_Word_t) vfs_close(tid,
 						(fildes_t) L4_MsgWord(&msg, 0));
 				*(sender2kernel(L4_MsgWord(&msg, 1))) = rval;
 				break;
 
 			case SOS_READ:
-				rval = (L4_Word_t) vfs_read(
+				rval = (L4_Word_t) vfs_read(tid,
 						(fildes_t) L4_MsgWord(&msg, 0),
 						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
 						(size_t) L4_MsgWord(&msg, 2));
@@ -195,7 +193,7 @@ syscall_loop(void)
 				break;
 
 			case SOS_WRITE:
-				rval = (L4_Word_t) vfs_write(
+				rval = (L4_Word_t) vfs_write(tid,
 						(fildes_t) L4_MsgWord(&msg, 0),
 						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
 						(size_t) L4_MsgWord(&msg, 2));
