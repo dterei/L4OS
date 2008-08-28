@@ -17,7 +17,7 @@
 
 fildes_t
 vfs_open(const char *path, fmode_t mode) {
-	dprintf(1, "*** vfs_open: %p %d\n", path, mode);
+	dprintf(1, "*** vfs_open: %p (%s) %d\n", path, path, mode);
 	return 0;
 }
 
@@ -29,7 +29,7 @@ vfs_close(fildes_t file) {
 
 int
 vfs_read(fildes_t file, char *buf, size_t nbyte) {
-	dprintf(1, "*** vfs_read: %d %p %d\n", file, buf, nbyte);
+	//dprintf(1, "*** vfs_read: %d %p %d\n", file, buf, nbyte);
 	return 0;
 }
 

@@ -114,6 +114,17 @@ findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
 	return &level1->pages2[offset1]->pages[offset2];
 }
 
+static Region*
+findRegion(AddrSpace *as, L4_Word_t addr) {
+	Region *r;
+
+	for (r = as->regions; r != NULL; r = r->next) {
+		if (addr >= r->base && addr < r->base + r->size) break;
+	}
+
+	return r;
+}
+
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 {
@@ -124,6 +135,7 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 
 	L4_Word_t frame;
 	int rights;
+	int mapKernelToo = 0;
 
 	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
 			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
@@ -137,25 +149,29 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 		rights = L4_FullyAccessible;
 	} else {
 		// Find region it belongs in.
-		Region *r;
-		for (r = as->regions; r != NULL; r = r->next) {
-			if (addr >= r->base && addr < r->base + r->size) break;
-		}
+		Region *r = findRegion(as, addr);
 
 		if (r == NULL) {
 			dprintf(0, "Segmentation fault\n");
 			// TODO kill the thread (L4_ThreadControl)
 		}
 
-		if (r->mapDirectly) {
-			dprintf(1, "*** pager: mapping %lx (region %p) directly\n", addr, r);
-			frame = addr;
+		// Place in, or retrieve from, page table.
+		L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
+
+		if (*entry != 0) {
+			// Already appears in page table, just got unmapped somehow.
+		} else if (r->mapDirectly) {
+			// Wants to be mapped directly (code/data probably).
+			// In this case the kernel doesn't know about it from the
+			// frame table, so map it 1:1 in the kernel too.
+			*entry = addr;
+			mapKernelToo = 1;
 		} else {
-			L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
-			if (*entry == 0) *entry = frame_alloc();
-			frame = *entry;
+			*entry = frame_alloc();
 		}
 
+		frame = *entry;
 		rights = r->rights;
 	}
 
@@ -165,10 +181,16 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 
 	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
-		printf("Can't map page at %lx to frame %lx for tid %lx, ip = %lx\n",
+		dprintf(0, "Can't map page at %lx to frame %lx for tid %lx, ip = %lx\n",
 				addr, frame, tid.raw, ip);
 	}
 
+	if (mapKernelToo) {
+		if (!L4_MapFpage(L4_rootspace, fpage, ppage)) {
+			sos_print_error(L4_ErrorCode());
+			dprintf(0, "Failed mapping to kernel too\n");
+		}
+	}
 }
 
 void
@@ -181,31 +203,22 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
 	}
-
-	/*
-	// get null frame to map pages to
-	L4_Word_t nullAddr = { 0UL };
-	nullAddr &= PAGEALIGN;
-	L4_PhysDesc_t nullFrame = L4_PhysDesc(nullAddr, L4_UncachedMemory);
-
-	// map all pages to null frame
-	for (L4_Word_t paddr = 0UL; paddr < (L4_Word_t) (-1); paddr += PAGESIZE) {
-		paddr &= PAGEALIGN;
-
-		L4_Fpage_t page = L4_Fpage(paddr, PAGESIZE);
-		L4_Set_Rights(&page, L4_NoAccess);
-
-		if (!L4_MapFpage(L4_SenderSpace(), page, nullFrame)) {
-			sos_print_error(L4_ErrorCode());
-			printf("Can't map page at %lx to %lx for tid %lx\n",
-					paddr, nullAddr, tid.raw);
-		}
-	}
-	*/
 }
 
 L4_Word_t*
-sender2kernel(L4_Word_t ptr) {
-	return NULL;
+sender2kernel(L4_Word_t addr) {
+	dprintf(1, "*** sender2kernel: addr=%p ", addr);
+	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+
+	// Check that addr is in valid region
+	Region *r = findRegion(as, addr);
+	if (r == NULL) return NULL;
+
+	// XXX need to check rights too!!!
+
+	// Find equivalent physical address
+	L4_Word_t physAddr = *findPageTableWord(as->pagetb, addr & PAGEALIGN);
+	physAddr = physAddr + (L4_Word_t) (addr & (PAGESIZE - 1));
+	return (L4_Word_t*) physAddr;
 }
 

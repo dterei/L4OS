@@ -37,7 +37,7 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	high = frame + 1;
 
 	// Hungry!
-	dprintf(1, "*** frame_init: trying to map pages.\n");
+	dprintf(1, "*** frame_init: trying to map from %p to %p\n", low, high);
 	for (page = low; page < high; page += PAGESIZE) {
 		fpage = L4_Fpage(page, PAGESIZE);
 		L4_Set_Rights(&fpage, L4_ReadWriteOnly);

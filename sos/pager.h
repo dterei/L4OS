@@ -51,7 +51,7 @@ uintptr_t add_stackheap(AddrSpace *as);
 void as_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
-L4_Word_t *sender2kernel(L4_Word_t ptr);
+L4_Word_t *sender2kernel(L4_Word_t addr);
 
 #endif // _PAGER_H
 

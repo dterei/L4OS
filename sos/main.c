@@ -167,6 +167,11 @@ syscall_loop(void)
 				send = 0;
 				break;
 
+		// XXX must check that sender2kernel doesn't return null,
+		// or the user can crash the kernel!!!
+		// XXX sender2kernel needs to also know about access rights
+		// for a similar reason.
+
 			case SOS_OPEN:
 				rval = (L4_Word_t) vfs_open(
 						(char*) sender2kernel(L4_MsgWord(&msg, 0)),
