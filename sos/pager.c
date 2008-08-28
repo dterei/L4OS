@@ -125,20 +125,15 @@ findRegion(AddrSpace *as, L4_Word_t addr) {
 	return r;
 }
 
-void
-pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
-{
-	// Get the faulting address
-	L4_Word_t addr = L4_MsgWord(msgP, 0);
-	L4_Word_t ip = L4_MsgWord(msgP, 1);
+static void
+doPager(L4_Word_t addr, L4_Word_t ip) {
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
-
 	L4_Word_t frame;
 	int rights;
 	int mapKernelToo = 0;
 
-	dprintf(1, "*** pager: fault on tid=0x%lx, ss=%d, addr=%p, ip=%p\n",
-			L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()), addr, ip);
+	dprintf(1, "*** pager: fault on ss=%d, addr=%p, ip=%p\n",
+			L4_SpaceNo(L4_SenderSpace()), addr, ip);
 
 	addr &= PAGEALIGN;
 
@@ -181,8 +176,8 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 
 	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
-		dprintf(0, "Can't map page at %lx to frame %lx for tid %lx, ip = %lx\n",
-				addr, frame, tid.raw, ip);
+		dprintf(0, "Can't map page at %lx to frame %lx for ip = %lx\n",
+				addr, frame, ip);
 	}
 
 	if (mapKernelToo) {
@@ -191,6 +186,11 @@ pager(L4_ThreadId_t tid, L4_Msg_t *msgP)
 			dprintf(0, "Failed mapping to kernel too\n");
 		}
 	}
+}
+
+void
+pager(L4_ThreadId_t tid, L4_Msg_t *msgP) {
+	doPager(L4_MsgWord(msgP, 0), L4_MsgWord(msgP, 1));
 }
 
 void
@@ -214,11 +214,16 @@ sender2kernel(L4_Word_t addr) {
 	Region *r = findRegion(as, addr);
 	if (r == NULL) return NULL;
 
-	// XXX need to check rights too!!!
+	// Find equivalent physical address - the address might
+	// not actually be in the page table yet, so may need to
+	// invoke pager manually.
+	L4_Word_t physAddr;
+	while ((physAddr = *findPageTableWord(as->pagetb, addr & PAGEALIGN)) == 0) {
+		dprintf(1, "*** sender2kernel: %p wasn't mapped in, doing manually\n", addr);
+		doPager(addr, (L4_Word_t) -1);
+	}
 
-	// Find equivalent physical address
-	L4_Word_t physAddr = *findPageTableWord(as->pagetb, addr & PAGEALIGN);
-	physAddr = physAddr + (L4_Word_t) (addr & (PAGESIZE - 1));
+	physAddr += (L4_Word_t) (addr & (PAGESIZE - 1));
 	return (L4_Word_t*) physAddr;
 }
 

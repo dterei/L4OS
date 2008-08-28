@@ -169,8 +169,9 @@ syscall_loop(void)
 
 		// XXX must check that sender2kernel doesn't return null,
 		// or the user can crash the kernel!!!
-		// XXX sender2kernel needs to also know about access rights
-		// for a similar reason.
+		// XXX what if contiguous virtual pages arent contiguous
+		// physically... then like addr[HUUUGE] will actually
+		// index in to a completely different physical frame.
 
 			case SOS_OPEN:
 				rval = (L4_Word_t) vfs_open(
@@ -296,11 +297,10 @@ main (void)
 	dprintf(0, "Available memory from 0x%08lx to 0x%08lx - %luMB\n", 
 			low, high, (high - low) / ONE_MEG);
 
-	// Initialise the memory frame table
+	// Initialise the various monolithic things
 	frame_init((low + HEAP_SIZE), high);
-
-	// Initialise the address spaces
 	as_init();
+	vfs_init();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

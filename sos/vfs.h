@@ -3,6 +3,8 @@
 
 #include <sos/sos.h>
 
+#define CONSOLE_PATH "console"
+
 /* Simple VFS-style vnode */
 typedef struct VNode_t {
 	// Properties
@@ -18,7 +20,7 @@ typedef struct VNode_t {
 
 /* Global record of the "special files" */
 typedef struct SpecialFile_t *SpecialFile;
-struct SpecialFiles_t {
+struct SpecialFile_t {
 	VNode file;
 	SpecialFile next;
 };
@@ -34,5 +36,8 @@ fildes_t vfs_open(const char *path, fmode_t mode);
 int vfs_close(fildes_t file);
 int vfs_read(fildes_t file, char *buf, size_t nbyte);
 int vfs_write(fildes_t file, const char *buf, size_t nbyte);
+
+/* Other functions */
+fildes_t findNextFd(int spaceId);
 
 #endif
