@@ -62,8 +62,14 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
 	// make sure they passed in the right vnode
-	if (strcmp(self->path, path) != 0)
+	if (strcmp(self->path, path) != 0) {
+		// TODO umm, since this info actually came from SOS (not the
+		// user) should probably do something more obvious than
+		// returning (-1).
 		return (-1);
+	}
+
+	// XXX work with multiple writers
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL)
@@ -146,11 +152,10 @@ void serial_read_callback(struct serial *serial, char c) {
 	// going be able to ahndle multiple serial devices.
 	Console_File *cf = Console_Files[0];
 
-	if (cf->reader_tid = L4_nilthread)
+	if (cf->reader_tid == L4_nilthread)
 		return;
 
 	// XXX need to store single char now and send IPC to thread.
 	// need to change console struct to actually store read
 	// paramaters
-
 }
