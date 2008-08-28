@@ -124,11 +124,15 @@ int console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 	dprintf(1, "*** console_read: %s, %d, %d, %d, %d ***\n", self->path, cf->Max_Readers, cf->Max_Writers, cf->readers, cf->writers);
 
 	// should check for free slots really in a generic fashion but just simply handle one reader now
-	if (cf->reader_tid != L4_nilthread)
-		return (-1);
+	// XXX this won't work, the tid is meaningless.  need a different
+	// way to say that there are no readers.
+	//if (cf->reader_tid != L4_nilthread)
+	//	return (-1);
 
 	// register tid XXX locking?
-	cf->reader_tid = tid;
+	// XXX this won't work, the tid is meaningless.  need a different
+	// way to say that there are no readers.
+	//cf->reader_tid = tid;
 
 	return 0;
 }
@@ -150,10 +154,13 @@ void serial_read_callback(struct serial *serial, char c) {
 
 	// XXX hack, need proper way of handling finding if we are
 	// going be able to ahndle multiple serial devices.
-	Console_File *cf = Console_Files[0];
+	Console_File *cf = Console_Files + 0;
+	(void) cf;
 
-	if (cf->reader_tid == L4_nilthread)
-		return;
+	// XXX this won't work, the tid is meaningless.  need a different
+	// way to say that there are no readers.
+	//if (cf->reader_tid == L4_nilthread)
+	//	return;
 
 	// XXX need to store single char now and send IPC to thread.
 	// need to change console struct to actually store read
