@@ -34,6 +34,9 @@ struct SpecialFile_t {
 extern SpecialFile specialFiles;
 
 /* All allocated vnodes */
+// TODO have a PCB rather than this.  Not all that challenging and
+// probably cleaner when there is more complex stuff to store
+// with each address space.
 extern VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 
 /* System call implementations */
