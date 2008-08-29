@@ -14,4 +14,3 @@ extern int network_register_serialhandler(void (*handler)(struct serial *serial,
 extern struct cookie mnt_point;
 
 #endif
-

@@ -21,14 +21,17 @@
 
 // struct for storing info about a console file
 typedef struct {
+	// store console device info
 	char *path;
 	const unsigned int Max_Readers;
 	const unsigned int Max_Writers;
 	unsigned int readers;
 	unsigned int writers;
-	// struct serial *serial;
-	//L4_ThreadId_t reader_tid; // should be a list really but simple for moment
-	L4_Word_t tid;
+
+	// store info about a thread waiting on a read
+	L4_ThreadId_t reading_tid;
+	char *reading_buf;
+	size_t reading_nbyte;	
 } Console_File;
 
 // The file names of our consoles

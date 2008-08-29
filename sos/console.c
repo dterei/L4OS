@@ -12,7 +12,7 @@
 #define verbose 1
 
 // The file names of our consoles
-Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, 0 } };
+Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL} } };
 
 SpecialFile console_init(SpecialFile sflist) {
 	int i;
@@ -39,8 +39,7 @@ SpecialFile console_init(SpecialFile sflist) {
 		console->write = console_write;
 
 		// setup the console struct
-		//Console_Files[i].reader_tid = L4_nilthread;
-		//Console_Files[i].serial = serial_init();
+		Console_Files[i].reading_tid = L4_nilthread;
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
@@ -70,27 +69,49 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 		return (-1);
 	}
 
-	// XXX work with multiple writers
-
+	// TODO work with multiple writers
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL)
 		return (-1);
 
-	if (cf->readers > cf->Max_Readers) {
-		// Reader slots full
-		return (-1);
-	} else {
-		cf->readers++;
-		int spaceId = L4_SpaceNo(L4_SenderSpace());
-		fildes_t fd = findNextFd(spaceId);
-
-		if (fd < 0) {
+	fildes_t fd = -1;
+	if (mode & FM_READ) {
+		if (cf->readers > cf->Max_Readers) {
+			// Reader slots full
 			return (-1);
 		} else {
-			vnodes[spaceId][fd] = self;
-			return fd;
+			cf->readers++;
+			int spaceId = L4_SpaceNo(L4_SenderSpace());
+			fd = findNextFd(spaceId);
+
+			if (fd < 0) {
+				return (-1);
+			} else {
+				vnodes[spaceId][fd] = self;
+			}
 		}
 	}
+
+	if (mode & FM_WRITE) {
+		if (cf->writers > cf->Max_Writers) {
+			// Writers slots full
+			return (-1);
+		} else {
+			cf->writers++;
+			if (fd == -1) {
+				int spaceId = L4_SpaceNo(L4_SenderSpace());
+				fd = findNextFd(spaceId);
+
+				if (fd < 0) {
+					return (-1);
+				} else {
+					vnodes[spaceId][fd] = self;
+				}
+			}
+		}
+	}
+
+	return fd;
 }
 
 int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
@@ -105,8 +126,8 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 		cf->readers--;
 
 	// remove it if waiting on read (although shouldnt be able to occur)
-	//if (L4_IsThreadEqual(cf->reader_tid, tid))
-		//cf->reader_tid = L4_nilthread;
+	if (L4_IsThreadEqual(cf->reading_tid, tid))
+		cf->reading_tid = L4_nilthread;
 
 	return 0;
 }
@@ -120,24 +141,23 @@ int console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 	if (!(self->stat.st_fmode & FM_READ))
 		return (-1);
 
+	// make sure console exists
+	if (self == NULL || self->extra == NULL)
+		return (-1);
+
 	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL)
+		return (-1);
 
-	//dprintf(1, "*** console_read: %s, %d, %d, %d, %d, %d, %d ***\n", self->path, cf->Max_Readers, cf->Max_Writers, cf->readers, cf->writers, L4_ThreadNo(tid), L4_ThreadNo(cf->reader_tid));
-
+	// XXX for some reason this causes a page fault
 	// should check for free slots really in a generic fashion but just simply handle one reader now
-	//if (!L4_IsThreadEqual(cf->reader_tid, L4_nilthread))
+	//if (L4_IsNilThread(cf->reading_tid))
 		//return (-1);
-	// XXX this won't work, the tid is meaningless.  need a different
-	// way to say that there are no readers.
-	//if (cf->reader_tid != L4_nilthread)
-	//	return (-1);
 
-	// register tid XXX locking?
-	//cf->reader_tid = L4_GlobalId(12,1);
-	cf->tid = L4_ThreadNo(tid);
-	// XXX this won't work, the tid is meaningless.  need a different
-	// way to say that there are no readers.
-	//cf->reader_tid = tid;
+	// store read request
+	cf->reading_tid = tid;
+	cf->reading_buf = buf;
+	cf->reading_nbyte = nbyte;
 
 	return 0;
 }
@@ -160,21 +180,28 @@ void serial_read_callback(struct serial *serial, char c) {
 	dprintf(0, "*** serial_read_callback: %c ***\n", c);
 
 	// XXX hack, need proper way of handling finding if we are
-	// going be able to ahndle multiple serial devices.
-	//Console_File *cf = &Console_Files[0];
-
-	Console_File *cf = Console_Files + 0;
+	// going be able to handle multiple serial devices.
+	Console_File *cf = &Console_Files[0];
 	(void) cf;
 
-	//if (L4_IsThreadEqual(cf->reader_tid, L4_nilthread))
-		//return;
-	// XXX this won't work, the tid is meaningless.  need a different
-	// way to say that there are no readers.
-	//if (cf->reader_tid == L4_nilthread)
-	//	return;
+	if (L4_IsNilThread(cf->reading_tid))
+		return;
 
 	// XXX need to store single char now and send IPC to thread.
 	// need to change console struct to actually store read
 	// paramaters
+	
+	dprintf(0, "*** serial read: %c, send to %d ***\n", c, L4_ThreadNo(cf->reading_tid));
+
+	// store char
+	// XXX probably should increase the buf pointer
+	if (cf->reading_nbyte > 1) {
+		cf->reading_buf[0] = c;
+		cf->reading_buf[1] = '\0';
+	}
+
+	dprintf(0, "*** serial read: buf = %s ***\n", cf->reading_buf);
+
+	// TODO: Send reply IPC finally to thread cf->reading_tid to unblock it
 }
 
