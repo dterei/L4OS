@@ -42,3 +42,6 @@ offsets, easy through wrapper function) but I think it's a good idea given how
 it doesn't return NULL.  And fail nicely (from the kernel's perspective) if
 it does.  Should kill thread though.
 
+- Milestone 4
+
+- Milestone 5
