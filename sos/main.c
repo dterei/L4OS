@@ -24,7 +24,7 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
@@ -129,8 +129,8 @@ syscall_loop(void)
 			continue;
 		}
 
-		dprintf(2, "%s: got msg, reply cap %lx, (%d %p)\n", __FUNCTION__,
-				tid.raw, (int) TAG_SYSLAB(tag),
+		dprintf(2, "%s: got msg, reply cap %lx (%d), (%d %p)\n", __FUNCTION__,
+				tid.raw, L4_ThreadNo(tid), (int) TAG_SYSLAB(tag),
 				(void *) L4_MsgWord(&msg, 0));
 
 		//
@@ -177,28 +177,34 @@ syscall_loop(void)
 						(char*) sender2kernel(L4_MsgWord(&msg, 0)),
 						(fmode_t) L4_MsgWord(&msg, 1));
 				*(sender2kernel(L4_MsgWord(&msg, 2))) = rval;
+				//send = 0; // open will reply to cap
 				break;
 
 			case SOS_CLOSE:
 				rval = (L4_Word_t) vfs_close(tid,
 						(fildes_t) L4_MsgWord(&msg, 0));
 				*(sender2kernel(L4_MsgWord(&msg, 1))) = rval;
+				//send = 0; // open will reply to cap
 				break;
 
 			case SOS_READ:
-				rval = (L4_Word_t) vfs_read(tid,
+				vfs_read(tid,
 						(fildes_t) L4_MsgWord(&msg, 0),
 						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
-						(size_t) L4_MsgWord(&msg, 2));
-				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+						(size_t) L4_MsgWord(&msg, 2),
+						(int*) sender2kernel(L4_MsgWord(&msg, 3)));
+				//*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				send = 0; // open will reply to cap
 				break;
 
 			case SOS_WRITE:
-				rval = (L4_Word_t) vfs_write(tid,
+				vfs_write(tid,
 						(fildes_t) L4_MsgWord(&msg, 0),
 						(char*) sender2kernel(L4_MsgWord(&msg, 1)),
-						(size_t) L4_MsgWord(&msg, 2));
-				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+						(size_t) L4_MsgWord(&msg, 2),
+						(int*) sender2kernel(L4_MsgWord(&msg, 3)));
+				//*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				send = 0; // open will reply to cap
 				break;
 
 			case SOS_GETDIRENT:

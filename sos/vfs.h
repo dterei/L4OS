@@ -17,11 +17,11 @@ struct VNode_t {
 
 	int (*close)(L4_ThreadId_t tid, VNode self, fildes_t file);
 
-	int (*read)(L4_ThreadId_t tid, VNode self, fildes_t file,
-			char *buf, size_t nbyte);
+	void (*read)(L4_ThreadId_t tid, VNode self, fildes_t file,
+			char *buf, size_t nbyte, int *rval);
 
-	int (*write)(L4_ThreadId_t tid, VNode self, fildes_t file,
-			const char *buf, size_t nbyte);
+	void (*write)(L4_ThreadId_t tid, VNode self, fildes_t file,
+			const char *buf, size_t nbyte, int *rval);
 };
 
 /* Global record of the "special files" */
@@ -43,8 +43,8 @@ extern VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 void vfs_init(void);
 fildes_t vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode);
 int vfs_close(L4_ThreadId_t tid, fildes_t file);
-int vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte);
-int vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte);
+void vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval);
+void vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *rval);
 
 /* Other functions */
 fildes_t findNextFd(int spaceId);

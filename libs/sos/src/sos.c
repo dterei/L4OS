@@ -110,7 +110,9 @@ int read(fildes_t file, char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
+	printf("*** sys read call start ***\n");
 	makeSyscall(SOS_READ, YES_REPLY, &msg);
+	printf("*** sys read call end ***\n");
 	return rval;
 }
 

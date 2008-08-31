@@ -32,6 +32,8 @@ typedef struct {
 	L4_ThreadId_t reading_tid;
 	char *reading_buf;
 	size_t reading_nbyte;	
+	int *reading_rval;
+	int reading_rbytes;
 } Console_File;
 
 // The file names of our consoles
@@ -47,11 +49,11 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 
 int console_close(L4_ThreadId_t tid, VNode self, fildes_t file);
 
-int console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
-		char *buf, size_t nbyte);
+void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
+		char *buf, size_t nbyte, int *rval);
 
-int console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
-		const char *buf, size_t nbyte);
+void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
+		const char *buf, size_t nbyte, int *rval);
 
 // callback for read
 void serial_read_callback(struct serial *serial, char c);

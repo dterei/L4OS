@@ -73,26 +73,30 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	return vnode->close(tid, vnode, file);
 }
 
-int
-vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte) {
+void
+vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read: %d %p %d\n", file, buf, nbyte);
 
 	VNode vnode = vnodes[L4_SpaceNo(L4_SenderSpace())][file];
-	if (vnode == NULL)
-		return (-1);
+	if (vnode == NULL) {
+		*rval = (-1);
+		return;
+	}
 
-	return vnode->read(tid, vnode, file, buf, nbyte);
+	vnode->read(tid, vnode, file, buf, nbyte, rval);
 }
 
-int
-vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte) {
+void
+vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_write: %d %p %d\n", file, buf, nbyte);
 
 	VNode vnode = vnodes[L4_SpaceNo(L4_SenderSpace())][file];
-	if (vnode == NULL)
-		return (-1);
+	if (vnode == NULL) {
+		*rval = (-1);
+		return;
+	}
 
-	return vnode->write(tid, vnode, file, buf, nbyte);
+	vnode->write(tid, vnode, file, buf, nbyte, rval);
 }
 
 fildes_t
