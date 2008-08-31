@@ -3,8 +3,7 @@ Involves changing the implementation of malloc (or rather, morecore?) to
 ask the kernel to increase heap size.  Or at least, find out where the heap
 is (but might as well increase the size as well).
 
-- Fix stack to be set to top of address space.
-Also need to subtract 3 words.
+- Fix stack to be set to top of address space.  Also need to subtract 3 words.
 
 - Get rid of ttyout.[ch], the only thing it exists for is for userspace printf
 to print to console.  They should do this through the stdout fd anyway - and
@@ -42,6 +41,21 @@ offsets, easy through wrapper function) but I think it's a good idea given how
 it doesn't return NULL.  And fail nicely (from the kernel's perspective) if
 it does.  Should kill thread though.
 
-- Milestone 4
+- Also as part of the sender2kernel point, there needs to be some way to check
+the access rights of the regions.  This is because the kernel has write access
+to everything (see frames.c) so if the user process is devious it could trick
+the kernel in to writing over a read-only region (eg. the code/data).  Strictly
+speaking this isn't actually a problem right now, because the code/data regions
+aren't mapped by the frame table, only on a page fault (see doPager in pager.c)
+and at that point they are mapped even for the kernel with the correct rights.
+However, it would be nice to fix this as long as it's not too messy.  I can see
+two ways to fix: either remap anything from the frame table with the correct
+access rights, or add a flag to sender2kernel that checks the access rights of
+the region before doing anything.  A clean way to do this would be to include
+that flag in the userptr struct.  However - I think the former option is
+probably nicer.
 
-- Milestone 5
+- Milestone 4 - the NFS stuff seems pretty straightforward, maybe 1 or 2 days
+of work (once some of the above issues have been fixed).
+
+- Milestone 5 - the timer driver, actually looks pretty difficult.
