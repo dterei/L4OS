@@ -27,7 +27,7 @@
 #include "pager.h"
 #include "libsos.h"
 
-#define verbose 1
+#define verbose 2
 
 AddrSpace addrspace[MAX_ADDRSPACES];
 
@@ -70,13 +70,12 @@ add_stackheap(AddrSpace *as) {
 	heap->base = top;
 	heap->rights = REGION_READ | REGION_WRITE;
 
-	// Put the stack above the heap... for no particular
-	// reason.
-	// TODO: Place stack at top of address space
-	top = page_align_up(top + heap->size);
+	// Put the stack half way up the address space - at the top
+	// causes pagefaults, so halfway up seems like a nice compromise.
+	top = page_align_up(((unsigned int) -1) >> 1);
 	Region *stack = (Region *)malloc(sizeof(Region));
 	stack->size = ONE_MEG;
-	stack->base = top;
+	stack->base = top - stack->size;
 	stack->rights = REGION_READ | REGION_WRITE;
 
 	// Add them to the region list.
@@ -84,9 +83,9 @@ add_stackheap(AddrSpace *as) {
 	heap->next = as->regions;
 	as->regions = stack;
 
-	// Stack pointer - the (-PAGESIZE) thing makes it work.
-	// TODO: fix this hack.
-	return stack->base + stack->size - PAGESIZE;
+	// crt0 (whatever that is) will pop 3 words off stack,
+	// hence the need to subtact 3 words from the sp.
+	return stack->base + stack->size - (3 * sizeof(L4_Word_t));
 }
 
 static L4_Word_t*
