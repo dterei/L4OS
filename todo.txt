@@ -17,9 +17,6 @@ which threads should always start in, which sets up the file descriptors (and
 maybe some other stuff later - who knows) and then calls the real main function
 which it would be passed somehow.
 
-- Used normal memory (not L4_UncachedMemory) but flush cache at the
-appropriate places e.g. when accessing any "shared" state.
-
 - Kill any thread which causes a segmentation fault.
 
 - Use sender2kernel for EVERY userspace pointer dereference.  It would be nice
@@ -52,6 +49,9 @@ access rights, or add a flag to sender2kernel that checks the access rights of
 the region before doing anything.  A clean way to do this would be to include
 that flag in the userptr struct.  However - I think the former option is
 probably nicer.
+
+- Fix weird reply bug!  It wasn't (at least directly) due to the use of
+L4_UncachedMemory.
 
 - Milestone 4 - the NFS stuff seems pretty straightforward, maybe 1 or 2 days
 of work (once some of the above issues have been fixed).

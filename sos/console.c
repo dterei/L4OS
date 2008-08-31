@@ -2,15 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <l4/ipc.h>
-#include <l4/thread.h>
-#include <l4/types.h>
-
 #include "console.h"
+#include "l4.h"
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 1
+#define verbose 2
 
 // The file names of our consoles
 Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL} } };
@@ -18,7 +15,7 @@ Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL
 SpecialFile console_init(SpecialFile sflist) {
 	int i;
 
-	dprintf(0, "*** Creating special console files ***\n");
+	dprintf(1, "*** console_init: creating special console files ***\n");
 
 	for (i = 0; i < NUM_CONSOLES; i++) {
 		// create new vnode;
@@ -26,7 +23,7 @@ SpecialFile console_init(SpecialFile sflist) {
 
 		// set up console vnode
 		console->path = Console_Files[i].path;
-		dprintf(0, "*** setting up special file; %s\n", console->path);
+		dprintf(1, "*** console_init: setting up special file; %s\n", console->path);
 
 		console->stat.st_type = ST_SPECIAL;
 		console->stat.st_fmode = FM_READ | FM_WRITE;
@@ -51,7 +48,7 @@ SpecialFile console_init(SpecialFile sflist) {
 	}
 
 	int r = network_register_serialhandler(serial_read_callback);
-	dprintf(0, "register = %d\n", r);
+	dprintf(1, "*** console_init: register = %d\n", r);
 
 	return sflist;
 }
@@ -186,9 +183,9 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
 }
 
 void serial_read_callback(struct serial *serial, char c) {
-	dprintf(0, "*** serial_read_callback: %c ***\n", c);
+	dprintf(1, "*** serial_read_callback: %c\n", c);
 
-	// XXX hack, need proper way of handling finding if we are
+	// TODO hack, need proper way of handling finding if we are
 	// going be able to handle multiple serial devices.
 	Console_File *cf = &Console_Files[0];
 	int read = 0;
@@ -196,23 +193,14 @@ void serial_read_callback(struct serial *serial, char c) {
 	if (L4_IsNilThread(cf->reading_tid))
 		return;
 
-	// XXX need to store single char now and send IPC to thread.
-	// need to change console struct to actually store read
-	// paramaters
-	
-	dprintf(0, "*** serial read: %c, send to %p ***\n", c, (cf->reading_tid).raw);
+	dprintf(1, "*** serial_read_callback: %c, send to %p\n", c, (cf->reading_tid).raw);
 
-	// store char
-	// XXX probably should increase the buf pointer
-	// XXX Massive hack here in way we handle. For some reason try to send one char
-	// at a time doesnt work. Something is screwed with IPC, when this call back is
-	// called quickly, all the IPC sends seem to collapse into the last one. However
-	// if we just try to send one IPC at the end instead of letting them collapse, it
-	// still fails.
 	if (cf->reading_nbyte > cf->reading_rbytes + 1) {
 		cf->reading_buf[cf->reading_rbytes] = c;
 		cf->reading_buf[cf->reading_rbytes + 1] = '\0';
 		cf->reading_rbytes++;
+	} else {
+		// TODO else... what?
 	}
 
 	read = cf->reading_rbytes;
@@ -220,27 +208,34 @@ void serial_read_callback(struct serial *serial, char c) {
 	if (c == '\n' || cf->reading_rbytes >= cf->reading_nbyte) {
 		*(cf->reading_rval) = cf->reading_rbytes;
 
-		dprintf(0, "*** serial read: send tid = %d, buf = %s ***\n",
+		dprintf(1, "*** serial_read_callback: send tid = %d, buf = %s\n",
 				L4_ThreadNo(cf->reading_tid), cf->reading_buf);
 
+		/*
 		for (int i = 0; i < cf->reading_rbytes; i++) {
 			L4_MsgTag_t calltag = L4_Reply(cf->reading_tid);
 			if(L4_IpcFailed(calltag)) {
 				dprintf(0, "*** L4 hates you %d %d ***\n", i, L4_ErrorCode());
 			}
 		}
+		*/
+
+		// XXX this is a complete freaking mystery.  Originally we
+		// thought that the need to call L4_Reply twice was because
+		// we were using UncachedMemory for everything - and that
+		// the first call failed but did something magic with the
+		// cache to make it work the second time - but now that this
+		// has been fixed it STILL doesn't work.
+		L4_CacheFlushAll(); // TODO only flush buffer
+		L4_MsgTag_t tag = L4_Reply(cf->reading_tid);
+		if (L4_IpcFailed(tag)) {
+			dprintf(0, "!!! serial_read_callback: reply failed first time!\n");
+			L4_Reply(cf->reading_tid);
+		}
 
 		cf->reading_rbytes = 0;
-		/*
-		if (cf->reading_rbytes >= cf->reading_nbyte) {
-			cf->reading_buf[cf->reading_rbytes] = c;
-			cf->reading_buf[cf->reading_rbytes + 1] = '\0';
-		}
-		*/
 	}
 
-	//*(cf->reading_rval) = read;
-	//L4_Reply(cf->reading_tid);
-	dprintf(0, "*** serial read: buf = %s ***\n", cf->reading_buf);
+	dprintf(1, "*** serial read: buf = %s\n", cf->reading_buf);
 }
 

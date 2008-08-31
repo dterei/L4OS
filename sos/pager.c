@@ -171,7 +171,7 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 
 	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
-	L4_PhysDesc_t ppage = L4_PhysDesc(frame, L4_UncachedMemory);
+	L4_PhysDesc_t ppage = L4_PhysDesc(frame, L4_DefaultMemory);
 
 	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
@@ -206,7 +206,7 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 
 L4_Word_t*
 sender2kernel(L4_Word_t addr) {
-	dprintf(1, "*** sender2kernel: addr=%p ", addr);
+	dprintf(1, "*** sender2kernel: addr=%p\n", addr);
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 
 	// Check that addr is in valid region
