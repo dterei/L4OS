@@ -245,11 +245,11 @@ void serial_read_callback(struct serial *serial, char c) {
 
 		L4_MsgTag_t tag = L4_Reply(cf->reader.tid);
 		if (L4_IpcFailed(tag)) {
-			dprintf(2, "!!! serial_read_callback: reply failed first time (Err %d)!\n",
+			dprintf(2, "!!! serial_read_callback: reply failed (Err %d)!\n",
 					L4_ErrorCode());
 			tag = L4_Reply(cf->reader.tid);
 			if (L4_IpcFailed(tag)) {
-				dprintf(2, "!!! serial_read_callback: reply failed second time (Err %d)!\n",
+				dprintf(2, "!!! serial_read_callback: reply failed again (%d)!\n",
 						L4_ErrorCode());
 			}
 		}
