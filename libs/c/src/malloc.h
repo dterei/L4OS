@@ -82,6 +82,4 @@ extern Header *_kr_malloc_freep;            /* start of free list */
 #define freep   _kr_malloc_freep
 #define base    __malloc_base
 
-//void malloc_init(uintptr_t head_base,  uintptr_t heap_end)
-
 #endif /* _LIBS_MALLOC_H_ */

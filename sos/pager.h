@@ -27,12 +27,19 @@ typedef struct {
 } PageTable1;
 
 /* Region Struct */
+typedef enum {
+	REGION_STACK,
+	REGION_HEAP,
+	REGION_OTHER
+} region_type;
+
 struct Region {
-	uintptr_t base; // base of the region
-	uintptr_t size; // size of region
+	region_type type; // type of region (heap? stack?)
+	uintptr_t base;   // base of the region
+	uintptr_t size;   // size of region
 	int mapDirectly;  // do we directly (1:1) map it?
-	int rights;     // access rights of region (read, write, execute)
-	int id;         // what bootinfo uses to identify the region
+	int rights;       // access rights of region (read, write, execute)
+	int id;           // what bootinfo uses to identify the region
 	struct Region *next;
 };
 
@@ -51,7 +58,15 @@ uintptr_t add_stackheap(AddrSpace *as);
 void as_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
+int sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb);
 L4_Word_t *sender2kernel(L4_Word_t addr);
+
+// XXX
+//
+// typedef struct userptr_t userptr_t;
+//
+// L4_Word_t *user2kernel(userptr addr);
+// userptr new_userptr(void *ptr, rights r);
 
 #endif // _PAGER_H
 

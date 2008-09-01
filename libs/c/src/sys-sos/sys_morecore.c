@@ -63,7 +63,9 @@
 #include <stdint.h>
 #include <assert.h>
 
-extern void free(void *);
+#include <sos/sos.h>
+
+//extern void free(void *);
 
 #ifdef THREAD_SAFE
 #include <assert.h>
@@ -74,7 +76,7 @@ extern struct okl4_mutex malloc_mutex;
 
 #define NALLOC 0x10000
 #define MALLOC_AREA_SIZE 0x100000
-char __malloc_area[MALLOC_AREA_SIZE];
+char __malloc_area[MALLOC_AREA_SIZE]; // XXX
 uintptr_t __malloc_bss = (uintptr_t)&__malloc_area;
 uintptr_t __malloc_top = (uintptr_t)&__malloc_area[MALLOC_AREA_SIZE];
 
@@ -104,20 +106,36 @@ __malloc_init(uintptr_t heap_base, uintptr_t heap_end)
 Header *
 morecore(unsigned nu)
 {
-    uintptr_t nb;
-    uintptr_t cp;
-    Header *up;
+	printf("*** morecore: %u\n", nu);
 
-    cp = __malloc_bss;
+	uintptr_t nb;
+	uintptr_t cp;
+	Header *up;
 
-    nb = round_up(nu * sizeof(Header), NALLOC);
+	// Our new implementation of morecore, which is what needs to
+	// ask SOS about the heap section.  I assume we can do what we
+	// want - but a growing heap region would make sense and it
+	// would be cool.
 
-    if (__malloc_bss + nb > __malloc_top) {
-        return NULL;
-    }
-    __malloc_bss += nb;
-    up = (Header *)cp;
-    up->s.size = nb / sizeof(Header);
-    free((void *)(up + 1));
-    return _kr_malloc_freep;
+
+	cp = __malloc_bss;
+	nb = round_up(nu * sizeof(Header), NALLOC);
+
+	// The old way that morecore got memory
+	/*
+	if (__malloc_bss + nb > __malloc_top) {
+		return NULL;
+	}
+	__malloc_bss += nb;
+	*/
+
+	// The new way - ask SOS to move the pointers for us
+	if (!moremem(&__malloc_bss, &__malloc_top, nb)) {
+		return NULL;
+	}
+
+	up = (Header *)cp;
+	up->s.size = nb / sizeof(Header);
+	free((void *)(up + 1));
+	return _kr_malloc_freep;
 }

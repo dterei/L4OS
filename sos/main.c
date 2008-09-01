@@ -166,8 +166,21 @@ syscall_loop(void)
 				send = 0;
 				break;
 
+			case SOS_MOREMEM:
+				rval = (L4_Word_t) sos_moremem(
+						(uintptr_t*) sender2kernel(L4_MsgWord(&msg, 0)),
+						(uintptr_t*) sender2kernel(L4_MsgWord(&msg, 1)),
+						(unsigned int) L4_MsgWord(&msg, 2));
+				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				break;
+
 		// XXX must check that sender2kernel doesn't return null,
 		// or the user can crash the kernel!!!
+		// XXX check the rights of the page before doing anything
+		// in sender2kernel - CAN'T just map with the userspace
+		// access rights since then userspace could crash the kernel,
+		// and can't just map with all access rights because then
+		// user programs could access memory they're not allowed to.
 		// XXX what if contiguous virtual pages arent contiguous
 		// physically... then like addr[HUUUGE] will actually
 		// index in to a completely different physical frame.

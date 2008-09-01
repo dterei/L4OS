@@ -329,6 +329,7 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 
 	// Create new region.
 	Region *newreg = (Region *)malloc(sizeof(Region));
+	newreg->type = REGION_OTHER;
 	newreg->base = base;
 	newreg->size = size;
 	newreg->mapDirectly = (virtpool == VIRTPOOL_MAP_DIRECTLY);

@@ -229,7 +229,8 @@ void serial_read_callback(struct serial *serial, char c) {
 		L4_CacheFlushAll(); // TODO only flush buffer
 		L4_MsgTag_t tag = L4_Reply(cf->reading_tid);
 		if (L4_IpcFailed(tag)) {
-			dprintf(0, "!!! serial_read_callback: reply failed first time!\n");
+			dprintf(0, "!!! serial_read_callback: reply failed! Code=%d\n",
+					L4_ErrorCode());
 			L4_Reply(cf->reading_tid);
 		}
 
