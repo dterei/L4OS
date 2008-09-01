@@ -13,6 +13,7 @@
 typedef enum {
 	SOS_NETPRINT,
 	SOS_DEBUG_FLUSH,
+	SOS_MOREMEM,
 	SOS_OPEN,
 	SOS_CLOSE,
 	SOS_READ,
@@ -78,6 +79,9 @@ void sos_debug_flush(void);
 
 /* Block the calling thread. */
 void thread_block(void);
+
+/* Request more memory for the heap section. */
+int moremem(uintptr_t *base, uintptr_t *top, unsigned int nb);
 
 /* I/O system calls */
 

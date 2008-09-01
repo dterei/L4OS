@@ -27,14 +27,20 @@
 #include "pager.h"
 #include "libsos.h"
 
-#define verbose 2
+#define verbose 1
+
+// XXX
+//
+// typedef struct {
+// 	void *ptr;
+// 	rights r;
+// } userptr_t;
 
 AddrSpace addrspace[MAX_ADDRSPACES];
 
 static uintptr_t
 page_align_up(uintptr_t adr)
 {
-	//TODO: Can be simplified, just align usually then add a page size.
 	int pageoffset = adr % PAGESIZE;
 	if (pageoffset > 0) {
 		adr += (PAGESIZE - pageoffset);
@@ -63,17 +69,22 @@ add_stackheap(AddrSpace *as) {
 			top = r->base + r->size;
 	}
 
-	// TODO: Need to actually change malloc to use this new heap area
 	top = page_align_up(top);
+
+	// Size of the region is zero for now, expand as we get
+	// syscalls (more_heap).
 	Region *heap = (Region *)malloc(sizeof(Region));
-	heap->size = ONE_MEG;
+	heap->type = REGION_HEAP;
+	heap->size = 0;
 	heap->base = top;
 	heap->rights = REGION_READ | REGION_WRITE;
 
 	// Put the stack half way up the address space - at the top
 	// causes pagefaults, so halfway up seems like a nice compromise.
 	top = page_align_up(((unsigned int) -1) >> 1);
+
 	Region *stack = (Region *)malloc(sizeof(Region));
+	stack->type = REGION_STACK;
 	stack->size = ONE_MEG;
 	stack->base = top - stack->size;
 	stack->rights = REGION_READ | REGION_WRITE;
@@ -86,6 +97,39 @@ add_stackheap(AddrSpace *as) {
 	// crt0 (whatever that is) will pop 3 words off stack,
 	// hence the need to subtact 3 words from the sp.
 	return stack->base + stack->size - (3 * sizeof(L4_Word_t));
+}
+
+int
+sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
+	dprintf(0, "*** sos_moremem(%p, %p, %lx)\n", base, top, nb);
+
+	// Find the current heap section.
+	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+	Region *heap;
+
+	for (heap = as->regions; heap != NULL; heap = heap->next) {
+		if (heap->type == REGION_HEAP) {
+			break;
+		}
+	}
+
+	if (heap == NULL) {
+		// No heap!?
+		dprintf(0, "!!! sos_more_heap: no heap region found!\n");
+		return 0;
+	}
+
+	// Move the heap region manually
+	dprintf(0, "*** sos_moremem: was %p %lx\n", heap->base, heap->size);
+	nb = page_align_up(nb);
+	heap->size += nb / sizeof(L4_Word_t);
+	dprintf(0, "*** sos_moremem: now %p %lx\n", heap->base, heap->size);
+
+	*base = heap->base;
+	*top = heap->base + nb;
+
+	// Have the option of returning 0 to signify no more memory
+	return 1;
 }
 
 static L4_Word_t*

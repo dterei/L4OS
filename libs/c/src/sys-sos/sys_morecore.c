@@ -63,7 +63,9 @@
 #include <stdint.h>
 #include <assert.h>
 
-extern void free(void *);
+#include <sos/sos.h>
+
+//extern void free(void *);
 
 #ifdef THREAD_SAFE
 #include <assert.h>
@@ -74,9 +76,8 @@ extern struct okl4_mutex malloc_mutex;
 
 #define NALLOC 0x10000
 #define MALLOC_AREA_SIZE 0x100000
-char __malloc_area[MALLOC_AREA_SIZE];
-uintptr_t __malloc_bss = (uintptr_t)&__malloc_area;
-uintptr_t __malloc_top = (uintptr_t)&__malloc_area[MALLOC_AREA_SIZE];
+uintptr_t __malloc_bss = 0;
+uintptr_t __malloc_top = 0;
 
 Header *_kr_malloc_freep = NULL;
 
@@ -85,14 +86,15 @@ void __malloc_init(uintptr_t heap_base, uintptr_t heap_end);
 void
 __malloc_init(uintptr_t heap_base, uintptr_t heap_end)
 {
-    __malloc_bss = heap_base;
-    __malloc_top = heap_end+1;
+	printf("__malloc_init got called!?\n");
+	__malloc_bss = heap_base;
+	__malloc_top = heap_end+1;
 
 #ifdef THREAD_SAFE
-    {
-        int error = okl4_mutex_init(&malloc_mutex);
-        assert(!error);
-    }
+	{
+		int error = okl4_mutex_init(&malloc_mutex);
+		assert(!error);
+	}
 #endif /* THREAD_SAFE */
 }
 
@@ -102,22 +104,35 @@ __malloc_init(uintptr_t heap_base, uintptr_t heap_end)
  * sbrk equiv
  */
 Header *
-morecore(unsigned nu)
+morecore(unsigned int nu)
 {
-    uintptr_t nb;
-    uintptr_t cp;
-    Header *up;
+	uintptr_t nb;
+	uintptr_t cp;
+	Header *up;
 
-    cp = __malloc_bss;
+	// Our new implementation of morecore, which is what needs to
+	// ask SOS about the heap section.  I assume we can do what we
+	// want - but a growing heap region would make sense and it
+	// would be cool.
 
-    nb = round_up(nu * sizeof(Header), NALLOC);
+	cp = __malloc_bss;
+	nb = round_up(nu * sizeof(Header), NALLOC);
 
-    if (__malloc_bss + nb > __malloc_top) {
-        return NULL;
-    }
-    __malloc_bss += nb;
-    up = (Header *)cp;
-    up->s.size = nb / sizeof(Header);
-    free((void *)(up + 1));
-    return _kr_malloc_freep;
+	// The old way that morecore got memory
+	/*
+	if (__malloc_bss + nb > __malloc_top) {
+		return NULL;
+	}
+	__malloc_bss += nb;
+	*/
+
+	// The new way - ask SOS to move the pointers for us
+	if (!moremem(&__malloc_bss, &__malloc_top, nb)) {
+		return NULL;
+	}
+
+	up = (Header *)cp;
+	up->s.size = nb / sizeof(Header);
+	free((void *)(up + 1));
+	return _kr_malloc_freep;
 }
