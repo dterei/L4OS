@@ -7,7 +7,7 @@
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 2
+#define verbose 1
 
 // The file names of our consoles
 Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL} } };

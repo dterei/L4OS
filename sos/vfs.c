@@ -15,7 +15,7 @@
 #include "pager.h"
 #include "vfs.h"
 
-#define verbose 0
+#define verbose 1
 
 // Global record of file descriptors per address space
 VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
@@ -45,7 +45,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// Check to see if path is one of the special files
 	for (SpecialFile sf = specialFiles; sf != NULL; sf = sf->next) {
-		dprintf(0, "*** Special file: %s ***\n", sf->file->path);
+		dprintf(1, "*** Special file: %s ***\n", sf->file->path);
 		if (strcmp(sf->file->path, path) == 0) {
 			vnode = sf->file;
 			break;

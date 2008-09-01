@@ -1,8 +1,3 @@
-- Fix heap, currently using static array, need to change it to use region.
-Involves changing the implementation of malloc (or rather, morecore?) to
-ask the kernel to increase heap size.  Or at least, find out where the heap
-is (but might as well increase the size as well).
-
 - Get rid of ttyout.[ch], the only thing it exists for is for userspace printf
 to print to console.  They should do this through the stdout fd anyway - and
 the important things from ttyout (i.e. the serial sending etc) should (and I
