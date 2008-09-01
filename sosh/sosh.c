@@ -259,12 +259,13 @@ main(void)
 				done=1;
 				break;
 			}
-			else {
-				if (verbose > 1) {
-					printf("sosh: just read %s, %d\n", bp, r);
+			bp[r] = 0;		/* terminate */
+			if (verbose > 1) {
+				printf("sosh: just read %s, %d", bp, r);
+				if (bp[r-1] != '\n') {
+					printf("\n");
 				}
 			}
-			bp[r] = 0;		/* terminate */
 			for (p=bp; p<bp+r; p++) {
 				if (*p == '\03') {	/* ^C */
 					printf("^C\n");

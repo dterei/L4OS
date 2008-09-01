@@ -7,7 +7,7 @@
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 3
+#define verbose 1
 
 // The file names of our consoles
 Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
@@ -174,8 +174,10 @@ void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 	}
 
 	// XXX for some reason this causes a page fault
-	//if (L4_IsNilThread(cf->reading_tid))
-		//return (-1);
+	//if (L4_IsNilThread(cf->reader.tid)) {
+		//*rval = (-1);
+		//return;
+	//}
 
 	// store read request
 	cf->reader.tid = tid;
@@ -185,6 +187,7 @@ void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 	cf->reader.rbyte = 0;
 	*rval = 0;
 
+	// flush cache to clear out any of the userprogs entries
 	L4_CacheFlushAll();
 }
 
@@ -219,14 +222,13 @@ void serial_read_callback(struct serial *serial, char c) {
 	dprintf(2, "*** serial_read_callback: %c, send to %p\n", c, (cf->reader.tid).raw);
 
 	// add data to buffer
-	if (cf->reader.rbyte + 1 < cf->reader.nbyte) {
+	if (cf->reader.rbyte < cf->reader.nbyte) {
 		cf->reader.buf[cf->reader.rbyte] = c;
-		cf->reader.buf[cf->reader.rbyte + 1] = '\0';
 		cf->reader.rbyte++;
 	}
 
 	// if new line or buffer full, return
-	if (c == '\n' || cf->reader.rbyte + 1 >= cf->reader.nbyte) {
+	if (c == '\n' || cf->reader.rbyte >= cf->reader.nbyte) {
 		*(cf->reader.rval) = cf->reader.rbyte;
 
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
@@ -238,7 +240,9 @@ void serial_read_callback(struct serial *serial, char c) {
 		// the first call failed but did something magic with the
 		// cache to make it work the second time - but now that this
 		// has been fixed it STILL doesn't work.
-		L4_CacheFlushAll(); // TODO only flush buffer
+		
+		// TODO only flush buffer
+		L4_CacheFlushAll();
 
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
 				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
@@ -254,6 +258,11 @@ void serial_read_callback(struct serial *serial, char c) {
 			}
 		}
 
+		// remove request now its done
+		cf->reader.tid = L4_nilthread;
+		cf->reader.rval = NULL;
+		cf->reader.buf = NULL;
+		cf->reader.nbyte = 0;
 		cf->reader.rbyte = 0;
 	}
 
