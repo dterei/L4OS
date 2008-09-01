@@ -11,6 +11,8 @@
 /*
  * Wrappers for console open/read/write operations.
  * See libs/sos/include/sos.h for what they do.
+ *
+ * Note: Only one console device is currently supported.
  */
 
 // How many consoles we have
@@ -18,6 +20,15 @@
 
 // Unlimited Console readers or writers value
 #define CONSOLE_RW_UNLIMITED ((unsigned int) (-1))
+
+// struct for storing console read requests (continuation struct)
+typedef struct {
+	L4_ThreadId_t tid;
+	int *rval;
+	char *buf;
+	size_t nbyte;
+	size_t rbyte;
+} Console_ReadRequest;
 
 // struct for storing info about a console file
 typedef struct {
@@ -29,11 +40,8 @@ typedef struct {
 	unsigned int writers;
 
 	// store info about a thread waiting on a read
-	L4_ThreadId_t reading_tid;
-	char *reading_buf;
-	size_t reading_nbyte;	
-	int *reading_rval;
-	int reading_rbytes;
+	// change to a list to support more then one reader
+	Console_ReadRequest reader;	
 } Console_File;
 
 // The file names of our consoles

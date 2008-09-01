@@ -13,6 +13,8 @@
 
 #include <sos/sos.h>
 
+#define verbose 3
+
 #define BUF_SIZ   128
 #define MAX_ARGS   32
 
@@ -258,7 +260,9 @@ main(void)
 				break;
 			}
 			else {
-				printf("sosh: just read %s, %d\n", bp, r);
+				if (verbose > 1) {
+					printf("sosh: just read %s, %d\n", bp, r);
+				}
 			}
 			bp[r] = 0;		/* terminate */
 			for (p=bp; p<bp+r; p++) {
@@ -286,7 +290,7 @@ main(void)
 					p     = buf;
 					new   = 1;
 					break;
-				} else {
+				} else if (verbose > 0)  {
 					printf("%c",*p);
 				}
 			}
