@@ -17,15 +17,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <l4/types.h>
-#include <l4/map.h>
-#include <l4/misc.h>
-#include <l4/space.h>
-#include <l4/thread.h>
-
 #include "frames.h"
-#include "pager.h"
+#include "l4.h"
 #include "libsos.h"
+#include "pager.h"
+#include "thread.h"
 
 #define verbose 2
 
@@ -166,7 +162,8 @@ findRegion(AddrSpace *as, L4_Word_t addr) {
 
 static void
 doPager(L4_Word_t addr, L4_Word_t ip) {
-	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+	int sid = L4_SpaceNo(L4_SenderSpace());
+	AddrSpace *as = &addrspace[sid];
 	L4_Word_t frame;
 	int rights;
 	int mapKernelToo = 0;
@@ -186,8 +183,9 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		Region *r = findRegion(as, addr);
 
 		if (r == NULL) {
-			dprintf(0, "Segmentation fault\n");
-			// TODO kill the thread (L4_ThreadControl)
+			printf("Segmentation fault\n");
+			thread_kill(L4_GlobalId(sid, 0));
+			return;
 		}
 
 		// Place in, or retrieve from, page table.
@@ -247,11 +245,15 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 L4_Word_t*
 sender2kernel(L4_Word_t addr) {
 	dprintf(1, "*** sender2kernel: addr=%p\n", addr);
+	int sid = L4_SpaceNo(L4_SenderSpace());
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 
 	// Check that addr is in valid region
 	Region *r = findRegion(as, addr);
-	if (r == NULL) return NULL;
+	if (r == NULL) {
+		thread_kill(L4_GlobalId(sid, 0));
+		return NULL;
+	}
 
 	// Find equivalent physical address - the address might
 	// not actually be in the page table yet, so may need to
