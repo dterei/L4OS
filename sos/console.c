@@ -7,10 +7,10 @@
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 2
+#define verbose 1
 
 // The file names of our consoles
-Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0, {0UL} } };
+Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
 
 SpecialFile console_init(SpecialFile sflist) {
 	int i;
@@ -37,7 +37,7 @@ SpecialFile console_init(SpecialFile sflist) {
 		console->write = console_write;
 
 		// setup the console struct
-		Console_Files[i].reading_tid = L4_nilthread;
+		Console_Files[i].reader.tid = L4_nilthread;
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
@@ -47,35 +47,39 @@ SpecialFile console_init(SpecialFile sflist) {
 		sflist = sf;
 	}
 
+	// register callback
 	int r = network_register_serialhandler(serial_read_callback);
 	dprintf(1, "*** console_init: register = %d\n", r);
 
 	return sflist;
 }
 
-// TODO fix synchronisation issues
 fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 		fmode_t mode) {
 
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
-	// make sure they passed in the right vnode
-	if (strcmp(self->path, path) != 0) {
-		// TODO umm, since this info actually came from SOS (not the
-		// user) should probably do something more obvious than
-		// returning (-1).
+	// make sure console exists
+	if (self == NULL) {
 		return (-1);
 	}
 
-	// TODO work with multiple writers
-	Console_File *cf = (Console_File *) (self->extra);
-	if (cf == NULL)
+	// make sure they passed in the right vnode
+	if (strcmp(self->path, path) != 0) {
 		return (-1);
+	}
+
+	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL) {
+		return (-1);
+	}
 
 	fildes_t fd = -1;
+
+	// open file for reading
 	if (mode & FM_READ) {
+		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
-			// Reader slots full
 			return (-1);
 		} else {
 			cf->readers++;
@@ -90,9 +94,10 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 		}
 	}
 
+	// open file for writing
 	if (mode & FM_WRITE) {
+		// check if writers slots full
 		if (cf->writers > cf->Max_Writers) {
-			// Writers slots full
 			return (-1);
 		} else {
 			cf->writers++;
@@ -115,17 +120,32 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 	dprintf(1, "*** console_close: %d\n", file);
 
+	// make sure console exists
+	if (self == NULL) {
+		return (-1);
+	}
+
 	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL) {
+		return (-1);
+	}
 
 	// decrease counts
-	if (self->stat.st_fmode & FM_WRITE)
+	if (self->stat.st_fmode & FM_WRITE) {
 		cf->writers--;
-	if (self->stat.st_fmode & FM_READ)
+	}
+	if (self->stat.st_fmode & FM_READ) {
 		cf->readers--;
+	}
 
 	// remove it if waiting on read (although shouldnt be able to occur)
-	if (L4_IsThreadEqual(cf->reading_tid, tid))
-		cf->reading_tid = L4_nilthread;
+	if (L4_IsThreadEqual(cf->reader.tid, tid)) {
+		cf->reader.tid = L4_nilthread;
+		cf->reader.buf = NULL;
+		cf->reader.rval = NULL;
+		cf->reader.nbyte = 0;
+		cf->reader.rbyte = 0;
+	}
 
 	return 0;
 }
@@ -133,16 +153,16 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 		char *buf, size_t nbyte, int *rval) {
 
-	dprintf(1, "*** console_read: %d, %d %p %d from %p\n", file, buf, nbyte, tid.raw);
+	dprintf(1, "*** console_read: %d, %p, %d from %p\n", file, buf, nbyte, tid.raw);
 
-	// XXX make sure has permissions, can prbably be moved up to vfs
-	if (!(self->stat.st_fmode & FM_READ)) {
+	// make sure console exists
+	if (self == NULL) {
 		*rval = (-1);
 		return;
 	}
 
-	// make sure console exists
-	if (self == NULL || self->extra == NULL) {
+	// XXX make sure has permissions, can prbably be moved up to vfs
+	if (!(self->stat.st_fmode & FM_READ)) {
 		*rval = (-1);
 		return;
 	}
@@ -154,16 +174,21 @@ void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 	}
 
 	// XXX for some reason this causes a page fault
-	// should check for free slots really in a generic fashion but just simply handle one reader now
-	//if (L4_IsNilThread(cf->reading_tid))
-		//return (-1);
+	//if (L4_IsNilThread(cf->reader.tid)) {
+		//*rval = (-1);
+		//return;
+	//}
 
 	// store read request
-	cf->reading_tid = tid;
-	cf->reading_buf = buf;
-	cf->reading_nbyte = nbyte;
-	cf->reading_rval = rval;
+	cf->reader.tid = tid;
+	cf->reader.buf = buf;
+	cf->reader.rval = rval;
+	cf->reader.nbyte = nbyte;
+	cf->reader.rbyte = 0;
 	*rval = 0;
+
+	// flush cache to clear out any of the userprogs entries
+	L4_CacheFlushAll();
 }
 
 void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
@@ -178,6 +203,8 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
 	}
 
 	// because it doesn't like a const
+	// XXX Need to make sure we don't block up sos too long.
+	// either use a thread just for writes or continuations.
 	char *buf2 = (char *)buf;
 	*rval = network_sendstring_char(nbyte, buf2);
 }
@@ -188,37 +215,24 @@ void serial_read_callback(struct serial *serial, char c) {
 	// TODO hack, need proper way of handling finding if we are
 	// going be able to handle multiple serial devices.
 	Console_File *cf = &Console_Files[0];
-	int read = 0;
-
-	if (L4_IsNilThread(cf->reading_tid))
+	if (cf == NULL || L4_IsNilThread(cf->reader.tid)) {
 		return;
-
-	dprintf(1, "*** serial_read_callback: %c, send to %p\n", c, (cf->reading_tid).raw);
-
-	if (cf->reading_nbyte > cf->reading_rbytes + 1) {
-		cf->reading_buf[cf->reading_rbytes] = c;
-		cf->reading_buf[cf->reading_rbytes + 1] = '\0';
-		cf->reading_rbytes++;
-	} else {
-		// TODO else... what?
 	}
 
-	read = cf->reading_rbytes;
-	
-	if (c == '\n' || cf->reading_rbytes >= cf->reading_nbyte) {
-		*(cf->reading_rval) = cf->reading_rbytes;
+	dprintf(2, "*** serial_read_callback: %c, send to %p\n", c, (cf->reader.tid).raw);
 
-		dprintf(1, "*** serial_read_callback: send tid = %d, buf = %s\n",
-				L4_ThreadNo(cf->reading_tid), cf->reading_buf);
+	// add data to buffer
+	if (cf->reader.rbyte < cf->reader.nbyte) {
+		cf->reader.buf[cf->reader.rbyte] = c;
+		cf->reader.rbyte++;
+	}
 
-		/*
-		for (int i = 0; i < cf->reading_rbytes; i++) {
-			L4_MsgTag_t calltag = L4_Reply(cf->reading_tid);
-			if(L4_IpcFailed(calltag)) {
-				dprintf(0, "*** L4 hates you %d %d ***\n", i, L4_ErrorCode());
-			}
-		}
-		*/
+	// if new line or buffer full, return
+	if (c == '\n' || cf->reader.rbyte >= cf->reader.nbyte) {
+		*(cf->reader.rval) = cf->reader.rbyte;
+
+		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
+				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
 
 		// XXX this is a complete freaking mystery.  Originally we
 		// thought that the need to call L4_Reply twice was because
@@ -226,17 +240,33 @@ void serial_read_callback(struct serial *serial, char c) {
 		// the first call failed but did something magic with the
 		// cache to make it work the second time - but now that this
 		// has been fixed it STILL doesn't work.
-		L4_CacheFlushAll(); // TODO only flush buffer
-		L4_MsgTag_t tag = L4_Reply(cf->reading_tid);
+		
+		// TODO only flush buffer
+		L4_CacheFlushAll();
+
+		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
+				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
+
+		L4_MsgTag_t tag = L4_Reply(cf->reader.tid);
 		if (L4_IpcFailed(tag)) {
-			dprintf(0, "!!! serial_read_callback: reply failed! Code=%d\n",
+			dprintf(2, "!!! serial_read_callback: reply failed (Err %d)!\n",
 					L4_ErrorCode());
-			L4_Reply(cf->reading_tid);
+			tag = L4_Reply(cf->reader.tid);
+			if (L4_IpcFailed(tag)) {
+				dprintf(2, "!!! serial_read_callback: reply failed again (%d)!\n",
+						L4_ErrorCode());
+			}
 		}
 
-		cf->reading_rbytes = 0;
+		// remove request now its done
+		cf->reader.tid = L4_nilthread;
+		cf->reader.rval = NULL;
+		cf->reader.buf = NULL;
+		cf->reader.nbyte = 0;
+		cf->reader.rbyte = 0;
 	}
 
-	dprintf(1, "*** serial read: buf = %s\n", cf->reading_buf);
+	dprintf(2, "*** serial read: buf = %s\n", cf->reader.buf);
 }
+
 

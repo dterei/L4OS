@@ -190,14 +190,12 @@ syscall_loop(void)
 						(char*) sender2kernel(L4_MsgWord(&msg, 0)),
 						(fmode_t) L4_MsgWord(&msg, 1));
 				*(sender2kernel(L4_MsgWord(&msg, 2))) = rval;
-				//send = 0; // open will reply to cap
 				break;
 
 			case SOS_CLOSE:
 				rval = (L4_Word_t) vfs_close(tid,
 						(fildes_t) L4_MsgWord(&msg, 0));
 				*(sender2kernel(L4_MsgWord(&msg, 1))) = rval;
-				//send = 0; // open will reply to cap
 				break;
 
 			case SOS_READ:

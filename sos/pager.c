@@ -23,7 +23,7 @@
 #include "pager.h"
 #include "thread.h"
 
-#define verbose 2
+#define verbose 1
 
 // XXX
 //
@@ -97,6 +97,8 @@ add_stackheap(AddrSpace *as) {
 
 int
 sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
+	dprintf(0, "*** sos_moremem(%p, %p, %lx)\n", base, top, nb);
+
 	// Find the current heap section.
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 	Region *heap;
@@ -114,8 +116,10 @@ sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
 	}
 
 	// Move the heap region manually
+	dprintf(0, "*** sos_moremem: was %p %lx\n", heap->base, heap->size);
 	nb = page_align_up(nb);
 	heap->size += nb / sizeof(L4_Word_t);
+	dprintf(0, "*** sos_moremem: now %p %lx\n", heap->base, heap->size);
 
 	*base = heap->base;
 	*top = heap->base + nb;

@@ -76,9 +76,8 @@ extern struct okl4_mutex malloc_mutex;
 
 #define NALLOC 0x10000
 #define MALLOC_AREA_SIZE 0x100000
-char __malloc_area[MALLOC_AREA_SIZE]; // XXX
-uintptr_t __malloc_bss = (uintptr_t)&__malloc_area;
-uintptr_t __malloc_top = (uintptr_t)&__malloc_area[MALLOC_AREA_SIZE];
+uintptr_t __malloc_bss = 0;
+uintptr_t __malloc_top = 0;
 
 Header *_kr_malloc_freep = NULL;
 
@@ -87,14 +86,15 @@ void __malloc_init(uintptr_t heap_base, uintptr_t heap_end);
 void
 __malloc_init(uintptr_t heap_base, uintptr_t heap_end)
 {
-    __malloc_bss = heap_base;
-    __malloc_top = heap_end+1;
+	printf("__malloc_init got called!?\n");
+	__malloc_bss = heap_base;
+	__malloc_top = heap_end+1;
 
 #ifdef THREAD_SAFE
-    {
-        int error = okl4_mutex_init(&malloc_mutex);
-        assert(!error);
-    }
+	{
+		int error = okl4_mutex_init(&malloc_mutex);
+		assert(!error);
+	}
 #endif /* THREAD_SAFE */
 }
 
@@ -104,10 +104,8 @@ __malloc_init(uintptr_t heap_base, uintptr_t heap_end)
  * sbrk equiv
  */
 Header *
-morecore(unsigned nu)
+morecore(unsigned int nu)
 {
-	printf("*** morecore: %u\n", nu);
-
 	uintptr_t nb;
 	uintptr_t cp;
 	Header *up;
@@ -116,7 +114,6 @@ morecore(unsigned nu)
 	// ask SOS about the heap section.  I assume we can do what we
 	// want - but a growing heap region would make sense and it
 	// would be cool.
-
 
 	cp = __malloc_bss;
 	nb = round_up(nu * sizeof(Header), NALLOC);
