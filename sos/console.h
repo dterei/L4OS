@@ -50,7 +50,7 @@ extern Console_File Console_Files[];
 /*
  * Initialise all console devices adding them to the special file list.
  */
-SpecialFile console_init(SpecialFile sf);
+VNode console_init(VNode sf);
 
 fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 		fmode_t mode);

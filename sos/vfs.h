@@ -6,11 +6,19 @@
 /* Simple VFS-style vnode */
 typedef struct VNode_t *VNode;
 
+/* All allocated vnodes stored in double link list */
 struct VNode_t {
 	// Properties
 	char *path;
 	stat_t stat;
-	void *extra; // store a pointer to any extra needed data
+	int refcount;
+	
+	// store a pointer to any extra needed data
+	void *extra; 
+
+	// links for list
+	VNode previous;
+	VNode next;
 
 	// Callbacks
 	int (*open)(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode);
@@ -24,20 +32,25 @@ struct VNode_t {
 			const char *buf, size_t nbyte, int *rval);
 };
 
-/* Global record of the "special files" */
-typedef struct SpecialFile_t *SpecialFile;
-struct SpecialFile_t {
-	VNode file;
-	SpecialFile next;
-};
 
-extern SpecialFile specialFiles;
+// Global VNode list
+extern VNode GlobalVNodes;
 
-/* All allocated vnodes */
+/* Per process open file table */
 // TODO have a PCB rather than this.  Not all that challenging and
 // probably cleaner when there is more complex stuff to store
 // with each address space.
-extern VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
+
+typedef struct {
+	VNode vnode;
+	fmode_t fmode;
+	L4_Word_t fp;
+} VFile_t;
+
+extern VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
+
+/* Global record of the "special files" */
+extern VNode specialFiles;
 
 /* System call implementations */
 void vfs_init(void);

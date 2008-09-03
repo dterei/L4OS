@@ -13,7 +13,7 @@
 
 #include <sos/sos.h>
 
-#define verbose 3
+#define verbose 0
 
 #define BUF_SIZ 128
 #define MAX_ARGS 32
@@ -292,7 +292,9 @@ main(void)
 					p--;
 					r--;
 				} else if (*p == '\n') {    /* ^J */
-					printf("%c",*p);
+					if (verbose > 0) {
+						printf("%c",*p);
+					}
 					*p    = 0;
 					found = p>buf;
 					p     = buf;

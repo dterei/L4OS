@@ -14,14 +14,18 @@
 #include "libsos.h"
 #include "pager.h"
 #include "vfs.h"
+#include "queue.h"
 
 #define verbose 1
 
-// Global record of file descriptors per address space
-VNode vnodes[MAX_ADDRSPACES][PROCESS_MAX_FILES];
+// Global open vnodes list
+VNode GlobalVNodes;
+
+// Per process open file table
+VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 
 // All special files (eg. console)
-SpecialFile specialFiles = NULL;
+VNode specialFiles = NULL;
 
 
 void
@@ -29,7 +33,9 @@ vfs_init(void) {
 	// All vnodes are unallocated
 	for (int i = 0; i < MAX_ADDRSPACES; i++) {
 		for (int j = 0; j < PROCESS_MAX_FILES; j++) {
-			vnodes[i][j] = NULL;
+			openfiles[i][j].vnode = NULL;
+			openfiles[i][j].fmode = 0;
+			openfiles[i][j].fp = 0;
 		}
 	}
 
@@ -44,12 +50,9 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 	VNode vnode = NULL;
 
 	// Check to see if path is one of the special files
-	for (SpecialFile sf = specialFiles; sf != NULL; sf = sf->next) {
-		dprintf(1, "*** Special file: %s ***\n", sf->file->path);
-		if (strcmp(sf->file->path, path) == 0) {
-			vnode = sf->file;
-			break;
-		}
+	for (vnode = specialFiles; vnode != NULL; vnode = vnode->next) {
+		dprintf(2, "*** Special file: %s ***\n", vnode->path);
+		if (strcmp(vnode->path, path) == 0) break;
 	}
 
 	if (vnode == NULL) {
@@ -58,7 +61,23 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 		return (-1);
 	} else {
 		// Was special file
-		return vnode->open(tid, vnode, path, mode);
+		fildes_t rval = vnode->open(tid, vnode, path, mode);
+		if (rval >= 0) {
+			// store file in per process table
+			openfiles[L4_SpaceNo(L4_SenderSpace())][rval].vnode = vnode;
+
+			// update global vnode list
+			VNode oldhead = GlobalVNodes;
+			GlobalVNodes = vnode;
+			vnode->next = oldhead;
+			vnode->previous = NULL;
+			oldhead->previous = vnode;
+
+			// update vnode refcount
+			vnode->refcount++;
+		}
+
+		return rval;
 	}
 }
 
@@ -66,18 +85,38 @@ int
 vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 
-	VNode vnode = vnodes[L4_SpaceNo(L4_SenderSpace())][file];
+	VNode vnode = openfiles[L4_SpaceNo(L4_SenderSpace())][file].vnode;
 	if (vnode == NULL)
 		return (-1);
 
-	return vnode->close(tid, vnode, file);
+	// try closing vnode;
+	int r = vnode->close(tid, vnode, file);
+
+	// clean up book keeping
+	if (r == 0) {
+		// close file table entry
+		openfiles[L4_SpaceNo(L4_SenderSpace())][file].vnode = NULL;
+		openfiles[L4_SpaceNo(L4_SenderSpace())][file].fmode = 0;
+		openfiles[L4_SpaceNo(L4_SenderSpace())][file].fp = 0;
+
+		// close global vnode entry if refcount zero
+		if (vnode->refcount < 1) {
+			VNode previous = vnode->previous;
+			VNode next = vnode->next;
+			previous->next = next;
+			next->previous = previous;
+			// XXX: free vnode?
+		}
+	}
+
+	return r;
 }
 
 void
 vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read: %d %p %d\n", file, buf, nbyte);
 
-	VNode vnode = vnodes[L4_SpaceNo(L4_SenderSpace())][file];
+	VNode vnode = openfiles[L4_SpaceNo(L4_SenderSpace())][file].vnode;
 	if (vnode == NULL) {
 		*rval = (-1);
 		return;
@@ -90,7 +129,7 @@ void
 vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_write: %d %p %d\n", file, buf, nbyte);
 
-	VNode vnode = vnodes[L4_SpaceNo(L4_SenderSpace())][file];
+	VNode vnode = openfiles[L4_SpaceNo(L4_SenderSpace())][file].vnode;
 	if (vnode == NULL) {
 		*rval = (-1);
 		return;
@@ -101,9 +140,10 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 
 fildes_t
 findNextFd(int spaceId) {
+	// TODO: Should we be reserving these really?
 	// 0, 1, 2 reserved for the standard file descriptors
 	for (int i = 3; i < MAX_ADDRSPACES; i++) {
-		if (vnodes[spaceId][i] == NULL) return i;
+		if (openfiles[spaceId][i].vnode == NULL) return i;
 	}
 
 	// Too many open files.

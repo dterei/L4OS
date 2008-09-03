@@ -12,19 +12,19 @@
 // The file names of our consoles
 Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
 
-SpecialFile console_init(SpecialFile sflist) {
+VNode console_init(VNode sflist) {
 	int i;
 
 	dprintf(1, "*** console_init: creating special console files ***\n");
 
 	for (i = 0; i < NUM_CONSOLES; i++) {
+		dprintf(1, "*** console_init: setting up special file; %s\n", Console_Files[i].path);
+
 		// create new vnode;
 		VNode console = (VNode) malloc(sizeof(struct VNode_t));
 
 		// set up console vnode
 		console->path = Console_Files[i].path;
-		dprintf(1, "*** console_init: setting up special file; %s\n", console->path);
-
 		console->stat.st_type = ST_SPECIAL;
 		console->stat.st_fmode = FM_READ | FM_WRITE;
 		console->stat.st_size = 0;
@@ -41,10 +41,10 @@ SpecialFile console_init(SpecialFile sflist) {
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
-		SpecialFile sf = (SpecialFile) malloc(sizeof(struct SpecialFile_t));
-		sf->file = console;
-		sf->next = sflist;
-		sflist = sf;
+		console->next = sflist;
+		console->previous = NULL;
+		sflist->previous = console;
+		sflist = console;
 	}
 
 	// register callback
@@ -76,21 +76,19 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 
 	fildes_t fd = -1;
 
+	//XXX: Check file permissions allow the requested open mode
+
 	// open file for reading
 	if (mode & FM_READ) {
 		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
 			return (-1);
 		} else {
-			cf->readers++;
-			int spaceId = L4_SpaceNo(L4_SenderSpace());
-			fd = findNextFd(spaceId);
-
+			fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
 			if (fd < 0) {
 				return (-1);
-			} else {
-				vnodes[spaceId][fd] = self;
 			}
+			cf->readers++;
 		}
 	}
 
@@ -98,19 +96,18 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 	if (mode & FM_WRITE) {
 		// check if writers slots full
 		if (cf->writers > cf->Max_Writers) {
+			if (mode & FM_READ) {
+				cf->readers--;
+			}
 			return (-1);
 		} else {
-			cf->writers++;
 			if (fd == -1) {
-				int spaceId = L4_SpaceNo(L4_SenderSpace());
-				fd = findNextFd(spaceId);
-
+				fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
 				if (fd < 0) {
 					return (-1);
-				} else {
-					vnodes[spaceId][fd] = self;
 				}
 			}
+			cf->writers++;
 		}
 	}
 
