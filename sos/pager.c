@@ -188,7 +188,7 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 
 		if (r == NULL) {
 			printf("Segmentation fault\n");
-			thread_kill(L4_GlobalId(sid, 0));
+			thread_kill(L4_GlobalId(sid, 1));
 			return;
 		}
 
@@ -250,12 +250,12 @@ L4_Word_t*
 sender2kernel(L4_Word_t addr) {
 	dprintf(1, "*** sender2kernel: addr=%p\n", addr);
 	int sid = L4_SpaceNo(L4_SenderSpace());
-	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+	AddrSpace *as = &addrspace[sid];
 
 	// Check that addr is in valid region
 	Region *r = findRegion(as, addr);
 	if (r == NULL) {
-		thread_kill(L4_GlobalId(sid, 0));
+		thread_kill(L4_GlobalId(sid, 1));
 		return NULL;
 	}
 

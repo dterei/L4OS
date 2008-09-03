@@ -493,7 +493,8 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
-		dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
+		//dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
+		dprintf(0, "Created thread: %d\n", (int) L4_ThreadNo(newtid));
 	} else {
 		dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
 		return BI_NAME_INVALID;

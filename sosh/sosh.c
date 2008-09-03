@@ -15,13 +15,15 @@
 
 #define verbose 3
 
-#define BUF_SIZ   128
-#define MAX_ARGS   32
+#define BUF_SIZ 128
+#define MAX_ARGS 32
+#define MAX_PROCESSES 10
+
 
 static fildes_t in;
 static stat_t   sbuf;
 
-	static void 
+static void 
 prstat(const char *name)
 {
 	/* print out stat buf */
@@ -34,7 +36,7 @@ prstat(const char *name)
 			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
 }
 
-	static int
+static int
 cat(int argc, char **argv)
 {
 	fildes_t fd;
@@ -65,7 +67,7 @@ cat(int argc, char **argv)
 }
 
 
-	static int
+static int
 cp(int argc, char **argv)
 {
 	fildes_t fd, fd_out;
@@ -98,9 +100,7 @@ cp(int argc, char **argv)
 	return 0;
 }
 
-#define MAX_PROCESSES 10
-
-	static int 
+static int 
 ps(int argc, char **argv)
 {
 
@@ -129,7 +129,7 @@ ps(int argc, char **argv)
 	return 0;
 }
 
-	static int
+static int
 exec(int argc, char **argv)
 {
 	pid_t pid;
@@ -166,7 +166,7 @@ exec(int argc, char **argv)
 	return 0;
 }
 
-	static int
+static int
 dir(int argc, char **argv)
 {
 	int  i=0, r;
@@ -212,6 +212,12 @@ dir(int argc, char **argv)
 	return 0;
 }
 
+static int
+segfault(int argc, char **argv) {
+	int *null = NULL;
+	return *null;
+}
+
 struct command {
 	char *name;
 	int (*command)(int argc, char **argv);
@@ -223,7 +229,8 @@ struct command commands[] = {
 	{"cat", cat},
 	{"cp", cp},
 	{"ps", ps},
-	{"exec", exec}
+	{"exec", exec},
+	{"segfault", segfault}
 };
 
 
