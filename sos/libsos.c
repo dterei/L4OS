@@ -16,17 +16,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <l4/types.h>
-
-#include <l4/config.h>
-#include <l4/ipc.h>
-#include <l4/thread.h>
-#include <l4/schedule.h>
-#include <l4/caps.h>
-
 #include <nfs/nfs.h>
 #include <serial/serial.h>
+#include <sos/sos.h>
 
+#include "l4.h"
 #include "libsos.h"
 #include "pager.h"
 
@@ -53,17 +47,7 @@ extern void *__okl4_bootinfo;
 static bi_name_t bootinfo_id = 1;
 
 // List of threads as identified by bootinfo.
-typedef struct ThreadListT *ThreadList;
-struct ThreadListT {
-	bi_name_t tid;       // thread id as assigned by bootinfo
-	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
-	L4_ThreadId_t sosid; // the id we (as sos) will give it
-	uintptr_t ip;        // ip for when thread is started
-	void *sp;            // stack for when thread is started
-	ThreadList next;
-};
-
-static ThreadList threads = NULL;
+ThreadList threads = NULL;
 
 /* Initialise the L4 Environment library */
 int
@@ -487,8 +471,21 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	if (sp == 0)
 		return BI_NAME_INVALID;
 
+	// Also need to add thread_init to the region list (so it can start).
+	Region *newreg = (Region*) malloc(sizeof(Region));
+	newreg->type = REGION_THREAD_INIT;
+	newreg->base = ((L4_Word_t) thread_init) & PAGEALIGN;
+	newreg->size = PAGESIZE;
+	newreg->mapDirectly = 1;
+	newreg->rights = L4_ReadeXecOnly;
+	newreg->id = (-1);
+	newreg->next = as->regions;
+	as->regions = newreg;
+
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
 			(void*) thread->ip, (void*) sp);
+	//L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
+	//		(void*) thread_init, (void*) sp);
 
 	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
 
@@ -507,12 +504,16 @@ int
 bootinfo_cleanup(const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_cleanup\n");
 
+	// Cleaning up now done on startme system call.
+
+	/*
 	ThreadList freeMe;
 	while (threads != NULL) {
 		freeMe = threads->next;
 		free(threads);
 		threads = freeMe;
 	}
+	*/
 
 	return 0;
 }

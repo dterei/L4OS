@@ -24,7 +24,7 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
@@ -57,6 +57,37 @@ init_thread(void)
         sos_usleep(30 * 1000 * 1000);
 }
 
+// Start a given thread from the list of unstarted threads.
+static void
+start_thread(L4_ThreadId_t tid) {
+	(void) start_thread;
+
+	// Look for which thread (address space) it wants.
+	ThreadList thread, prev = NULL;
+
+	for (thread = threads; thread != NULL; thread = thread->next) {
+		if (L4_IsThreadEqual(thread->sosid, tid)) {
+			break;
+		} else {
+			prev = thread;
+		}
+	}
+
+	if (thread == NULL) {
+		dprintf(0, "!!! start_thread: didn't find relevant thread!\n");
+		return;
+	} else {
+		dprintf(1, "*** start_thread: found thread %d\n", L4_ThreadNo(tid));
+	}
+
+	// Start it
+	L4_Start_SpIp(tid, (L4_Word_t) thread->sp, (L4_Word_t) thread->ip);
+
+	// Remove it from the list of threads
+	if (prev != NULL) prev->next = thread->next;
+	if (thread == threads) threads = thread->next;
+	free(thread);
+}
 
 /* Some IPC labels defined in the L4 documentation */
 #define L4_PAGEFAULT	((L4_Word_t) -2)
@@ -172,6 +203,9 @@ syscall_loop(void)
 						(uintptr_t*) sender2kernel(L4_MsgWord(&msg, 1)),
 						(unsigned int) L4_MsgWord(&msg, 2));
 				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+				break;
+
+			case SOS_STARTME:
 				break;
 
 		// XXX must check that sender2kernel doesn't return null,
@@ -315,7 +349,7 @@ main (void)
 
 	// Initialise the various monolithic things
 	frame_init((low + HEAP_SIZE), high);
-	as_init();
+	pager_init();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

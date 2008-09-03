@@ -35,7 +35,7 @@ static void makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
 
 /* Misc system calls */
 
-void sos_debug_flush(void) {
+void debug_flush(void) {
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 	makeSyscall(SOS_DEBUG_FLUSH, NO_REPLY, &msg);
@@ -65,6 +65,17 @@ int moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
 
 	makeSyscall(SOS_MOREMEM, YES_REPLY, &msg);
 	return rval;
+}
+
+void thread_init(void) {
+	// Set up address space things like stdin, stdout.
+
+	// Return to SOS via a syscall.
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+	makeSyscall(SOS_STARTME, NO_REPLY, &msg);
+
+	// SOS will move the IP so this function should never return.
 }
 
 /* I/O system calls */

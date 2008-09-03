@@ -46,11 +46,29 @@ page_align_up(uintptr_t adr)
 }
 
 void
-as_init(void) {
+pager_init(void) {
+	// Set up address spaces
 	for (int i = 0; i < MAX_ADDRSPACES; i++) {
 		addrspace[i].pagetb = NULL;
 		addrspace[i].regions = NULL;
 	}
+
+	// Manually map in thread_init so it won't page fault
+	// Argh, I'm getting sick of this boilerplate.
+	/*
+	dprintf(0, "!!! %p\n", thread_init);
+	L4_Word_t addr = ((L4_Word_t) thread_init) & PAGEALIGN;
+	dprintf(0, "!!! %p %p\n", thread_init, addr);
+	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
+	L4_Set_Rights(&fpage, L4_ReadeXecOnly);
+	L4_PhysDesc_t ppage = L4_PhysDesc(addr, L4_DefaultMemory);
+
+	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
+		sos_print_error(L4_ErrorCode());
+		dprintf(0, "!!! pager_init: failed to map thread_init (%p, %p)\n",
+				thread_init, addr);
+	}
+	*/
 }
 
 uintptr_t
@@ -158,7 +176,12 @@ findRegion(AddrSpace *as, L4_Word_t addr) {
 	Region *r;
 
 	for (r = as->regions; r != NULL; r = r->next) {
-		if (addr >= r->base && addr < r->base + r->size) break;
+		if (addr >= r->base && addr < r->base + r->size) {
+			break;
+		} else {
+			dprintf(1, "*** findRegion: %p not %p - %p (%d)\n",
+					addr, r->base, r->base + r->size, r->type);
+		}
 	}
 
 	return r;
@@ -172,8 +195,8 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 	int rights;
 	int mapKernelToo = 0;
 
-	dprintf(1, "*** pager: fault on ss=%d, addr=%p, ip=%p\n",
-			L4_SpaceNo(L4_SenderSpace()), addr, ip);
+	dprintf(1, "*** pager: fault on ss=%d, addr=%p, ip=%p thread_init=%p\n",
+			L4_SpaceNo(L4_SenderSpace()), addr, ip, thread_init);
 
 	addr &= PAGEALIGN;
 
@@ -231,7 +254,9 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP) {
+	dprintf(1, "*** pager: about to invoke doPager\n");
 	doPager(L4_MsgWord(msgP, 0), L4_MsgWord(msgP, 1));
+	dprintf(1, "*** pager: successfully invoked doPager\n");
 }
 
 void

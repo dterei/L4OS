@@ -30,7 +30,8 @@ typedef struct {
 typedef enum {
 	REGION_STACK,
 	REGION_HEAP,
-	REGION_OTHER
+	REGION_OTHER,
+	REGION_THREAD_INIT
 } region_type;
 
 struct Region {
@@ -55,7 +56,7 @@ typedef struct {
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
 uintptr_t add_stackheap(AddrSpace *as);
-void as_init(void);
+void pager_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 int sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb);

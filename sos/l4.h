@@ -15,6 +15,7 @@
 
 #include <bootinfo/bootinfo.h>
 #include <l4/cache.h>
+#include <l4/caps.h>
 #include <l4/config.h>
 #include <l4/ipc.h>
 #include <l4/kdebug.h>

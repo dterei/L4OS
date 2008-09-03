@@ -22,7 +22,7 @@ do_pt_test( char *buf )
 		buf[i * 1024] = i;
 
 	/* flush */
-	sos_debug_flush();
+	debug_flush();
 
 	/* check */
 	for(i = 0; i < NPAGES; i += 4)

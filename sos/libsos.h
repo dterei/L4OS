@@ -18,6 +18,20 @@
 
 #define ONE_MEG (1 * 1024 * 1024)
 
+// List of threads as identified by bootinfo.
+typedef struct ThreadListT *ThreadList;
+struct ThreadListT {
+	bi_name_t tid;       // thread id as assigned by bootinfo
+	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
+	L4_ThreadId_t sosid; // the id we (as sos) will give it
+	uintptr_t ip;        // ip for when thread is started
+	void *sp;            // stack for when thread is started
+	ThreadList next;
+};
+
+extern ThreadList threads;
+
+// Bootinfo required callbacks
 bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data);
@@ -144,6 +158,19 @@ extern L4_ThreadId_t sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 static inline L4_Word_t sos_tid2task(L4_ThreadId_t tid)
 {
     return L4_ThreadNo(tid) >> THREADBITS;
+}
+
+//
+// sos_sid2tid(L4_SpaceId_t sid)
+// 	return L4_ThreadId_t
+//
+// Function that returns the tid associated with the given space.
+// This isn't all that safe since it's just based on the assumptions
+// that we make regarding sender space with regards to tid.
+//
+static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
+{
+	return L4_GlobalId(L4_SpaceNo(sid), 1);
 }
 
 //
