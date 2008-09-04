@@ -23,30 +23,33 @@ struct VNode_t {
 	// Callbacks
 	int (*open)(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode);
 
-	int (*close)(L4_ThreadId_t tid, VNode self, fildes_t file);
+	int (*close)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode);
 
-	void (*read)(L4_ThreadId_t tid, VNode self, fildes_t file,
+	void (*read)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 			char *buf, size_t nbyte, int *rval);
 
-	void (*write)(L4_ThreadId_t tid, VNode self, fildes_t file,
+	void (*write)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			const char *buf, size_t nbyte, int *rval);
 };
 
-
-// Global VNode list
+/* Global VNode list */
 extern VNode GlobalVNodes;
 
-/* Per process open file table */
-// TODO have a PCB rather than this.  Not all that challenging and
-// probably cleaner when there is more complex stuff to store
-// with each address space.
-
+/*
+ * TODO have a PCB rather than this.  Not all that challenging and
+ * probably cleaner when there is more complex stuff to store
+ * with each address space.
+ */
 typedef struct {
 	VNode vnode;
+	/* This stores the permissions the file was opened with while the fmode_t in
+	   the vnode stores the permission stored with the file on disk */
 	fmode_t fmode;
+	// TODO: Should there be one for read and one for write?
 	L4_Word_t fp;
 } VFile_t;
 
+/* Per process open file table */
 extern VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 
 /* Global record of the "special files" */

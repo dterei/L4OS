@@ -55,12 +55,12 @@ VNode console_init(VNode sf);
 fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 		fmode_t mode);
 
-int console_close(L4_ThreadId_t tid, VNode self, fildes_t file);
+int console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode);
 
-void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
+void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval);
 
-void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
+void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval);
 
 // callback for read

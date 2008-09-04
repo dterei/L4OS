@@ -174,6 +174,18 @@ static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
 }
 
 //
+// getCurrentProcNum(void)
+// 	return L4_Word_t
+//
+// Returns the address space / process number of the current process
+// SOS is working on behalf of.
+//
+// TODO: Should probably just change to using a PCB and this function
+// will return a PCB instead of a number
+//
+extern L4_Word_t getCurrentProcNum(void);
+
+//
 // sos_usleep(uint32_t microseconds)
 //
 // Put the calling thread to sleep for microseconds.  This function is

@@ -142,7 +142,8 @@ sos_print_error(L4_Word_t ec)
 	sos_logf("  Message overflow error\n");
 }
 
-void sos_print_l4memory(void *addr, L4_Word_t len)
+void
+sos_print_l4memory(void *addr, L4_Word_t len)
 {
     len = ((len + 15) & ~15);	// Round up to next 16
     unsigned int *wp = &((unsigned int *) addr)[len / sizeof(unsigned)];
@@ -161,7 +162,8 @@ sos_print_fpage(L4_Fpage_t fpage)
 	    L4_Address(fpage), L4_Address(fpage) + L4_Size(fpage));
 }
 
-void sos_logf(const char *msg, ...)
+void
+sos_logf(const char *msg, ...)
 {
     va_list alist;
 
@@ -540,7 +542,9 @@ sos_start_binfo_executables(void *userstack)
 
 // Memory for the ixp400 networking layers
 extern void *sos_malloc(uint32_t size);
-void *sos_malloc(uint32_t size)
+
+void
+*sos_malloc(uint32_t size)
 {
     if (sSosMemoryBot + size < sSosMemoryTop) {
         L4_Word_t bot = sSosMemoryBot;
@@ -552,7 +556,27 @@ void *sos_malloc(uint32_t size)
 	}
 }
 
-void sos_usleep(uint32_t microseconds)
+void
+sos_usleep(uint32_t microseconds)
 {
     utimer_sleep(microseconds);	// M4 must change to your timer
 }
+
+L4_Word_t
+getCurrentProcNum(void)
+{
+	L4_SpaceId_t sp = L4_SenderSpace();
+	if (L4_IsNilSpace(sp)) {
+		return (-1);
+	}
+
+	L4_Word_t as = L4_SpaceNo(sp);
+	if (as < 0 || as >= MAX_ADDRSPACES) {
+		dprintf(0, "!!! Invalid Address Space Number! Outside range! (%d)\n", as);
+		// XXX: Should probably kill the whole process (might be many threads)
+		return (-1);
+	}
+
+	return as;
+}
+

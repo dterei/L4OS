@@ -76,8 +76,6 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 
 	fildes_t fd = -1;
 
-	//XXX: Check file permissions allow the requested open mode
-
 	// open file for reading
 	if (mode & FM_READ) {
 		// check if reader slots full
@@ -114,7 +112,7 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 	return fd;
 }
 
-int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
+int console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
 	dprintf(1, "*** console_close: %d\n", file);
 
 	// make sure console exists
@@ -128,10 +126,10 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 	}
 
 	// decrease counts
-	if (self->stat.st_fmode & FM_WRITE) {
+	if (mode & FM_WRITE) {
 		cf->writers--;
 	}
-	if (self->stat.st_fmode & FM_READ) {
+	if (mode & FM_READ) {
 		cf->readers--;
 	}
 
@@ -144,22 +142,24 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file) {
 		cf->reader.rbyte = 0;
 	}
 
+	// 'close' vnode if no one has it open
+	if (cf->writers <= 0 && cf->readers <= 0 && self->refcount == 1) {
+		self->refcount = 0;
+		cf->writers = 0;
+		cf->readers = 0;
+		self = NULL;
+	}
+
 	return 0;
 }
 
-void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
+void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 
 	dprintf(1, "*** console_read: %d, %p, %d from %p\n", file, buf, nbyte, tid.raw);
 
 	// make sure console exists
 	if (self == NULL) {
-		*rval = (-1);
-		return;
-	}
-
-	// XXX make sure has permissions, can prbably be moved up to vfs
-	if (!(self->stat.st_fmode & FM_READ)) {
 		*rval = (-1);
 		return;
 	}
@@ -189,15 +189,9 @@ void console_read(L4_ThreadId_t tid, VNode self, fildes_t file,
 }
 
 void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
-		const char *buf, size_t nbyte, int *rval) {
+		L4_Word_t offset, const char *buf, size_t nbyte, int *rval) {
 
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
-
-	// XXX make sure has permissions, can prbably be moved up to vfs
-	if (!(self->stat.st_fmode & FM_WRITE)) {
-		*rval = (-1);
-		return;
-	}
 
 	// because it doesn't like a const
 	// XXX Need to make sure we don't block up sos too long.
