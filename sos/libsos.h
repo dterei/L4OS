@@ -44,6 +44,8 @@ bi_name_t bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data);
 int bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data);
 int bootinfo_cleanup(const bi_user_data_t *data);
 
+void msgClear(void);
+
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)
 //

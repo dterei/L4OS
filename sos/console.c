@@ -230,29 +230,14 @@ serial_read_callback(struct serial *serial, char c) {
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
 				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
 
-		// XXX this is a complete freaking mystery.  Originally we
-		// thought that the need to call L4_Reply twice was because
-		// we were using UncachedMemory for everything - and that
-		// the first call failed but did something magic with the
-		// cache to make it work the second time - but now that this
-		// has been fixed it STILL doesn't work.
-		
 		// TODO only flush buffer
 		L4_CacheFlushAll();
 
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
 				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
 
-		L4_MsgTag_t tag = L4_Reply(cf->reader.tid);
-		if (L4_IpcFailed(tag)) {
-			dprintf(2, "!!! serial_read_callback: reply failed (Err %d)!\n",
-					L4_ErrorCode());
-			tag = L4_Reply(cf->reader.tid);
-			if (L4_IpcFailed(tag)) {
-				dprintf(2, "!!! serial_read_callback: reply failed again (%d)!\n",
-						L4_ErrorCode());
-			}
-		}
+		msgClear();
+		L4_Reply(cf->reader.tid);
 
 		// remove request now its done
 		cf->reader.tid = L4_nilthread;

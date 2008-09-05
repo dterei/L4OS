@@ -580,3 +580,9 @@ getCurrentProcNum(void)
 	return as;
 }
 
+void
+msgClear(void) {
+	L4_Msg_t clear;
+	L4_MsgClear(&clear);
+	L4_MsgLoad(&clear);
+}
