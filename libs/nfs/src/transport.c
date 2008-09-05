@@ -101,7 +101,7 @@ adddata(struct pbuf* pbuf, char *data, int size)
     addtobuf(pbuf, data, size);
 
     if (padded % 4) {
-	addtobuf(pbuf, (char*) &fill, 4 - (padded % 4) );
+	 	addtobuf(pbuf, (char*) &fill, 4 - (padded % 4) );
     }	
 }
 
@@ -114,7 +114,7 @@ skipstring(struct pbuf *pbuf)
     getfrombuf(pbuf, (char*) &size, sizeof(size));
     
     if (size % 4)
-	size += 4 - (size % 4);
+	 	size += 4 - (size % 4);
     pbuf_adv_arg(pbuf, 0, size);
 }
 
@@ -137,11 +137,11 @@ getdata(struct pbuf *pbuf, char* data, int len, int null)
     padsize = size;
 
     if (size < len)
-	len = size;
+	 	len = size;
 
     /* copy bytes into tmp */
     if (padsize % 4)
-	padsize += 4 - (padsize % 4);
+		padsize += 4 - (padsize % 4);
 
     getfrombuf(pbuf, data, len);
 
@@ -149,7 +149,7 @@ getdata(struct pbuf *pbuf, char* data, int len, int null)
 
     /* add the null pointer to the name */
     if (null)
-	data[ len ] = '\0';
+		data[ len ] = '\0';
 
     return len;
 }
@@ -172,6 +172,7 @@ getfrombuf(struct pbuf *pbuf, char* data, int len)
 void
 addtobuf(struct pbuf *pbuf, char *data, int len)
 {
+	 assert(pbuf->len >= len);
     memcpy(pbuf->arg[0], data, len);
     pbuf_adv_arg(pbuf, 0, len);
 }

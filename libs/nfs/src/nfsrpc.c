@@ -6,11 +6,11 @@
 #include <nfs/nfs.h>
 #include "transport.h"
 
-//#define DEBUG_NFS 1
+#define DEBUG_NFS 1
 #ifdef DEBUG_NFS
-#define debug(x...) printf(x)
+	#define debug(x...) printf(x)
 #else
-#define debug(x...)
+	#define debug(x...)
 #endif
 
 static int nfs_port = 0;
@@ -103,18 +103,20 @@ mnt_mount(char *dir, struct cookie *pfh)
     
     ret = rpc_call(pbuf, mount_port);
 
-    if (ret == 0) {
-	debug( "mount call failed :(\n" );
-	return 1;
-    }
+	 if (ret == 0) {
+		 debug( "mount call failed :(\n" );
+		 return 1;
+	 }
 
     /* now we do some stuff :) */
     getfrombuf(ret, (char*) &status, sizeof(status));
 
-    if (status != 0) {
-	debug( "Could not mount %s!\n", dir );
-	return 1;
-    }
+	 if (status != 0) {
+		 debug( "Could not mount %s, %d!\n", dir, status );
+		 return 1;
+	 }
+
+	 debug("All seems good for mount: %s!\n", dir);
 
     getfrombuf(ret, (char*) pfh, sizeof(struct cookie));
 
@@ -129,45 +131,45 @@ mnt_mount(char *dir, struct cookie *pfh)
 int
 nfs_init(struct ip_addr server)
 {
-    mapping_t map;
+	mapping_t map;
 
-    init_transport(server);
+	init_transport(server);
 
-    /* make and RPC to get mountd info */
-    map.prog = MNT_NUMBER;
-    map.vers = MNT_VERSION;
-    map.prot = IPPROTO_UDP;
-    
-    if (map_getport(&map) == 0) {
-	debug("mountd port number is %d\n", map.port);
-	mount_port = map.port;
-	if (mount_port == 0) {
-	    printf("Mount port invalid\n");
-	    return 1;
+	/* make and RPC to get mountd info */
+	map.prog = MNT_NUMBER;
+	map.vers = MNT_VERSION;
+	map.prot = IPPROTO_UDP;
+
+	if (map_getport(&map) == 0) {
+		debug("mountd port number is %d\n", map.port);
+		mount_port = map.port;
+		if (mount_port == 0) {
+			printf("Mount port invalid\n");
+			return 1;
+		}
+	} else {
+		printf("Error getting mountd port number\n");
+		return 1;
 	}
-    } else {
-	printf("Error getting mountd port number\n");
-	return 1;
-    }
-    
-    /* make and RPC to get nfs info */
-    map.prog = NFS_NUMBER;
-    map.vers = NFS_VERSION;
-    map.prot = IPPROTO_UDP;
-    
-    if(map_getport(&map) == 0) {
-	debug( "nfs port number is %d\n", map.port );
-	nfs_port = map.port;
-    } else {
-	if (nfs_port == 0) {
-	    printf("Invalid NFS port\n");
-	    return 1;
-	}
-	debug( "Error getting NFS port number\n" );
-	return 1;
-    }
 
-    return 0;
+	/* make and RPC to get nfs info */
+	map.prog = NFS_NUMBER;
+	map.vers = NFS_VERSION;
+	map.prot = IPPROTO_UDP;
+
+	if(map_getport(&map) == 0) {
+		debug( "nfs port number is %d\n", map.port );
+		nfs_port = map.port;
+	} else {
+		if (nfs_port == 0) {
+			printf("Invalid NFS port\n");
+			return 1;
+		}
+		debug( "Error getting NFS port number\n" );
+		return 1;
+	}
+
+	return 0;
 }
 
 /******************************************

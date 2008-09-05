@@ -12,7 +12,8 @@
 // The file names of our consoles
 Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
 
-VNode console_init(VNode sflist) {
+VNode
+console_init(VNode sflist) {
 	int i;
 
 	dprintf(1, "*** console_init: creating special console files ***\n");
@@ -54,8 +55,8 @@ VNode console_init(VNode sflist) {
 	return sflist;
 }
 
-fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
-		fmode_t mode) {
+fildes_t
+console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode) {
 
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
@@ -112,7 +113,8 @@ fildes_t console_open(L4_ThreadId_t tid, VNode self, const char *path,
 	return fd;
 }
 
-int console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
+int
+console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
 	dprintf(1, "*** console_close: %d\n", file);
 
 	// make sure console exists
@@ -153,7 +155,8 @@ int console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
 	return 0;
 }
 
-void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
+void
+console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 
 	dprintf(1, "*** console_read: %d, %p, %d from %p\n", file, buf, nbyte, tid.raw);
@@ -188,8 +191,9 @@ void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	L4_CacheFlushAll();
 }
 
-void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
-		L4_Word_t offset, const char *buf, size_t nbyte, int *rval) {
+void
+console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
+		const char *buf, size_t nbyte, int *rval) {
 
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
@@ -200,7 +204,8 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file,
 	*rval = network_sendstring_char(nbyte, buf2);
 }
 
-void serial_read_callback(struct serial *serial, char c) {
+void
+serial_read_callback(struct serial *serial, char c) {
 	dprintf(1, "*** serial_read_callback: %c\n", c);
 
 	// TODO hack, need proper way of handling finding if we are

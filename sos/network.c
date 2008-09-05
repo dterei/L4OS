@@ -38,7 +38,8 @@ static struct serial *serial = NULL;
 #define NFS_DIR "/mnt/hgfs/tftpboot"
 #else
 /* UNSW (set your username here) */
-#define NFS_DIR "/var/tftpboot/<$USER>"
+//#define NFS_DIR "/var/tftpboot/<$USER>"
+#define NFS_DIR "/srv/tftp"
 #endif
 
 // Internal APIs, just direct publish from ixp_osal
@@ -96,21 +97,21 @@ network_init(void)
     // Finish the initialisation of the nslu2 hardware
     ixOsalOSServicesFinaliseInit();
 
-#if 0
+#if 1
     /* Initialise NFS */
     int r = nfs_init(gw); assert(!r);
 
     mnt_get_export_list();	// Print out the exports on this server
 
-    const char *msg;
-    if (mnt_mount(NFS_DIR, &mnt_point))		// Mount aos_nfs
-	msg = "%s: Error mounting path '%s'!\n";
-    else
-	msg = "Successfully mounted '%s'\n";
-    printf(msg, __FUNCTION__, NFS_DIR);
+	 const char *msg;
+	 if (mnt_mount(NFS_DIR, &mnt_point))		// Mount aos_nfs
+		 msg = "%s: Error mounting path '%s'!\n";
+	 else
+		 msg = "%s: Successfully mounted '%s'\n";
+	 printf(msg, __FUNCTION__, NFS_DIR);
 #endif
 
-	 // Initialise the serial driver, for milestone 0
+	 // Initialise the serial driver
 	 serial = serial_init();
 
     printf("Finished %s\n\n", __FUNCTION__);

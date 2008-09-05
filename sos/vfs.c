@@ -10,11 +10,13 @@
 
 #include <sos/sos.h>
 
+#include "vfs.h"
+
 #include "console.h"
+#include "nfsfs.h"
+
 #include "libsos.h"
 #include "pager.h"
-#include "vfs.h"
-#include "queue.h"
 
 #define verbose 1
 
@@ -41,6 +43,8 @@ vfs_init(void) {
 
 	// Init console files
 	specialFiles = console_init(specialFiles);
+	// Init NFS
+	nfsfs_init();
 }
 
 fildes_t

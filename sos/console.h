@@ -1,8 +1,6 @@
 #ifndef _CONSOLE_H
 #define _CONSOLE_H
 
-#include <serial/serial.h>
-
 #include <sos/sos.h>
 #include <serial/serial.h>
 
