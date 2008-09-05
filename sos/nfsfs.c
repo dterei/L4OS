@@ -5,7 +5,7 @@
 #include "libsos.h"
 #include "network.h"
 
-#define verbose 1
+#define verbose 2
 
 /*** NFS TIMEOUT THREAD ***/
 extern void nfs_timeout(void);
@@ -53,6 +53,7 @@ nfsfs_init(void) {
 	return 0;
 }
 
+static
 VNode
 nfsfs_findvnode(L4_ThreadId_t tid, VNode self, const char *path,
 		fmode_t mode, int *rval) {
@@ -63,8 +64,11 @@ nfsfs_findvnode(L4_ThreadId_t tid, VNode self, const char *path,
 void
 nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval, VNode vnode)) {
+			const char *path, fmode_t mode, int *rval)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
+	nfsfs_findvnode(tid, self, path, mode, rval);
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
@@ -72,28 +76,38 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
 nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
 		int *rval) {
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %s, %d\n", self, pos, name, nbyte);
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
 nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
+	msgClear();
+	L4_Reply(tid);
 }
 

@@ -235,7 +235,7 @@ struct command commands[] = {
 
 
 
-	int
+int
 main(void)
 {
 	char             buf[BUF_SIZ];

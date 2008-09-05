@@ -10,6 +10,8 @@
 
 #include <sos/sos.h>
 
+#include "l4.h"
+
 #include "vfs.h"
 
 #include "console.h"
@@ -18,7 +20,7 @@
 #include "libsos.h"
 #include "pager.h"
 
-#define verbose 1
+#define verbose 2
 
 // Global open vnodes list
 VNode GlobalVNodes;
@@ -76,7 +78,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	// filesystems more transparently.
 	if (vnode == NULL) {
 		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
-		nfsfs_findvnode(tid, vnode, path, mode, rval);
+		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
 		return;
 	}
 	
@@ -212,7 +214,9 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 
 void
 vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {
-		dprintf(1, "*** vfs_getdirent: %d, %s, %d\n", pos, name, nbyte);
+	dprintf(1, "*** vfs_getdirent: %d, %s, %d\n", pos, name, nbyte);
+	msgClear();
+	L4_Reply(tid);
 }
 
 
@@ -220,5 +224,7 @@ void
 vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** vfs_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
 			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
+	msgClear();
+	L4_Reply(tid);
 }
 

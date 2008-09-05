@@ -24,7 +24,7 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 4
+#define verbose 0
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
