@@ -31,6 +31,7 @@ nfsfs_timeout_thread(void) {
 
 int
 nfsfs_init(void) {
+	dprintf(1, "*** nfsfs_init\n");
 	// TODO: Move NFS init here instead of network.c
 	
 #if 0
@@ -49,31 +50,50 @@ nfsfs_init(void) {
 
 	(void) sos_thread_new(&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
 
-	return 1;
+	return 0;
 }
 
-fildes_t
-nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path,
-		fmode_t mode) {
-	//TODO
-	return (-1);
+VNode
+nfsfs_findvnode(L4_ThreadId_t tid, VNode self, const char *path,
+		fmode_t mode, int *rval) {
+	dprintf(1, "*** nfsfs_findvnode: %p, %s", self, path);
+	return self;
 }
 
-int
-nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
-	//TODO
-	return (-1);
+void
+nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
+			const char *path, fmode_t mode, int *rval, VNode vnode)) {
+	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
+}
+
+void
+nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+			int *rval)) {
+	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 }
 
 void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
-	//TODO
+	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 }
 
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval) {
-	//TODO
+	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
+}
+
+void
+nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
+		int *rval) {
+	dprintf(1, "*** nfsfs_getdirent: %p, %d, %s, %d\n", self, pos, name, nbyte);
+}
+
+void
+nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
+	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
 }
 

@@ -166,8 +166,18 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
  * -1 if error (non-existent entry).
  */
 int getdirent(int pos, char *name, size_t nbyte) {
-	printf("getdirent: system call not implemented.\n");
-	return 0;
+	int rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
+	L4_MsgAppendWord(&msg, (L4_Word_t) name);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_GETDIRENT, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 
@@ -175,8 +185,17 @@ int getdirent(int pos, char *name, size_t nbyte) {
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 int stat(const char *path, stat_t *buf) {
-	printf("stat: system call not implemented.\n");
-	return 0;
+	int rval;
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) path);
+	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+
+	makeSyscall(SOS_STAT, YES_REPLY, &msg);
+	return rval;
 }
 
 /* 

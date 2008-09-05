@@ -30,6 +30,18 @@ VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 VNode specialFiles = NULL;
 
 
+fildes_t
+findNextFd(int spaceId) {
+	// TODO: Should we be reserving these really?
+	// 0, 1, 2 reserved for the standard file descriptors
+	for (int i = 3; i < MAX_ADDRSPACES; i++) {
+		if (openfiles[spaceId][i].vnode == NULL) return i;
+	}
+
+	// Too many open files.
+	return (-1);
+}
+
 void
 vfs_init(void) {
 	// All vnodes are unallocated
@@ -47,8 +59,8 @@ vfs_init(void) {
 	nfsfs_init();
 }
 
-fildes_t
-vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
+void
+vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	dprintf(1, "*** vfs_open: %p (%s) %d\n", path, path, mode);
 
 	VNode vnode = NULL;
@@ -63,40 +75,43 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 	// points so no point getting fancy to support multiple
 	// filesystems more transparently.
 	if (vnode == NULL) {
-		// TODO: NFS Open
-		dprintf(0, "!!! vfs_open: NFS not supported yet\n");
-		return (-1);
+		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
+		nfsfs_findvnode(tid, vnode, path, mode, rval);
+		return;
 	}
 	
 	// Have vnode now so open
-	fildes_t rval = vnode->open(tid, vnode, path, mode);
+	vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+}
+
+void
+vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
+	dprintf(1, "*** vfs_open_done: %p (%s) %d\n", path, path, mode);
 
 	// open failed
-	if (rval < 0) {
-		dprintf(2, "*** vfs_open: can't open file: error code %d\n", rval);
-		return (-1);
+	if (*rval < 0) {
+		dprintf(2, "*** vfs_open: can't open file: error code %d\n", *rval);
+		return;
 	}
 
 	// store file in per process table
-	openfiles[getCurrentProcNum()][rval].vnode = vnode;
-	openfiles[getCurrentProcNum()][rval].fmode = mode;
-	openfiles[getCurrentProcNum()][rval].fp = 0;
+	openfiles[getCurrentProcNum()][*rval].vnode = self;
+	openfiles[getCurrentProcNum()][*rval].fmode = mode;
+	openfiles[getCurrentProcNum()][*rval].fp = 0;
 
 	// update global vnode list
 	VNode oldhead = GlobalVNodes;
-	GlobalVNodes = vnode;
-	vnode->next = oldhead;
-	vnode->previous = NULL;
-	oldhead->previous = vnode;
+	GlobalVNodes = self;
+	self->next = oldhead;
+	self->previous = NULL;
+	oldhead->previous = self;
 
 	// update vnode refcount
-	vnode->refcount++;
-
-	return rval;
+	self->refcount++;
 }
 
-int
-vfs_close(L4_ThreadId_t tid, fildes_t file) {
+void
+vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 
 	// get file
@@ -106,16 +121,26 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	VNode vnode =vf->vnode;
 	if (vnode == NULL) {
 		dprintf(2, "*** vfs_close: invalid file handler: %d\n", file);
-		return (-1);
+		*rval = (-1);
+		return;
 	}
 
 	// vnode close function is responsible for freeing the node if appropriate
 	// so don't access after a close without checking its not null
 	// try closing vnode;
-	int r = vnode->close(tid, vnode, file, vf->fmode);
+	vnode->close(tid, vnode, file, vf->fmode, rval, vfs_close_done);
+}
+
+void
+vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *rval) {
+	dprintf(1, "*** vfs_close_done: %d\n", file);
+
+	// get file & vnode
+	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
+	VNode vnode =vf->vnode;
 
 	// clean up book keeping
-	if (r == 0) {
+	if (*rval == 0) {
 		// close file table entry
 		vf->vnode = NULL;
 		vf->fmode = 0;
@@ -131,8 +156,6 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 			vnode->refcount--;
 		}
 	}
-
-	return r;
 }
 
 void
@@ -187,15 +210,15 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval);
 }
 
-fildes_t
-findNextFd(int spaceId) {
-	// TODO: Should we be reserving these really?
-	// 0, 1, 2 reserved for the standard file descriptors
-	for (int i = 3; i < MAX_ADDRSPACES; i++) {
-		if (openfiles[spaceId][i].vnode == NULL) return i;
-	}
+void
+vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {
+		dprintf(1, "*** vfs_getdirent: %d, %s, %d\n", pos, name, nbyte);
+}
 
-	// Too many open files.
-	return (-1);
+
+void
+vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
+	dprintf(1, "*** vfs_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
+			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
 }
 

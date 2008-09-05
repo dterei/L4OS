@@ -26,16 +26,19 @@ console_init(VNode sflist) {
 
 		// set up console vnode
 		console->path = Console_Files[i].path;
-		console->stat.st_type = ST_SPECIAL;
-		console->stat.st_fmode = FM_READ | FM_WRITE;
-		console->stat.st_size = 0;
-		console->stat.st_ctime = 0;
-		console->stat.st_atime = 0;
+		console->vstat.st_type = ST_SPECIAL;
+		console->vstat.st_fmode = FM_READ | FM_WRITE;
+		console->vstat.st_size = 0;
+		console->vstat.st_ctime = 0;
+		console->vstat.st_atime = 0;
 
+		// setup system calls
 		console->open = console_open;
 		console->close = console_close;
 		console->read = console_read;
 		console->write = console_write;
+		console->getdirent = console_getdirent;
+		console->stat = console_stat;
 
 		// setup the console struct
 		Console_Files[i].reader.tid = L4_nilthread;
@@ -55,24 +58,40 @@ console_init(VNode sflist) {
 	return sflist;
 }
 
-fildes_t
-console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode) {
+static
+void
+console_open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
+			const char *path, fmode_t mode, int *rval), int r) {
+	*rval = r;
+	open_done(tid, self, path, mode, rval);
+	msgClear();
+	L4_Reply(tid);
+}
 
+
+void
+console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
+			const char *path, fmode_t mode, int *rval)) {
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
 	// make sure console exists
 	if (self == NULL) {
-		return (-1);
+		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		return;
 	}
 
 	// make sure they passed in the right vnode
 	if (strcmp(self->path, path) != 0) {
-		return (-1);
+		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		return (-1);
+		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		return;
 	}
 
 	fildes_t fd = -1;
@@ -81,11 +100,13 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode) {
 	if (mode & FM_READ) {
 		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
-			return (-1);
+			console_open_finish(tid, self, path, mode, rval, open_done, -1);
+			return;
 		} else {
 			fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
 			if (fd < 0) {
-				return (-1);
+				console_open_finish(tid, self, path, mode, rval, open_done, -1);
+				return;
 			}
 			cf->readers++;
 		}
@@ -98,33 +119,50 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode) {
 			if (mode & FM_READ) {
 				cf->readers--;
 			}
-			return (-1);
+			console_open_finish(tid, self, path, mode, rval, open_done, -1);
+			return;
 		} else {
 			if (fd == -1) {
 				fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
 				if (fd < 0) {
-					return (-1);
+					console_open_finish(tid, self, path, mode, rval, open_done, -1);
+					return;
 				}
 			}
 			cf->writers++;
 		}
 	}
 
-	return fd;
+	console_open_finish(tid, self, path, mode, rval, open_done, fd);
 }
 
-int
-console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
+static
+void
+console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+			int *rval), int r) {
+	*rval = r;
+	close_done(tid, self, file, mode, rval);
+	msgClear();
+	L4_Reply(tid);
+}
+
+void
+console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
+			int *rval)) {
 	dprintf(1, "*** console_close: %d\n", file);
 
 	// make sure console exists
 	if (self == NULL) {
-		return (-1);
+		console_close_finish(tid, self, file, mode, rval, close_done, -1);
+		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		return (-1);
+		console_close_finish(tid, self, file, mode, rval, close_done, -1);
+		return;
 	}
 
 	// decrease counts
@@ -152,7 +190,7 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode) {
 		self = NULL;
 	}
 
-	return 0;
+	console_close_finish(tid, self, file, mode, rval, close_done, 0);
 }
 
 void
@@ -202,6 +240,35 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	// either use a thread just for writes or continuations.
 	char *buf2 = (char *)buf;
 	*rval = network_sendstring_char(nbyte, buf2);
+
+	msgClear();
+	L4_Reply(tid);
+}
+
+void
+console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
+		int *rval) {
+	dprintf(1, "*** console_getdirent: %d, %s, %d\n", pos, name, nbyte);
+
+	dprintf(0, "***console_getdirent: Not implemented for console fs\n");
+
+   *rval = 0;
+
+	msgClear();
+	L4_Reply(tid);
+}
+
+void
+console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
+	dprintf(1, "*** console_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
+			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
+
+	dprintf(0, "***console_stat: Not implemented for console fs\n");
+
+   *rval = 0;
+
+	msgClear();
+	L4_Reply(tid);
 }
 
 void
