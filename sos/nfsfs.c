@@ -1,9 +1,11 @@
 #include <nfs/nfs.h>
 
 #include "nfsfs.h"
+
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
+#include "syscall.h"
 
 #define verbose 2
 
@@ -67,8 +69,9 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			const char *path, fmode_t mode, int *rval)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 	nfsfs_findvnode(tid, self, path, mode, rval);
-	msgClear();
-	L4_Reply(tid);
+
+	*rval = (-1);
+	syscall_reply(tid);
 }
 
 void
@@ -76,6 +79,9 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
+
+	*rval = -1;
+
 	msgClear();
 	L4_Reply(tid);
 }
@@ -84,6 +90,9 @@ void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
+
+	*rval = -1;
+
 	msgClear();
 	L4_Reply(tid);
 }
@@ -92,6 +101,9 @@ void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
+
+	*rval = -1;
+
 	msgClear();
 	L4_Reply(tid);
 }
@@ -100,6 +112,9 @@ void
 nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
 		int *rval) {
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %s, %d\n", self, pos, name, nbyte);
+
+	*rval = -1;
+
 	msgClear();
 	L4_Reply(tid);
 }
@@ -107,6 +122,9 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 void
 nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
+
+	*rval = -1;
+
 	msgClear();
 	L4_Reply(tid);
 }

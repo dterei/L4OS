@@ -52,6 +52,8 @@ cat(int argc, char **argv)
 
 	fd = open(argv[1], FM_READ);
 
+	printf("%d\n", fd);
+
 	assert(fd >= 0);
 
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 )

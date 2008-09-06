@@ -6,7 +6,7 @@
 #include <nfs/nfs.h>
 #include "transport.h"
 
-#define DEBUG_NFS 1
+#define DEBUG_NFS 0
 #ifdef DEBUG_NFS
 	#define debug(x...) printf(x)
 #else

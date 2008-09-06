@@ -18,6 +18,8 @@
 
 #define ONE_MEG (1 * 1024 * 1024)
 
+#define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
+
 // List of threads as identified by bootinfo.
 typedef struct ThreadListT *ThreadList;
 struct ThreadListT {

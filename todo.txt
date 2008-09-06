@@ -60,3 +60,6 @@ of work (once some of the above issues have been fixed).
 
 - Milestone 5 - the timer driver, actually looks pretty difficult.  Although
 apparently (according to Oleg) a tutor said it was a "catchup milestone".
+
+- Change all syscalls to use syscall_reply instead of handling directly.
+
