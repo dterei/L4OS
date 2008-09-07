@@ -6,6 +6,7 @@
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
+#include "syscall.h"
 
 #define verbose 1
 
@@ -65,8 +66,7 @@ console_open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mod
 			const char *path, fmode_t mode, int *rval), int r) {
 	*rval = r;
 	open_done(tid, self, path, mode, rval);
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 
@@ -143,8 +143,7 @@ console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval), int r) {
 	*rval = r;
 	close_done(tid, self, file, mode, rval);
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -224,9 +223,6 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	cf->reader.nbyte = nbyte;
 	cf->reader.rbyte = 0;
 	*rval = 0;
-
-	// flush cache to clear out any of the userprogs entries
-	L4_CacheFlushAll();
 }
 
 void
@@ -240,9 +236,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	// either use a thread just for writes or continuations.
 	char *buf2 = (char *)buf;
 	*rval = network_sendstring_char(nbyte, buf2);
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -252,10 +246,8 @@ console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nby
 
 	dprintf(0, "***console_getdirent: Not implemented for console fs\n");
 
-   *rval = 0;
-
-	msgClear();
-	L4_Reply(tid);
+   *rval = (-1);
+	syscall_reply(tid);
 }
 
 void
@@ -265,10 +257,8 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *
 
 	dprintf(0, "***console_stat: Not implemented for console fs\n");
 
-   *rval = 0;
-
-	msgClear();
-	L4_Reply(tid);
+   *rval = (-1);
+	syscall_reply(tid);
 }
 
 void
@@ -297,14 +287,10 @@ serial_read_callback(struct serial *serial, char c) {
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
 				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
 
-		// TODO only flush buffer
-		L4_CacheFlushAll();
-
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
 				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
 
-		msgClear();
-		L4_Reply(cf->reader.tid);
+		syscall_reply(cf->reader.tid);
 
 		// remove request now its done
 		cf->reader.tid = L4_nilthread;
@@ -316,5 +302,4 @@ serial_read_callback(struct serial *serial, char c) {
 
 	dprintf(2, "*** serial read: buf = %s\n", cf->reader.buf);
 }
-
 

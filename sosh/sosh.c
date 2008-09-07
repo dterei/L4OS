@@ -48,13 +48,13 @@ cat(int argc, char **argv)
 		return 1;
 	}
 
-	printf("<%s>\n", argv[1]);
-
 	fd = open(argv[1], FM_READ);
+	if (fd < 0) {
+		printf("%s cannot be opened\n", argv[1]);
+		return 1;
+	}
 
-	printf("%d\n", fd);
-
-	assert(fd >= 0);
+	printf("<%s>\n", argv[1]);
 
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 )
 		num_written = write(stdout_fd, buf, num_read);
@@ -88,7 +88,15 @@ cp(int argc, char **argv)
 	fd = open(file1, FM_READ);
 	fd_out = open(file2, FM_WRITE);
 
-	assert(fd >= 0);
+	if (fd < 0) {
+		printf("%s cannot be opened\n", file1);
+		return 1;
+	}
+
+	if (fd_out < 0) {
+		printf("%s cannot be opened\n", file2);
+		return 1;
+	}
 
 	while( (num_read = read( fd, buf, BUF_SIZ) ) > 0 )
 		num_written = write(fd_out, buf, num_read);
@@ -109,7 +117,9 @@ ps(int argc, char **argv)
 	process_t *process;
 	int i, processes;
 
+	printf("ps: calling malloc\n");
 	process = malloc( MAX_PROCESSES * sizeof(*process) );
+	printf("ps: malloc done\n");
 
 	if( process == NULL )
 	{
@@ -185,7 +195,7 @@ dir(int argc, char **argv)
 		r = stat(argv[1], &sbuf);
 		if( r < 0 )
 		{
-			printf("stat(%s) failed: %d\n", buf, r);
+			printf("stat(%s) failed: %d\n", argv[1], r);
 			return 0;
 		}
 		prstat(argv[1]);
@@ -371,3 +381,4 @@ main(void)
 	}
 	printf("[SOS Exiting]\n");
 }
+

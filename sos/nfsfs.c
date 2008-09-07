@@ -81,9 +81,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 
 	*rval = -1;
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -92,9 +90,7 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
 	*rval = -1;
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -103,9 +99,7 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
 	*rval = -1;
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -114,9 +108,7 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %s, %d\n", self, pos, name, nbyte);
 
 	*rval = -1;
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
 void
@@ -124,8 +116,6 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
 
 	*rval = -1;
-
-	msgClear();
-	L4_Reply(tid);
+	syscall_reply(tid);
 }
 
