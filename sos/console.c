@@ -69,7 +69,6 @@ console_open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mod
 	syscall_reply(tid);
 }
 
-
 void
 console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
@@ -94,8 +93,6 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		return;
 	}
 
-	fildes_t fd = -1;
-
 	// open file for reading
 	if (mode & FM_READ) {
 		// check if reader slots full
@@ -103,11 +100,6 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			console_open_finish(tid, self, path, mode, rval, open_done, -1);
 			return;
 		} else {
-			fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
-			if (fd < 0) {
-				console_open_finish(tid, self, path, mode, rval, open_done, -1);
-				return;
-			}
 			cf->readers++;
 		}
 	}
@@ -122,18 +114,11 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			console_open_finish(tid, self, path, mode, rval, open_done, -1);
 			return;
 		} else {
-			if (fd == -1) {
-				fd = findNextFd(L4_SpaceNo(L4_SenderSpace()));
-				if (fd < 0) {
-					console_open_finish(tid, self, path, mode, rval, open_done, -1);
-					return;
-				}
-			}
 			cf->writers++;
 		}
 	}
 
-	console_open_finish(tid, self, path, mode, rval, open_done, fd);
+	console_open_finish(tid, self, path, mode, rval, open_done, 0);
 }
 
 static

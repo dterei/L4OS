@@ -44,6 +44,8 @@ findNextFd(int spaceId) {
 
 void
 vfs_init(void) {
+	GlobalVNodes = NULL;
+
 	// All vnodes are unallocated
 	for (int i = 0; i < MAX_ADDRSPACES; i++) {
 		for (int j = 0; j < PROCESS_MAX_FILES; j++) {
@@ -65,10 +67,25 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 
 	VNode vnode = NULL;
 
-	// Check to see if path is one of the special files
-	for (vnode = specialFiles; vnode != NULL; vnode = vnode->next) {
-		dprintf(2, "*** Special file: %s ***\n", vnode->path);
+	// check can open more files
+	if (findNextFd(getCurrentProcNum()) < 0) {
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	// Check open vnodes
+	for (vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
+		dprintf(2, "*** Open vnode: %s ***\n", vnode->path);
 		if (strcmp(vnode->path, path) == 0) break;
+	}
+
+	// Check to see if path is one of the special files
+	if (vnode == NULL) {
+		for (vnode = specialFiles; vnode != NULL; vnode = vnode->next) {
+			dprintf(2, "*** Special vnode: %s ***\n", vnode->path);
+			if (strcmp(vnode->path, path) == 0) break;
+		}
 	}
 
 	// Not special file, assume NFS, we dont support mount
@@ -89,15 +106,18 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 	dprintf(1, "*** vfs_open_done: %p (%s) %d\n", path, path, mode);
 
 	// open failed
-	if (*rval < 0) {
+	if (*rval < 0 || self == NULL) {
 		dprintf(2, "*** vfs_open: can't open file: error code %d\n", *rval);
 		return;
 	}
 
+	fildes_t fd = findNextFd(getCurrentProcNum());
+	*rval = fd;
+
 	// store file in per process table
-	openfiles[getCurrentProcNum()][*rval].vnode = self;
-	openfiles[getCurrentProcNum()][*rval].fmode = mode;
-	openfiles[getCurrentProcNum()][*rval].fp = 0;
+	openfiles[getCurrentProcNum()][fd].vnode = self;
+	openfiles[getCurrentProcNum()][fd].fmode = mode;
+	openfiles[getCurrentProcNum()][fd].fp = 0;
 
 	// update global vnode list
 	VNode oldhead = GlobalVNodes;
