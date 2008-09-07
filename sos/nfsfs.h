@@ -2,8 +2,23 @@
 #define _NFSFS_H
 
 #include <sos/sos.h>
+#include <nfs/rpc.h>
 
 #include "vfs.h"
+
+typedef struct NFS_File_t NFS_File;
+
+struct NFS_File_t {
+	VNode vnode;
+	struct cookie fh;
+
+	NFS_File *previous;
+	NFS_File *next;
+
+	uintptr_t lookup;
+	L4_ThreadId_t lookup_tid;
+	int *rval;
+};
 
 int nfsfs_init(void);
 
