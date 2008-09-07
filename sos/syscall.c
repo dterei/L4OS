@@ -43,9 +43,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 		case SOS_MOREMEM:
 			rval = (L4_Word_t) sos_moremem(
 					(uintptr_t*) sender2kernel(L4_MsgWord(msg, 0)),
-					(uintptr_t*) sender2kernel(L4_MsgWord(msg, 1)),
-					(unsigned int) L4_MsgWord(msg, 2));
-			*(sender2kernel(L4_MsgWord(msg, 3))) = rval;
+					(unsigned int) L4_MsgWord(msg, 1));
+			*(sender2kernel(L4_MsgWord(msg, 2))) = rval;
 			break;
 
 		case SOS_STARTME:

@@ -65,7 +65,7 @@
 
 #include <sos/sos.h>
 
-//extern void free(void *);
+#define NEW_MALLOC
 
 #ifdef THREAD_SAFE
 #include <assert.h>
@@ -76,29 +76,20 @@ extern struct okl4_mutex malloc_mutex;
 
 #define NALLOC 0x10000
 #define MALLOC_AREA_SIZE 0x100000
-uintptr_t __malloc_bss = 0;
-uintptr_t __malloc_top = 0;
 
-Header *_kr_malloc_freep = NULL;
+#ifndef NEW_MALLOC
+static char __malloc_area[MALLOC_AREA_SIZE];
+static uintptr_t __malloc_bss = (uintptr_t)&__malloc_area;
+static uintptr_t __malloc_top = (uintptr_t)&__malloc_area[MALLOC_AREA_SIZE];
 
-void __malloc_init(uintptr_t heap_base, uintptr_t heap_end);
+#endif // NEW_MALLOC
 
-void
-__malloc_init(uintptr_t heap_base, uintptr_t heap_end)
-{
-	printf("__malloc_init got called!?\n");
-	__malloc_bss = heap_base;
-	__malloc_top = heap_end+1;
-
-#ifdef THREAD_SAFE
-	{
-		int error = okl4_mutex_init(&malloc_mutex);
-		assert(!error);
-	}
-#endif /* THREAD_SAFE */
-}
+Header *_kr_malloc_freep = NULL; // GLOBAL
 
 #define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
+
+// XXX HACK TO GET AROUND STACK ISSUE WITH sender2kernel
+static uintptr_t cp;
 
 /*
  * sbrk equiv
@@ -107,29 +98,25 @@ Header *
 morecore(unsigned int nu)
 {
 	uintptr_t nb;
-	uintptr_t cp;
+	//uintptr_t cp; XXX HACK TO GET AROUND STACK ISSUE WITH sender2kernel
 	Header *up;
 
-	// Our new implementation of morecore, which is what needs to
-	// ask SOS about the heap section.  I assume we can do what we
-	// want - but a growing heap region would make sense and it
-	// would be cool.
-
-	cp = __malloc_bss;
 	nb = round_up(nu * sizeof(Header), NALLOC);
 
-	// The old way that morecore got memory
-	/*
+#ifdef NEW_MALLOC
+	if (!moremem(&cp, nb)) {
+		return NULL;
+	}
+
+#else
 	if (__malloc_bss + nb > __malloc_top) {
 		return NULL;
 	}
-	__malloc_bss += nb;
-	*/
 
-	// The new way - ask SOS to move the pointers for us
-	if (!moremem(&__malloc_bss, &__malloc_top, nb)) {
-		return NULL;
-	}
+	cp = __malloc_bss;
+	__malloc_bss += nb;
+
+#endif // NEW_MALLOC
 
 	up = (Header *)cp;
 	up->s.size = nb / sizeof(Header);

@@ -23,7 +23,7 @@
 #include "pager.h"
 #include "thread.h"
 
-#define verbose 1
+#define verbose 2
 
 // XXX
 //
@@ -114,8 +114,8 @@ add_stackheap(AddrSpace *as) {
 }
 
 int
-sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
-	dprintf(0, "*** sos_moremem(%p, %p, %lx)\n", base, top, nb);
+sos_moremem(uintptr_t *base, unsigned int nb) {
+	dprintf(1, "*** sos_moremem(%p, %lx)\n", base, nb);
 
 	// Find the current heap section.
 	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
@@ -133,16 +133,16 @@ sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
 		return 0;
 	}
 
-	// Move the heap region manually
-	dprintf(0, "*** sos_moremem: was %p %lx\n", heap->base, heap->size);
-	nb = page_align_up(nb);
-	heap->size += nb / sizeof(L4_Word_t);
-	dprintf(0, "*** sos_moremem: now %p %lx\n", heap->base, heap->size);
+	// Top of heap is the (new) start of the free region, this is
+	// what morecore/malloc expect.
+	*base = heap->base + heap->size;
 
-	*base = heap->base;
-	*top = heap->base + nb;
+	// Move the heap region so SOS knows about it.
+	dprintf(1, "*** sos_moremem: was %p %lx\n", heap->base, heap->size);
+	heap->size += nb;
+	dprintf(1, "*** sos_moremem: now %p %lx\n", heap->base, heap->size);
 
-	// Have the option of returning 0 to signify no more memory
+	// Have the option of returning 0 to signify no more memory.
 	return 1;
 }
 
@@ -195,8 +195,8 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 	int rights;
 	int mapKernelToo = 0;
 
-	dprintf(1, "*** pager: fault on ss=%d, addr=%p, ip=%p thread_init=%p\n",
-			L4_SpaceNo(L4_SenderSpace()), addr, ip, thread_init);
+	dprintf(1, "*** pager: fault on ss=%d, addr=%p (%p), ip=%p\n",
+			L4_SpaceNo(L4_SenderSpace()), addr, addr & PAGEALIGN, ip);
 
 	addr &= PAGEALIGN;
 

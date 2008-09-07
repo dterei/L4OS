@@ -59,7 +59,7 @@ uintptr_t add_stackheap(AddrSpace *as);
 void pager_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
-int sos_moremem(uintptr_t *base, uintptr_t *top, unsigned int nb);
+int sos_moremem(uintptr_t *base, unsigned int nb);
 L4_Word_t *sender2kernel(L4_Word_t addr);
 
 // XXX
