@@ -169,9 +169,8 @@ syscall_loop(void)
 			case SOS_MOREMEM:
 				rval = (L4_Word_t) sos_moremem(
 						(uintptr_t*) sender2kernel(L4_MsgWord(&msg, 0)),
-						(uintptr_t*) sender2kernel(L4_MsgWord(&msg, 1)),
-						(unsigned int) L4_MsgWord(&msg, 2));
-				*(sender2kernel(L4_MsgWord(&msg, 3))) = rval;
+						(unsigned int) L4_MsgWord(&msg, 1));
+				*(sender2kernel(L4_MsgWord(&msg, 2))) = rval;
 				break;
 
 		// XXX must check that sender2kernel doesn't return null,

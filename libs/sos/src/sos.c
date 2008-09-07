@@ -52,14 +52,13 @@ void thread_block(void) {
 	}
 }
 
-int moremem(uintptr_t *base, uintptr_t *top, unsigned int nb) {
+int moremem(uintptr_t *base, unsigned int nb) {
 	int rval;
 
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) base);
-	L4_MsgAppendWord(&msg, (L4_Word_t) top);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
 	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
