@@ -30,37 +30,67 @@ nfsfs_timeout_thread(void) {
 }
 
 /*** NFS FS ***/
+#define NULL_TOKEN ((uintptr_t) (-1))
+
+NFS_File *NfsFiles;
 
 int
 nfsfs_init(void) {
 	dprintf(1, "*** nfsfs_init\n");
 	// TODO: Move NFS init here instead of network.c
-	
-#if 0
-	IP4_ADDR(&ip_nfsd, 192, 168, 168, 1);
-	int r = nfs_init(ip_nfsd);
-
-	if (r != 0) {
-		dprintf(0, "!!! nfs_init: Can't initialise nfs (%d) !!!\n", r);
-		return (-1);
-	}
-
-	if (verbose > 1) {
-		mnt_get_export_list();
-	}
-#endif
-
+	NfsFiles = NULL;
 	(void) sos_thread_new(&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
-
 	return 0;
 }
 
 static
-VNode
-nfsfs_findvnode(L4_ThreadId_t tid, VNode self, const char *path,
-		fmode_t mode, int *rval) {
-	dprintf(1, "*** nfsfs_findvnode: %p, %s", self, path);
-	return self;
+uintptr_t
+newtoken(void) {
+	static uintptr_t tok = 0;
+	tok++;
+	return (tok % ( NULL_TOKEN - 1));
+}
+
+static
+NFS_File *
+createfile(void) {
+	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
+	nf->vnode = NULL;
+	//nf->fh.data = NULL;
+	nf->lookup = NULL_TOKEN;
+	nf->lookup_tid = L4_nilthread;
+	return nf;
+}
+
+static
+void
+addfile(NFS_File *new_nf) {
+	new_nf->next = NfsFiles;
+	new_nf->previous = NULL;
+	NfsFiles->previous = new_nf;
+	NfsFiles = new_nf;
+}
+
+static
+void 
+lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
+	dprintf(1, "*** nfsfs_lookup_cb: %d, %d, %p, %p\n", token, status, fh, attr);
+
+	NFS_File *nf = NULL;
+	for (nf = NfsFiles; nf != NULL; nf = nf->next) {
+		dprintf(1, "nfsfs_lookup_cb: NFS_File: %d\n", nf->lookup);
+		if (nf->lookup == token) break;
+	}
+
+	if (nf == NULL) {
+		dprintf(0, "Corrupt callback, no matching token: %d\n", token);
+	} else {
+		// need to copy token and attr.	
+		dprintf(1, "Sending: %d, %d\n", token, L4_ThreadNo(nf->lookup_tid));
+		*(nf->rval) = (-1);
+		syscall_reply(nf->lookup_tid);
+	}
+
 }
 
 void
@@ -68,10 +98,15 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
 			const char *path, fmode_t mode, int *rval)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
-	nfsfs_findvnode(tid, self, path, mode, rval);
 
-	*rval = (-1);
-	syscall_reply(tid);
+	NFS_File *nf = createfile();
+	addfile(nf);
+	nf->lookup = newtoken();
+	nf->lookup_tid = tid;
+	nf->rval = rval;
+
+	char *path2 = (char *) path;
+	nfs_lookup(&mnt_point, path2, lookup_cb, nf->lookup);
 }
 
 void

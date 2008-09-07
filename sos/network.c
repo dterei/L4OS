@@ -97,7 +97,6 @@ network_init(void)
     // Finish the initialisation of the nslu2 hardware
     ixOsalOSServicesFinaliseInit();
 
-#if 1
     /* Initialise NFS */
     int r = nfs_init(gw); assert(!r);
 
@@ -109,7 +108,6 @@ network_init(void)
 	 else
 		 msg = "%s: Successfully mounted '%s'\n";
 	 printf(msg, __FUNCTION__, NFS_DIR);
-#endif
 
 	 // Initialise the serial driver
 	 serial = serial_init();
