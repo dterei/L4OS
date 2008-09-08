@@ -1,3 +1,4 @@
+#include <string.h>
 #include <nfs/nfs.h>
 
 #include "nfsfs.h"
@@ -13,6 +14,7 @@
 extern void nfs_timeout(void);
 
 // stack for nfs timer thread, can probably be a lot less
+// TODO: Have better kernel stacks 
 #define STACK_SIZE 0x1000
 static L4_Word_t nfsfs_timer_stack[STACK_SIZE];
 
@@ -32,13 +34,13 @@ nfsfs_timeout_thread(void) {
 /*** NFS FS ***/
 #define NULL_TOKEN ((uintptr_t) (-1))
 
-NFS_File *NfsFiles;
+NFS_BaseRequest *NfsRequests;
 
 int
 nfsfs_init(void) {
 	dprintf(1, "*** nfsfs_init\n");
 	// TODO: Move NFS init here instead of network.c
-	NfsFiles = NULL;
+	NfsRequests = NULL;
 	(void) sos_thread_new(&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
 	return 0;
 }
@@ -52,23 +54,69 @@ newtoken(void) {
 }
 
 static
-NFS_File *
-createfile(void) {
-	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
-	nf->vnode = NULL;
-	//nf->fh.data = NULL;
-	nf->lookup = NULL_TOKEN;
-	nf->lookup_tid = L4_nilthread;
-	return nf;
+NFS_BaseRequest *
+create_request(enum NfsRequestType rt) {
+	NFS_BaseRequest *rq;
+	switch (rt) {
+		case RT_LOOKUP:
+			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_LookupRequest));
+			rq->rt = RT_LOOKUP;
+			break;
+		default:
+			return NULL;
+			dprintf(0, "nfsfs.c: create_request: invalid request type %d\n", rt);
+	}
+
+	rq->token = newtoken();
+
+	// handle empty list
+	if (NfsRequests == NULL) {
+		NfsRequests = rq;
+	} else {
+		rq->next = NfsRequests;
+		rq->previous = NULL;
+		NfsRequests->previous = rq;
+		NfsRequests = rq;
+	}
+
+	return rq;
 }
 
 static
 void
-addfile(NFS_File *new_nf) {
-	new_nf->next = NfsFiles;
-	new_nf->previous = NULL;
-	NfsFiles->previous = new_nf;
-	NfsFiles = new_nf;
+remove_request(NFS_BaseRequest *rq) {
+	// remove from lists
+	NFS_BaseRequest *prq, *nrq;
+	prq = rq->previous;
+	nrq = rq->next;
+
+	// handle empty list
+	if (prq == NULL && nrq == NULL) {
+		NfsRequests = NULL;
+	}
+	// handle end of list
+	else if (nrq == NULL) {
+		prq->next = NULL;
+	}
+	// handle start of list
+	else if (prq == NULL) {
+		NfsRequests = nrq;
+		nrq->previous = NULL;
+	}
+	// handle other usual case
+	else {
+		prq->next = nrq;
+		nrq->previous = prq;
+	}
+
+	// free memory
+	switch (rq->rt) {
+		case RT_LOOKUP:
+			free((NFS_LookupRequest *) rq);
+			break;
+		default:
+			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
+	}
 }
 
 static
@@ -76,21 +124,37 @@ void
 lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	dprintf(1, "*** nfsfs_lookup_cb: %d, %d, %p, %p\n", token, status, fh, attr);
 
-	NFS_File *nf = NULL;
-	for (nf = NfsFiles; nf != NULL; nf = nf->next) {
-		dprintf(1, "nfsfs_lookup_cb: NFS_File: %d\n", nf->lookup);
-		if (nf->lookup == token) break;
+	NFS_LookupRequest *rq = NULL;
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(1, "nfsfs_lookup_cb: NFS_BaseRequest: %d\n", brq->token);
+		if (brq->token == token) {
+			rq = (NFS_LookupRequest *) brq;
+		}
 	}
 
-	if (nf == NULL) {
+	if (rq == NULL) {
 		dprintf(0, "Corrupt callback, no matching token: %d\n", token);
-	} else {
-		// need to copy token and attr.	
-		dprintf(1, "Sending: %d, %d\n", token, L4_ThreadNo(nf->lookup_tid));
-		*(nf->rval) = (-1);
-		syscall_reply(nf->lookup_tid);
+		return;
 	}
 
+	if (status != 0) {
+		free((NFS_File *) rq->vnode->extra);
+		free(rq->vnode);
+		(*rq->rval) = (-1);
+		syscall_reply(rq->tid);
+		remove_request((NFS_BaseRequest *) rq);
+		return;
+	}
+
+	NFS_File *nf = (NFS_File *) rq->vnode->extra;
+	memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
+	memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
+
+	dprintf(1, "Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
+	*(rq->rval) = 0;
+	rq->open_done(rq->tid, rq->vnode, rq->vnode->path, rq->mode, rq->rval);
+	syscall_reply(rq->tid);
+	remove_request((NFS_BaseRequest *) rq);
 }
 
 void
@@ -98,15 +162,35 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
 			const char *path, fmode_t mode, int *rval)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
+	// TODO: Handle opening already open vnode
 
-	NFS_File *nf = createfile();
-	addfile(nf);
-	nf->lookup = newtoken();
-	nf->lookup_tid = tid;
-	nf->rval = rval;
+	self = (VNode) malloc(sizeof(struct VNode_t));
+	if (self == NULL) {
+		// TODO: handle fail of malloc
+	}
+	strncpy(self->path, path, N_NAME);
+	self->refcount = 1;
+
+	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
+	nf->vnode = self;
+	self->extra = (void *) nf;
+	self->open = nfsfs_open;
+	self->close = nfsfs_close;
+	self->read = nfsfs_read;
+	self->write = nfsfs_write;
+	self->getdirent = nfsfs_getdirent;
+	self->stat = nfsfs_stat;
+
+	NFS_LookupRequest *rq = (NFS_LookupRequest *) create_request(RT_LOOKUP);
+
+	rq->tid = tid;
+	rq->vnode = self;
+	rq->mode = mode;
+	rq->rval = rval;
+	rq->open_done = open_done;
 
 	char *path2 = (char *) path;
-	nfs_lookup(&mnt_point, path2, lookup_cb, nf->lookup);
+	nfs_lookup(&mnt_point, path2, lookup_cb, rq->token);
 }
 
 void
@@ -115,7 +199,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 
-	*rval = -1;
+	*rval = (-1);
 	syscall_reply(tid);
 }
 
@@ -124,7 +208,7 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
-	*rval = -1;
+	*rval = (-1);
 	syscall_reply(tid);
 }
 
@@ -133,7 +217,7 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
-	*rval = -1;
+	*rval = (-1);
 	syscall_reply(tid);
 }
 
@@ -142,7 +226,7 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 		int *rval) {
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %s, %d\n", self, pos, name, nbyte);
 
-	*rval = -1;
+	*rval = (-1);
 	syscall_reply(tid);
 }
 
@@ -150,7 +234,7 @@ void
 nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
 
-	*rval = -1;
+	*rval = (-1);
 	syscall_reply(tid);
 }
 

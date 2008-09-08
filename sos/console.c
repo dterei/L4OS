@@ -26,7 +26,7 @@ console_init(VNode sflist) {
 		VNode console = (VNode) malloc(sizeof(struct VNode_t));
 
 		// set up console vnode
-		console->path = Console_Files[i].path;
+		strncpy(console->path, Console_Files[i].path, N_NAME);
 		console->vstat.st_type = ST_SPECIAL;
 		console->vstat.st_fmode = FM_READ | FM_WRITE;
 		console->vstat.st_size = 0;

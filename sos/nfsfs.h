@@ -6,19 +6,50 @@
 
 #include "vfs.h"
 
-typedef struct NFS_File_t NFS_File;
-
-struct NFS_File_t {
+/* NFS File */
+typedef struct {
 	VNode vnode;
 	struct cookie fh;
+	fattr_t attr;
+} NFS_File;
 
-	NFS_File *previous;
-	NFS_File *next;
-
-	uintptr_t lookup;
-	L4_ThreadId_t lookup_tid;
-	int *rval;
+/* Types of NFS request, used for continuations until callbacks */
+enum NfsRequestType {
+	RT_LOOKUP,
 };
+
+typedef struct NFS_BaseRequest_t NFS_BaseRequest;
+
+/* Base NFS request object.
+ * Make sure all other request implement the same elements of this structure
+ * at the start so we can treat them as this base class.
+ */
+struct NFS_BaseRequest_t {
+	enum NfsRequestType rt;
+	struct cookie fh;
+	uintptr_t token;
+	VNode vnode;
+	L4_ThreadId_t tid;
+
+	NFS_BaseRequest *previous;
+	NFS_BaseRequest *next;
+};
+
+typedef struct {
+	enum NfsRequestType rt;
+	struct cookie fh;
+	uintptr_t token;
+	VNode vnode;
+	L4_ThreadId_t tid;
+
+	NFS_BaseRequest *previous;
+	NFS_BaseRequest *next;
+
+	fmode_t mode;
+	int *rval;
+
+	void (*open_done) (L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+} NFS_LookupRequest;
 
 int nfsfs_init(void);
 

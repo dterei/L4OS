@@ -9,7 +9,7 @@ typedef struct VNode_t *VNode;
 /* All allocated vnodes stored in double link list */
 struct VNode_t {
 	// Properties
-	char *path;
+	char path[N_NAME];
 	stat_t vstat;
 	int refcount;
 	

@@ -59,7 +59,13 @@ cat(int argc, char **argv)
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 )
 		num_written = write(stdout_fd, buf, num_read);
 
-	if( num_read == -1 || num_written == -1 )
+	if( num_read == -1)
+	{
+		printf( "error on read\n" );
+		return 1;
+	}
+
+	if( num_written == -1)
 	{
 		printf( "error on write\n" );
 		return 1;

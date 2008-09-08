@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 3
 
 // Global open vnodes list
 VNode GlobalVNodes;
@@ -69,6 +69,15 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 
 	// check can open more files
 	if (findNextFd(getCurrentProcNum()) < 0) {
+		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	// check filename is valid
+	if (strlen(path) >= N_NAME) {
+		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
 		*rval = (-1);
 		syscall_reply(tid);
 		return;
@@ -124,7 +133,9 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 	GlobalVNodes = self;
 	self->next = oldhead;
 	self->previous = NULL;
-	oldhead->previous = self;
+	if (oldhead != NULL) {
+		oldhead->previous = self;
+	}
 
 	// update vnode refcount
 	self->refcount++;
@@ -168,10 +179,20 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 
 		// close global vnode entry if returned vnode is null
 		if (vnode == NULL) {
-			VNode previous = vnode->previous;
-			VNode next = vnode->next;
-			previous->next = next;
-			next->previous = previous;
+			VNode vp = vnode->previous;
+			VNode vn = vnode->next;
+
+			if (vp == NULL && vn == NULL) {
+				GlobalVNodes = NULL;
+			} else if (vn == NULL) {
+				vp->next = NULL;
+			} else if (vp == NULL) {
+				GlobalVNodes = vn;
+				vn->previous = NULL;
+			} else {
+				vp->next = vn;
+				vn->previous = vp;
+			}
 		} else {
 			vnode->refcount--;
 		}
