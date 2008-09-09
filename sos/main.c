@@ -8,6 +8,7 @@
  ****************************************************************************/
 
 #include <assert.h>
+#include <clock/clock.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -15,13 +16,12 @@
 
 #include <sos/sos.h>
 
+#include "frames.h"
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
-
-#include "syscall.h"
 #include "pager.h"
-#include "frames.h"
+#include "syscall.h"
 #include "vfs.h"
 
 #define verbose 0
@@ -174,6 +174,7 @@ syscall_loop(void)
 
 			case L4_INTERRUPT:
 				/* actually an IRQ lock/unlock message */
+				dprintf(0, "got interrupt\n");
 				network_irq(&tid, &send);
 				break;
 
@@ -268,6 +269,7 @@ main (void)
 			low, high, (high - low) / ONE_MEG);
 
 	// Initialise the various monolithic things
+	start_timer();
 	frame_init((low + HEAP_SIZE), high);
 	pager_init();
 

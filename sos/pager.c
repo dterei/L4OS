@@ -179,7 +179,7 @@ findRegion(AddrSpace *as, L4_Word_t addr) {
 		if (addr >= r->base && addr < r->base + r->size) {
 			break;
 		} else {
-			dprintf(1, "*** findRegion: %p not %p - %p (%d)\n",
+			dprintf(2, "*** findRegion: %p not %p - %p (%d)\n",
 					addr, r->base, r->base + r->size, r->type);
 		}
 	}

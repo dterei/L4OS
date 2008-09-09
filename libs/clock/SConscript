@@ -1,9 +1,3 @@
 Import("env")
-
-LIBS = "libs"
-
-public_headers = [("include/", "include/")]
-lib = env.KengeLibrary("clock", libs=Split(LIBS))
+lib = env.KengeLibrary("clock")
 Return("lib")
-
-# vim: set filetype=python:
