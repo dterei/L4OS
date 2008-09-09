@@ -1,6 +1,7 @@
 #ifndef _CLOCK_H_
 #define _CLOCK_H_
 
+#include <l4/types.h>
 #include <stdint.h>
 
 /*
