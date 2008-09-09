@@ -8,7 +8,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 3
 
 /*** NFS TIMEOUT THREAD ***/
 extern void nfs_timeout(void);
@@ -32,6 +32,7 @@ nfsfs_timeout_thread(void) {
 }
 
 /*** NFS FS ***/
+#define UDP_PAYLOAD 500
 #define NULL_TOKEN ((uintptr_t) (-1))
 
 NFS_BaseRequest *NfsRequests;
@@ -61,6 +62,10 @@ create_request(enum NfsRequestType rt) {
 		case RT_LOOKUP:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_LookupRequest));
 			rq->rt = RT_LOOKUP;
+			break;
+		case RT_READ:
+			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_ReadRequest));
+			rq->rt = RT_READ;
 			break;
 		default:
 			return NULL;
@@ -114,6 +119,9 @@ remove_request(NFS_BaseRequest *rq) {
 		case RT_LOOKUP:
 			free((NFS_LookupRequest *) rq);
 			break;
+		case RT_READ:
+			free((NFS_ReadRequest *) rq);
+			break;
 		default:
 			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
@@ -133,11 +141,11 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	}
 
 	if (rq == NULL) {
-		dprintf(0, "Corrupt callback, no matching token: %d\n", token);
+		dprintf(0, "!!!NFSFS: Corrupt lookup callback, no matching token: %d\n", token);
 		return;
 	}
 
-	if (status != 0) {
+	if (status != NFS_OK) {
 		free((NFS_File *) rq->vnode->extra);
 		free(rq->vnode);
 		(*rq->rval) = (-1);
@@ -183,8 +191,8 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 
 	NFS_LookupRequest *rq = (NFS_LookupRequest *) create_request(RT_LOOKUP);
 
-	rq->tid = tid;
 	rq->vnode = self;
+	rq->tid = tid;
 	rq->mode = mode;
 	rq->rval = rval;
 	rq->open_done = open_done;
@@ -203,13 +211,73 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	syscall_reply(tid);
 }
 
+static
+void 
+read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) {
+	dprintf(1, "*** nfsfs_read_cb: %u, %d, %d, %p\n", token, status, bytes_read, data);
+
+	// TODO: Can probably move this code to a generic function
+	NFS_ReadRequest *rq = NULL;
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(1, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
+		if (brq->token == token) {
+			rq = (NFS_ReadRequest *) brq;
+		}
+	}
+
+	if (rq == NULL) {
+		dprintf(0, "!!!NFSFS: Corrupt read callback, no matching token: %d\n", token);
+		return;
+	}
+
+	if (status != NFS_OK) {
+		free((NFS_File *) rq->vnode->extra);
+		free(rq->vnode);
+		(*rq->rval) = (-1);
+		syscall_reply(rq->tid);
+		remove_request((NFS_BaseRequest *) rq);
+		return;
+	}
+
+	NFS_File *nf = (NFS_File *) rq->vnode->extra;
+
+	memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
+	strncpy(rq->buf, data, bytes_read);
+	*(rq->rval) = bytes_read;
+
+	// TODO: Increase pos file pointer
+	
+	dprintf(1, "NFSFS: Read CB Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
+	syscall_reply(rq->tid);
+	remove_request((NFS_BaseRequest *) rq);
+
+}
+
 void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
-	*rval = (-1);
-	syscall_reply(tid);
+	NFS_File *nf = (NFS_File *) self->extra;	
+	if (nf == NULL) {
+		dprintf(0, "!!! Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
+		*rval = (-1);
+		syscall_reply(tid);
+	}
+
+	if (nbyte >= UDP_PAYLOAD) {
+		nbyte = UDP_PAYLOAD - 1;
+	}
+
+	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ);
+	rq->vnode = self;
+	rq->tid = tid;
+	rq->file = file;
+	rq->buf = buf;
+	rq->rval = rval;
+
+	dprintf(2, "NFSFS: nfs_read call (token %u)\n", rq->token);
+	nfs_read(&(nf->fh), pos, nbyte, read_cb, rq->token);
 }
 
 void

@@ -56,8 +56,11 @@ cat(int argc, char **argv)
 
 	printf("<%s>\n", argv[1]);
 
-	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 )
-		num_written = write(stdout_fd, buf, num_read);
+	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
+		buf[num_read] = '\0';
+		printf("%s", buf);
+		//num_written = write(stdout_fd, buf, num_read);
+	}
 
 	if( num_read == -1)
 	{

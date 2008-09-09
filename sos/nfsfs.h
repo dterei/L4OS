@@ -16,6 +16,7 @@ typedef struct {
 /* Types of NFS request, used for continuations until callbacks */
 enum NfsRequestType {
 	RT_LOOKUP,
+	RT_READ
 };
 
 typedef struct NFS_BaseRequest_t NFS_BaseRequest;
@@ -26,7 +27,6 @@ typedef struct NFS_BaseRequest_t NFS_BaseRequest;
  */
 struct NFS_BaseRequest_t {
 	enum NfsRequestType rt;
-	struct cookie fh;
 	uintptr_t token;
 	VNode vnode;
 	L4_ThreadId_t tid;
@@ -37,7 +37,6 @@ struct NFS_BaseRequest_t {
 
 typedef struct {
 	enum NfsRequestType rt;
-	struct cookie fh;
 	uintptr_t token;
 	VNode vnode;
 	L4_ThreadId_t tid;
@@ -50,6 +49,20 @@ typedef struct {
 
 	void (*open_done) (L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
 } NFS_LookupRequest;
+
+typedef struct {
+	enum NfsRequestType rt;
+	uintptr_t token;
+	VNode vnode;
+	L4_ThreadId_t tid;
+
+	NFS_BaseRequest *previous;
+	NFS_BaseRequest *next;
+
+	fildes_t file;
+	char *buf;
+	int *rval;
+} NFS_ReadRequest;
 
 int nfsfs_init(void);
 
