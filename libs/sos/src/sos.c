@@ -241,14 +241,24 @@ pid_t process_wait(pid_t pid) {
 }
 
 /* Returns time in microseconds since booting. */
-long time_stamp(void) {
-	printf("time_stamp: system call not implemented.\n");
-	return 0;
+long uptime(void) {
+	long rval;
+	L4_Msg_t msg;
+
+	prepareSyscall(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+	makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
+
+	return rval;
 }
 
 /* Sleeps for the specified number of milliseconds. */
 void sleep(int msec) {
-	printf("sleep: system call not implemented.\n");
+	L4_Msg_t msg;
+
+	prepareSyscall(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) msec);
+	makeSyscall(SOS_SLEEP, YES_REPLY, &msg);
 }
 
 /* 

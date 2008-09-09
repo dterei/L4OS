@@ -236,10 +236,30 @@ segfault(int argc, char **argv) {
 	return *null;
 }
 
+static int 
+nap(int argc, char **argv) {
+	if (argc < 2) {
+		printf("usage: %s msec\n", argv[0]);
+		return 1;
+	}
+
+	int msec = atoi(argv[1]);
+	sleep(msec);
+	return 0;
+}
+
+static int 
+imtired(int argc, char **argv) {
+	printf("SOS has been running for %ld ms\n", uptime());
+	return 0;
+}
+
 struct command {
 	char *name;
 	int (*command)(int argc, char **argv);
 };
+
+static int help(int argc, char *argv[]);
 
 struct command commands[] = {
 	{"dir", dir},
@@ -248,10 +268,21 @@ struct command commands[] = {
 	{"cp", cp},
 	{"ps", ps},
 	{"exec", exec},
-	{"segfault", segfault}
+	{"segfault", segfault},
+	{"sleep", nap},
+	{"uptime", imtired},
+	{"help", help},
+	{"null", NULL}
 };
 
-
+static int
+help(int argc, char *argv[]) {
+	printf("Available commands:\n");
+	for (int i = 0; commands[i].command != NULL; i++) {
+		printf("\t%s\n", commands[i].name);
+	}
+	return 0;
+}
 
 int
 main(void)

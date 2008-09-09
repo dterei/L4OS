@@ -90,6 +90,7 @@ else:
 
 rootserver_env.Package("libs/l4")
 rootserver_env.Package("libs/bootinfo")
+rootserver_env.Package("libs/clock")
 rootserver_env.Package("libs/elf")
 rootserver_env.Package("libs/ixp_osal")
 rootserver_env.Package("libs/ixp400_xscale_sw")

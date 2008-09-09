@@ -1,3 +1,4 @@
+#include <clock/clock.h>
 #include <sos/sos.h>
 
 #include "syscall.h"
@@ -10,7 +11,7 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 0
+#define verbose 2
 
 void
 syscall_reply(L4_ThreadId_t tid)
@@ -111,13 +112,20 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			send = 0;
 			break;
 
+		case SOS_TIME_STAMP:
+			*((long*) sender2kernel(L4_MsgWord(msg, 0))) = (long) time_stamp();
+			break;
+
+		case SOS_SLEEP:
+			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
+			send = 0;
+			break;
+
 		case SOS_PROCESS_CREATE:
 		case SOS_PROCESS_DELETE:
 		case SOS_MY_ID:
 		case SOS_PROCESS_STATUS:
 		case SOS_PROCESS_WAIT:
-		case SOS_TIME_STAMP:
-		case SOS_SLEEP:
 		case SOS_SHARE_VM:
 		default:
 			// Unknown system call, so we don't want to reply to this thread
