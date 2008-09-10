@@ -26,9 +26,9 @@ static L4_Word_t firstFree;
 void
 frame_init(L4_Word_t low, L4_Word_t frame)
 {
-	static L4_Word_t page, high;
-	static L4_Fpage_t fpage;
-	static L4_PhysDesc_t ppage;
+	L4_Word_t page, high;
+	L4_Fpage_t fpage;
+	L4_PhysDesc_t ppage;
 
 	// Make the high address page aligned (grr).
 	high = frame + 1;

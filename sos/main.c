@@ -146,14 +146,19 @@ syscall_loop(void)
 			dprintf(2, "%s: async notify, bits=%lx\n", __FUNCTION__, notify_bits);
 			send = 0;
 			if (notify_bits & irq_mask) {
+				int irq = __L4_TCR_PlatformReserved(0);
+
 				/* it's an interrupt */
 				int dummy = 0; //we never want to reply here
-				dprintf(3, "%s: notification is interrupt\n", __FUNCTION__);
+				printf("%s: notification is interrupt: %d\n", __FUNCTION__, irq);
 				if (0)
 					; // some other interrupt, you need to implement this side
 				else
 					network_irq(&tid, &dummy);
+			} else {
+				printf("%s: notification is %ld\n", __FUNCTION__, notify_bits);
 			}
+
 			continue;
 		}
 
