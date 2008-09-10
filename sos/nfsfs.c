@@ -165,12 +165,12 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	remove_request((NFS_BaseRequest *) rq);
 }
 
+static
 void
-nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
 			const char *path, fmode_t mode, int *rval)) {
-	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
-	// TODO: Handle opening already open vnode
+	dprintf(1, "*** nfsfs_getvnode: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	self = (VNode) malloc(sizeof(struct VNode_t));
 	if (self == NULL) {
@@ -200,6 +200,22 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	char *path2 = (char *) path;
 	nfs_lookup(&mnt_point, path2, lookup_cb, rq->token);
 }
+
+void
+nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
+			const char *path, fmode_t mode, int *rval)) {
+	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
+
+	if (self == NULL) {
+		getvnode(tid, self, path, mode, rval, open_done);
+	} else {
+		self->refcount++;
+		open_done(tid, self, path, mode, rval);
+		*rval = 0;
+		syscall_reply(tid);
+	}
+};
 
 void
 nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,

@@ -61,9 +61,6 @@ typedef struct {
 /* Per process open file table */
 extern VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 
-/* Global record of the "special files" */
-extern VNode specialFiles;
-
 /* System call implementations */
 void vfs_init(void);
 

@@ -26,20 +26,6 @@ VNode GlobalVNodes;
 // Per process open file table
 VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
 
-// All special files (eg. console)
-VNode specialFiles = NULL;
-
-
-fildes_t
-findNextFd(int spaceId) {
-	for (int i = 0; i < MAX_ADDRSPACES; i++) {
-		if (openfiles[spaceId][i].vnode == NULL) return i;
-	}
-
-	// Too many open files.
-	return (-1);
-}
-
 void
 vfs_init(void) {
 	GlobalVNodes = NULL;
@@ -53,16 +39,16 @@ vfs_init(void) {
 		}
 	}
 
-	// Init console files
-	specialFiles = console_init(specialFiles);
-	// Init NFS
+	// Init file systems
+	dprintf(2, "*** vfs_init\n");
+	GlobalVNodes = console_init(GlobalVNodes);
 	nfsfs_init();
 }
 
 void
 vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open: %p (%s) %d\n", path, path, mode);
-
+	dprintf(1, "*** vfs_open: %d, %d, %p (%s) %d\n", getCurrentProcNum(),
+			L4_ThreadNo(tid), path, path, mode);
 	VNode vnode = NULL;
 
 	// check can open more files
@@ -81,23 +67,16 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 		return;
 	}
 
-	// Check open vnodes
+	// Check open vnodes (special files are stored here)
 	for (vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
-		dprintf(2, "*** Open vnode: %s ***\n", vnode->path);
-		if (strcmp(vnode->path, path) == 0) break;
-	}
-
-	// Check to see if path is one of the special files
-	if (vnode == NULL) {
-		for (vnode = specialFiles; vnode != NULL; vnode = vnode->next) {
-			dprintf(2, "*** Special vnode: %s ***\n", vnode->path);
-			if (strcmp(vnode->path, path) == 0) break;
+		dprintf(2, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
+		if (strcmp(vnode->path, path) == 0) {
+			dprintf(2, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
+			break;
 		}
 	}
 
-	// Not special file, assume NFS, we dont support mount
-	// points so no point getting fancy to support multiple
-	// filesystems more transparently.
+	// Not an open file so open nfs file
 	if (vnode == NULL) {
 		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
@@ -114,7 +93,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// open failed
 	if (*rval < 0 || self == NULL) {
-		dprintf(2, "*** vfs_open: can't open file: error code %d\n", *rval);
+		dprintf(2, "*** vfs_open_done: can't open file: error code %d\n", *rval);
 		return;
 	}
 
@@ -126,10 +105,20 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 	openfiles[getCurrentProcNum()][fd].fmode = mode;
 	openfiles[getCurrentProcNum()][fd].fp = 0;
 
-	// update global vnode list
-	self->next = GlobalVNodes;
-	GlobalVNodes->previous = self;
-	self->previous = NULL;
+	// update global vnode list if not already on it
+	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
+		dprintf(2, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p\n", path,
+				self, self->next, self->previous);
+		if (GlobalVNodes != NULL) {
+			self->next = GlobalVNodes;
+			GlobalVNodes->previous = self;
+		} else {
+			self->next = NULL;
+		}
+		self->previous = NULL;
+		GlobalVNodes = self;
+
+	}
 
 	// update vnode refcount
 	self->refcount++;
@@ -258,5 +247,15 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
 			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
 	*rval = (-1);
 	syscall_reply(tid);
+}
+
+fildes_t
+findNextFd(int spaceId) {
+	for (int i = 0; i < MAX_ADDRSPACES; i++) {
+		if (openfiles[spaceId][i].vnode == NULL) return i;
+	}
+
+	// Too many open files.
+	return (-1);
 }
 

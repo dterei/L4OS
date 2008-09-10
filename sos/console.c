@@ -46,9 +46,13 @@ console_init(VNode sflist) {
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
-		console->next = sflist;
+		if (sflist != NULL) {
+			console->next = sflist;
+			sflist->previous = console;
+		} else {
+			console->next = NULL;
+		}
 		console->previous = NULL;
-		sflist->previous = console;
 		sflist = console;
 	}
 
@@ -61,7 +65,7 @@ console_init(VNode sflist) {
 
 static
 void
-console_open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
 			const char *path, fmode_t mode, int *rval), int r) {
 	*rval = r;
@@ -77,19 +81,19 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 
 	// make sure console exists
 	if (self == NULL) {
-		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, -1);
 		return;
 	}
 
 	// make sure they passed in the right vnode
 	if (strcmp(self->path, path) != 0) {
-		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, -1);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		console_open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, -1);
 		return;
 	}
 
@@ -97,7 +101,7 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	if (mode & FM_READ) {
 		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
-			console_open_finish(tid, self, path, mode, rval, open_done, -1);
+			open_finish(tid, self, path, mode, rval, open_done, -1);
 			return;
 		} else {
 			cf->readers++;
@@ -111,14 +115,14 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			if (mode & FM_READ) {
 				cf->readers--;
 			}
-			console_open_finish(tid, self, path, mode, rval, open_done, -1);
+			open_finish(tid, self, path, mode, rval, open_done, -1);
 			return;
 		} else {
 			cf->writers++;
 		}
 	}
 
-	console_open_finish(tid, self, path, mode, rval, open_done, 0);
+	open_finish(tid, self, path, mode, rval, open_done, 0);
 }
 
 static
