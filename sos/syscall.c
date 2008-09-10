@@ -49,6 +49,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_STARTME:
+			dprintf(0, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SOS_STARTME\n");
 			break;
 
 			// XXX must check that sender2kernel doesn't return null,

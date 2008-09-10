@@ -13,7 +13,7 @@ from math import ceil, log
 
 #
 # Change this for the milestone you are building
-milestone = 3
+milestone = 2
 
 #############################################################################
 ## Global configuration options

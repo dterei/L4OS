@@ -30,7 +30,7 @@
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 1
+#define verbose 2
 
 extern void _start(void);
 
@@ -465,29 +465,29 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	}
 
 	// Start a new task from the thread.
-	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n", L4_ThreadNo(thread->sosid));
+	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n",
+			L4_ThreadNo(thread->sosid));
 
 	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
-	uintptr_t sp = add_stackheap(as);
+	uintptr_t sp = add_regions(as);
 
 	if (sp == 0)
 		return BI_NAME_INVALID;
 
-	// Also need to add thread_init to the region list (so it can start).
-	Region *newreg = (Region*) malloc(sizeof(Region));
-	newreg->type = REGION_THREAD_INIT;
-	newreg->base = ((L4_Word_t) thread_init) & PAGEALIGN;
-	newreg->size = PAGESIZE;
-	newreg->mapDirectly = 1;
-	newreg->rights = L4_ReadeXecOnly;
-	newreg->id = (-1);
-	newreg->next = as->regions;
-	as->regions = newreg;
+	// Starting thread in thread_init is impossible because that function is
+	// linked in to the rootserver (me) differently to userspace, so any
+	// functions that thread_init wants to call will also need to be mapped
+	// in and so on... bah.  Death to that idea.
+	//
+	// If only there was a way to find out the address of thread_init as
+	// it appears in userspace rather than kernelspace - but afaik there
+	// isn't one.
+	//
+	//L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
+	//		(void*) thread_init, (void*) sp);
 
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
 			(void*) thread->ip, (void*) sp);
-	//L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
-	//		(void*) thread_init, (void*) sp);
 
 	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
 

@@ -13,9 +13,7 @@
 #define MAGIC_THAT_MAKES_LABELS_WORK 4
 
 /* Standard file descriptors */
-fildes_t stdin_fd = 0;
-fildes_t stdout_fd = 1;
-fildes_t stderr_fd = 2;
+fildes_t stdout_fd = 0; // TODO make this nice
 
 /* Standard syscall interface. */
 static void prepareSyscall(L4_Msg_t *msg) {
@@ -67,9 +65,9 @@ int moremem(uintptr_t *base, unsigned int nb) {
 }
 
 void thread_init(void) {
-	// Set up address space things like stdin, stdout.
+	// This funtion is a lost cause, see comment in libsos.c.
 
-	// Return to SOS via a syscall.
+	// Return to SOS via a syscall (will NOT work).
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 	makeSyscall(SOS_STARTME, NO_REPLY, &msg);

@@ -32,9 +32,7 @@ VNode specialFiles = NULL;
 
 fildes_t
 findNextFd(int spaceId) {
-	// TODO: Should we be reserving these really?
-	// 0, 1, 2 reserved for the standard file descriptors
-	for (int i = 3; i < MAX_ADDRSPACES; i++) {
+	for (int i = 0; i < MAX_ADDRSPACES; i++) {
 		if (openfiles[spaceId][i].vnode == NULL) return i;
 	}
 
@@ -68,6 +66,11 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	VNode vnode = NULL;
 
 	// check can open more files
+	// TODO should probably use L4_ThreadNo(tid) here instead of
+	// getCurrentProcNum.
+	dprintf(1, "*** vfs_open: getCurrentProcNum=%d, L4_ThreadNo=%d\n",
+			getCurrentProcNum(), L4_ThreadNo(tid));
+
 	if (findNextFd(getCurrentProcNum()) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		*rval = (-1);

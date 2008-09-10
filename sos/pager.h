@@ -55,7 +55,7 @@ typedef struct {
 /* Max of 256 Address Spaces */
 extern AddrSpace addrspace[MAX_ADDRSPACES];
 
-uintptr_t add_stackheap(AddrSpace *as);
+uintptr_t add_regions(AddrSpace *as); // returns stack pointer
 void pager_init(void);
 void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);

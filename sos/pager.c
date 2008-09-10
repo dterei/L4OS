@@ -72,7 +72,7 @@ pager_init(void) {
 }
 
 uintptr_t
-add_stackheap(AddrSpace *as) {
+add_regions(AddrSpace *as) {
 	uintptr_t top = 0;
 
 	// Find the highest address from bootinfo and put the
@@ -92,6 +92,7 @@ add_stackheap(AddrSpace *as) {
 	heap->size = 0;
 	heap->base = top;
 	heap->rights = REGION_READ | REGION_WRITE;
+	heap->mapDirectly = 0;
 
 	// Put the stack half way up the address space - at the top
 	// causes pagefaults, so halfway up seems like a nice compromise.
@@ -102,6 +103,7 @@ add_stackheap(AddrSpace *as) {
 	stack->size = ONE_MEG;
 	stack->base = top - stack->size;
 	stack->rights = REGION_READ | REGION_WRITE;
+	stack->mapDirectly = 0;
 
 	// Add them to the region list.
 	stack->next = heap;
@@ -254,9 +256,9 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 
 void
 pager(L4_ThreadId_t tid, L4_Msg_t *msgP) {
-	dprintf(1, "*** pager: about to invoke doPager\n");
+	dprintf(2, "*** pager: about to invoke doPager\n");
 	doPager(L4_MsgWord(msgP, 0), L4_MsgWord(msgP, 1));
-	dprintf(1, "*** pager: successfully invoked doPager\n");
+	dprintf(2, "*** pager: successfully invoked doPager\n");
 }
 
 void
