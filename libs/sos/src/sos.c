@@ -12,8 +12,17 @@
 #define NO_REPLY 0
 #define MAGIC_THAT_MAKES_LABELS_WORK 4
 
+#define STDOUT_FN "console"
+
 /* Standard file descriptors */
-fildes_t stdout_fd = 0; // TODO make this nice
+fildes_t stdout_fd = (-1); // changed on sosuser_init
+
+/* All user programs must call this on startup! */
+void sosuser_init(void) {
+	assert(stdout_fd == (-1));
+	stdout_fd = open("console", FM_WRITE);
+	assert(stdout_fd == 0);
+}
 
 /* Standard syscall interface. */
 static void prepareSyscall(L4_Msg_t *msg) {

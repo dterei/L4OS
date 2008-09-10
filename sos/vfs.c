@@ -66,11 +66,6 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	VNode vnode = NULL;
 
 	// check can open more files
-	// TODO should probably use L4_ThreadNo(tid) here instead of
-	// getCurrentProcNum.
-	dprintf(1, "*** vfs_open: getCurrentProcNum=%d, L4_ThreadNo=%d\n",
-			getCurrentProcNum(), L4_ThreadNo(tid));
-
 	if (findNextFd(getCurrentProcNum()) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		*rval = (-1);
@@ -132,13 +127,9 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 	openfiles[getCurrentProcNum()][fd].fp = 0;
 
 	// update global vnode list
-	VNode oldhead = GlobalVNodes;
-	GlobalVNodes = self;
-	self->next = oldhead;
+	self->next = GlobalVNodes;
+	GlobalVNodes->previous = self;
 	self->previous = NULL;
-	if (oldhead != NULL) {
-		oldhead->previous = self;
-	}
 
 	// update vnode refcount
 	self->refcount++;

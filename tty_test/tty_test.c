@@ -23,6 +23,8 @@
 
 int main(void)
 {
+	sosuser_init();
+
 	/* initialise communication */
 	ttyout_init();
 

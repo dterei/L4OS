@@ -295,6 +295,8 @@ main(void)
 	int              i, r, done, found, new, argc;
 	char             *bp, *p;
 
+	sosuser_init();
+
 	in = open("console", FM_READ);
 	assert (in >= 0);
 
