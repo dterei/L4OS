@@ -140,7 +140,7 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 			// Delete it from list
 			if (bt->next != NULL) {
 				bt->tid = bt->next->tid;
-				bt->next = bt->next->next;
+				bt->unblock = bt->next->unblock;
 				bt->next = bt->next->next;
 			} else {
 				free(bt);
@@ -157,6 +157,12 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 	}
 
 	*OST_STS |= CLEAR_TIM0;
+
+	// Adjust for time changing since last tested, since especially with
+	// demand paging, it could have taken a while...
+	timestamp_t ts2 = raw_time_stamp();
+	nextDelay -= (ts2 - ts);
+	if (nextDelay <= 0) nextDelay = 1;
 
 	if (delay) {
 		*OST_TIM0_RL = nextDelay | ONESHOT_ENABLE;
