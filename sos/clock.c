@@ -6,6 +6,7 @@
 #include "pager.h"
 #include "l4.h"
 #include "libsos.h"
+#include "syscall.h"
 
 #define maybe(expr)\
 	if (!(expr)) {\
@@ -134,8 +135,7 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 	for (BlockedThreads bt = blocked_threads; bt != NULL; bt = bt->next) {
 		if (bt->unblock <= ts) {
 			// Unblock thread
-			msgClear();
-			L4_Reply(bt->tid);
+			syscall_reply(bt->tid);
 
 			// Delete it from list
 			if (bt->next != NULL) {

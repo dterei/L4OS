@@ -51,15 +51,18 @@ access rights, or add a flag to sender2kernel that checks the access rights of
 the region before doing anything.  A clean way to do this would be to include
 that flag in the userptr struct.  However - I think the former option is
 probably nicer.
-
-- Fix weird reply bug!  It wasn't (at least directly) due to the use of
 L4_UncachedMemory.
 
 - Milestone 4 - the NFS stuff seems pretty straightforward, maybe 1 or 2 days
 of work (once some of the above issues have been fixed).
 
-- Milestone 5 - the timer driver, actually looks pretty difficult.  Although
-apparently (according to Oleg) a tutor said it was a "catchup milestone".
+- Pager can call pager via malloc!  We haven't noticed this bug because we havent
+tested for it.  But basically, since it's a 2 level page table, if the malloc used
+to create the 2nd level causes morecore to be called, the region will be extended,
+the pager will try to access that region, then it will page fault.  Kaboom.
 
-- Change all syscalls to use syscall_reply instead of handling directly.
+- There are a lot of potential bugs when we have demand paging.  Be vigilant :-)
 
+- Milestone 6 - we have until week 8, hooray.
+
+- Testing.  Jesus we need to do more testing.
