@@ -197,6 +197,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	if (vnode == NULL) {
 		dprintf(2, "*** vfs_read: invalid file handler: %d\n", file);
 		*rval = (-1);
+		syscall_reply(tid);
 		return;
 	}
 
@@ -205,6 +206,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 		dprintf(2, "*** vfs_read: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
 		*rval = (-1);
+		syscall_reply(tid);
 		return;
 	}
 

@@ -208,11 +208,13 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	if (self == NULL) {
+		dprintf(2, "nfs_open: get new vnode\n");
 		getvnode(tid, self, path, mode, rval, open_done);
 	} else {
+		dprintf(2, "nfs_open: already open vnode, increase refcount\n\n");
 		self->refcount++;
-		open_done(tid, self, path, mode, rval);
 		*rval = 0;
+		open_done(tid, self, path, mode, rval);
 		syscall_reply(tid);
 	}
 };
