@@ -14,9 +14,11 @@
 #include <stdint.h>
 
 #include <clock/clock.h>
+#include <clock/nslu2.h>
 #include <sos/sos.h>
 
 #include "frames.h"
+#include "irq.h"
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
@@ -31,6 +33,8 @@
 #define INFINITY (1 << 8)
 #define RUN_FRAME_TEST 0
 
+#define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
+
 // Set aside some memory for a stack for the
 // first user task 
 #define STACK_SIZE 0x1000
@@ -43,6 +47,7 @@ static void
 init_thread(void)
 {
     L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
+
     // Initialise the network for libsos_logf_init
     network_init();
 	 vfs_init();
@@ -109,15 +114,12 @@ syscall_loop(void)
 {
 	dprintf(3, "Entering %s\n", __FUNCTION__);
 
-	L4_Set_NotifyMask(1 << SOS_IRQ_NOTIFY_BIT);
-
 	// Set up which messages we will receive
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor,L4_NotifyMsgAcceptor));
 
 	int send = 0;
 	L4_Msg_t msg;
 	L4_ThreadId_t tid = L4_nilthread;
-	L4_Word_t irq_mask = 1 << SOS_IRQ_NOTIFY_BIT;
 
 	for (;;) {
 		L4_MsgTag_t tag;
@@ -141,24 +143,22 @@ syscall_loop(void)
 		L4_MsgStore(tag, &msg); /* Get the tag */
 
 		if (L4_IsNilThread(tid)) {
-			/* async notification */
 			L4_Word_t notify_bits = L4_MsgWord(&msg, 0);
-			dprintf(2, "%s: async notify, bits=%lx\n", __FUNCTION__, notify_bits);
-			send = 0;
-			if (notify_bits & irq_mask) {
-				int irq = __L4_TCR_PlatformReserved(0);
+			dprintf(-1, "*** syscall_loop: async notify %lx\n", notify_bits);
 
-				/* it's an interrupt */
-				int dummy = 0; //we never want to reply here
-				printf("%s: notification is interrupt: %d\n", __FUNCTION__, irq);
-				if (0)
-					; // some other interrupt, you need to implement this side
-				else
-					network_irq(&tid, &dummy);
-			} else {
-				printf("%s: notification is %ld\n", __FUNCTION__, notify_bits);
+			if (notify_bits & IRQ_MASK) {
+				int irq = __L4_TCR_PlatformReserved(0);
+				int dummy = 0; // never want to reply
+
+				if (irq_find(irq)->irq_request(&tid, &dummy)) {
+					L4_LoadMR(0, irq);
+					L4_AcknowledgeInterrupt(0, 0);
+				}
+
+				msgClear();
 			}
 
+			send = 0;
 			continue;
 		}
 
@@ -274,9 +274,17 @@ main (void)
 			low, high, (high - low) / ONE_MEG);
 
 	// Initialise the various monolithic things
-	start_timer();
 	frame_init((low + HEAP_SIZE), high);
 	pager_init();
+	start_timer(); // start as soon as possible
+
+	// Add irq information
+	irq_init();
+	irq_add(NSLU2_NPEB_IRQ, network_irq);
+	irq_add(NSLU2_NPEC_IRQ, network_irq);
+	irq_add(NSLU2_QM1_IRQ, network_irq);
+	irq_add(NSLU2_TIMESTAMP_IRQ, timestamp_irq);
+	irq_add(NSLU2_TIMER0_IRQ, timer_irq);
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

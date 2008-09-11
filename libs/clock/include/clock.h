@@ -35,6 +35,7 @@ int register_timer(uint64_t delay, L4_ThreadId_t client);
  *
  * Returns a negative value if failure.
  */
+timestamp_t raw_time_stamp(void);
 timestamp_t time_stamp(void);
 
 /*
@@ -43,5 +44,18 @@ timestamp_t time_stamp(void);
  * Returns CLOCK_R_OK iff successful.
  */
 int stop_timer(void);
+
+/*
+ * Callbacks.
+ *
+ * Returns whether to acknowledge interrupt or not.
+ *
+ * tid is the threadid of originating interrupt - should be
+ * nil thread but gives the opportunity to change (for
+ * whatever reason - network_irq needs it).  Similarly
+ * for send.  The expectation is that neither will change.
+ */
+int timestamp_irq(L4_ThreadIt_t *tid, int *send);
+int timer_irq(L4_ThreadIt_t *tid, int *send);
 
 #endif /* _CLOCK_H_ */

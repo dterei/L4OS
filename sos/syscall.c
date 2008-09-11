@@ -118,7 +118,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_SLEEP:
-			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
+			register_timer((uint64_t) L4_MsgWord(msg, 0) * 1000, tid);
 			send = 0;
 			break;
 

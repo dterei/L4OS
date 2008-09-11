@@ -6,11 +6,11 @@
 
 
 // Always call network_irq if an interrupt occurs that you are not interested in
-extern void network_irq(L4_ThreadId_t *tP, int *sendP);
-extern void network_init(void);
-extern int network_sendstring_int(int, int*);
-extern int network_sendstring_char(int len, char *contents);
-extern int network_register_serialhandler(void (*handler)(struct serial *serial, char c));
-extern struct cookie mnt_point;
+int network_irq(L4_ThreadId_t *tP, int *sendP);
+void network_init(void);
+int network_sendstring_int(int, int*);
+int network_sendstring_char(int len, char *contents);
+int network_register_serialhandler(void (*handler)(struct serial *serial, char c));
+struct cookie mnt_point;
 
 #endif

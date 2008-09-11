@@ -130,11 +130,11 @@ void ixOsalOSServicesFinaliseInit(void)
 /*
  * General interrupt handler
  */
-extern void ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tP, int *sendP);
-void ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tidP, int *sendP)
+extern int ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tP, int *sendP);
+int ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tidP, int *sendP)
 {
-    int acknowledge = 0;
-    L4_ThreadId_t fromTid = *tidP;
+	int acknowledge = 0;
+	L4_ThreadId_t fromTid = *tidP;
 
 	L4_Word_t irqIndex = __L4_TCR_PlatformReserved(0);
 	IxOsalIRQEntry *irq;
@@ -142,68 +142,60 @@ void ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tidP, int *sendP)
 	ixOsalSemaphoreWait(&sIxOsalOsIrqLock, IX_OSAL_WAIT_FOREVER);
 	//sos_logf("%s: got semaphore\n", __FUNCTION__);
 	if (!L4_IsNilThread(fromTid)) {
-	    sIxOsalIntUnlocked = true;
+		sIxOsalIntUnlocked = true;
 	} else {
-	    // Interrupt message
-	    //sos_logf("%s: servicing IRQ %lu\n", __FUNCTION__, irqIndex);
-	    irq = &sIxOsalIrqInfo[irqIndex];
-	    assert(irqIndex < NR_INTS);
-	    assert( !(irq->fFlags & kIxOsalIntOccurred) );
-	    assert( !(irq->fFlags & kIxOsalIntReserved) );
+		// Interrupt message
+		//sos_logf("%s: servicing IRQ %lu\n", __FUNCTION__, irqIndex);
+		irq = &sIxOsalIrqInfo[irqIndex];
+		assert(irqIndex < NR_INTS);
+		assert( !(irq->fFlags & kIxOsalIntOccurred) );
+		assert( !(irq->fFlags & kIxOsalIntReserved) );
 
-	    irq->fFlags |= kIxOsalIntOccurred;	// Interrupt occured
+		irq->fFlags |= kIxOsalIntOccurred;	// Interrupt occured
 
-	    // Call the interrupt routine if enabled
-	    if (sIxOsalIntLocked || !(irq->fFlags & kIxOsalIntEnabled)) {
-	        //sos_logf("%s: locked, won't ack\n", __FUNCTION__);
-	        ;
-	    } else {
-	        //sos_logf("%s: calling service routine\n", __FUNCTION__);
-		    (*irq->fRoutine)(irq->fParameter);
-		    //sos_logf("%s: service routine done\n", __FUNCTION__);
-		    irq->fFlags &= ~kIxOsalIntOccurred;	// Clear occured bit
-		    acknowledge = 1;
-	    }
-	    *sendP = 0;
+		// Call the interrupt routine if enabled
+		if (sIxOsalIntLocked || !(irq->fFlags & kIxOsalIntEnabled)) {
+			//sos_logf("%s: locked, won't ack\n", __FUNCTION__);
+			;
+		} else {
+			//sos_logf("%s: calling service routine\n", __FUNCTION__);
+			(*irq->fRoutine)(irq->fParameter);
+			//sos_logf("%s: service routine done\n", __FUNCTION__);
+			irq->fFlags &= ~kIxOsalIntOccurred;	// Clear occured bit
+			acknowledge = 1;
+		}
+		*sendP = 0;
 	}
 
 	if (sIxOsalIntUnlocked) {
-	    //sos_logf("%s: got unlock msg\n", __FUNCTION__);
-	    // Must be an unlock message from user land not an interrupt
-	    // Probably should check the tag's label too
-	    for (L4_Word_t i = 0; i < NR_INTS; i++) {
-		irq = &sIxOsalIrqInfo[i];
-		// Check that the interrupt is enabled
-		if (!irq->fRoutine
-		||  (irq->fFlags & kIxOsalIntActive) != kIxOsalIntActive)
-		    continue;
+		//sos_logf("%s: got unlock msg\n", __FUNCTION__);
+		// Must be an unlock message from user land not an interrupt
+		// Probably should check the tag's label too
+		for (L4_Word_t i = 0; i < NR_INTS; i++) {
+			irq = &sIxOsalIrqInfo[i];
+			// Check that the interrupt is enabled
+			if (!irq->fRoutine
+					||  (irq->fFlags & kIxOsalIntActive) != kIxOsalIntActive)
+				continue;
 
-		(*irq->fRoutine)(irq->fParameter);
-		irq->fFlags &= ~kIxOsalIntOccurred;	// Clear occured bit
+			(*irq->fRoutine)(irq->fParameter);
+			irq->fFlags &= ~kIxOsalIntOccurred;	// Clear occured bit
 
-		if (irq->fFlags & kIxOsalIntEnabled) {
-		    // Acknowledge this interrupt now that it is enabled
-		    L4_Set_MsgTag(L4_Niltag); // Clear the tag down for sending
-		    L4_LoadMR(0, i);
-            L4_Word_t succeeded = L4_AcknowledgeInterrupt(0, 0);
-            if (!succeeded)
-                sos_logf("%s: failed to ack IRQ %lu! error=%lu\n", __FUNCTION__, i, L4_ErrorCode());
+			if (irq->fFlags & kIxOsalIntEnabled) {
+				// Acknowledge this interrupt now that it is enabled
+				L4_Set_MsgTag(L4_Niltag); // Clear the tag down for sending
+				L4_LoadMR(0, i);
+				L4_Word_t succeeded = L4_AcknowledgeInterrupt(0, 0);
+				if (!succeeded)
+					sos_logf("%s: failed to ack IRQ %lu! error=%lu\n", __FUNCTION__, i, L4_ErrorCode());
+			}
 		}
-	    }
-	    sIxOsalIntUnlocked = false;	// Done it
-	    *sendP = 1;
+		sIxOsalIntUnlocked = false;	// Done it
+		*sendP = 1;
 	}
 	//sos_logf("%s: attempting to post semaphore\n", __FUNCTION__);
 	ixOsalSemaphorePost(&sIxOsalOsIrqLock);
-	
-	if (acknowledge) {
-	    //sos_logf("%s: doing ack\n", __FUNCTION__);
-        L4_LoadMR(0, irqIndex);
-        L4_Word_t succeeded = L4_AcknowledgeInterrupt(0, 0);
-        if (!succeeded)
-            sos_logf("%s: failed to ack IRQ %lu! error=%lu\n", __FUNCTION__, irqIndex, L4_ErrorCode());
-    }
-    L4_Set_MsgTag(L4_Niltag);	// Clear the tag down for sending
+	return acknowledge;
 }
 
 /**************************************

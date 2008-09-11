@@ -23,7 +23,7 @@
 #include "pager.h"
 #include "thread.h"
 
-#define verbose 2
+#define verbose 1
 
 // XXX
 //

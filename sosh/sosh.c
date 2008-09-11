@@ -252,8 +252,16 @@ nap(int argc, char **argv) {
 }
 
 static int 
-imtired(int argc, char **argv) {
-	printf("SOS has been running for %ld ms\n", uptime());
+howlong(int argc, char **argv) {
+	long us = uptime();
+	long us2 = us;
+	long secs = us / 1000000;
+	long mins = secs / 60;
+
+	us2 -= 1000 * secs;
+	secs -= 60 * mins;
+
+	printf("up %ld mins %ld secs %lu us (total %lu)\n", mins, secs, us2, us);
 	return 0;
 }
 
@@ -273,7 +281,7 @@ struct command commands[] = {
 	{"exec", exec},
 	{"segfault", segfault},
 	{"sleep", nap},
-	{"uptime", imtired},
+	{"uptime", howlong},
 	{"help", help},
 	{"null", NULL}
 };

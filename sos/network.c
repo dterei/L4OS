@@ -45,11 +45,11 @@ static struct serial *serial = NULL;
 // Internal APIs, just direct publish from ixp_osal
 extern uint32_t ixOsalOemInit(void);
 extern void ixOsalOSServicesFinaliseInit(void);
-extern void ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tP, int *sendP);
+extern int ixOsalOSServicesServiceInterrupt(L4_ThreadId_t *tP, int *sendP);
 
-void network_irq(L4_ThreadId_t *tP, int *sendP)
+int network_irq(L4_ThreadId_t *tP, int *sendP)
 {
-    ixOsalOSServicesServiceInterrupt(tP, sendP);
+	return ixOsalOSServicesServiceInterrupt(tP, sendP);
 }
 
 
