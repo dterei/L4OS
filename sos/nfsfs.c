@@ -235,14 +235,14 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	// TODO: Can probably move this code to a generic function
 	NFS_ReadRequest *rq = NULL;
 	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
-		dprintf(1, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
+		dprintf(2, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_ReadRequest *) brq;
 		}
 	}
 
 	if (rq == NULL) {
-		dprintf(0, "!!!NFSFS: Corrupt read callback, no matching token: %d\n", token);
+		dprintf(0, "!!!nfsfs: Corrupt read callback, no matching token: %d\n", token);
 		return;
 	}
 
@@ -250,6 +250,7 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 		free((NFS_File *) rq->vnode->extra);
 		free(rq->vnode);
 		(*rq->rval) = (-1);
+		rq->read_done(rq->tid, rq->vnode, rq->file, 0, rq->buf, 0, rq->rval);
 		syscall_reply(rq->tid);
 		remove_request((NFS_BaseRequest *) rq);
 		return;
@@ -261,22 +262,23 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	strncpy(rq->buf, data, bytes_read);
 	*(rq->rval) = bytes_read;
 
-	// TODO: Increase pos file pointer
+	// call vfs to handle fp and anything else
+	rq->read_done(rq->tid, rq->vnode, rq->file, 0, rq->buf, bytes_read, rq->rval);
 	
-	dprintf(1, "NFSFS: Read CB Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
+	dprintf(2, "nfsfs: Read CB Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
 	syscall_reply(rq->tid);
 	remove_request((NFS_BaseRequest *) rq);
-
 }
 
 void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval) {
+		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval)) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
 	NFS_File *nf = (NFS_File *) self->extra;	
 	if (nf == NULL) {
-		dprintf(0, "!!! Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
+		dprintf(0, "!!! nfsfs: Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
 		*rval = (-1);
 		syscall_reply(tid);
 	}
@@ -291,14 +293,17 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	rq->file = file;
 	rq->buf = buf;
 	rq->rval = rval;
+	rq->read_done = read_done;
 
-	dprintf(2, "NFSFS: nfs_read call (token %u)\n", rq->token);
+	dprintf(2, "nfsfs: nfs_read call (token %u)\n", rq->token);
 	nfs_read(&(nf->fh), pos, nbyte, read_cb, rq->token);
 }
 
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval) {
+		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
+			int *rval)) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
 	*rval = (-1);

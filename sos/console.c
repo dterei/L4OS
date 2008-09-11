@@ -11,7 +11,7 @@
 #define verbose 1
 
 // The file names of our consoles
-Console_File Console_Files[] = { {"console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
+Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
 
 VNode
 console_init(VNode sflist) {
@@ -43,6 +43,7 @@ console_init(VNode sflist) {
 
 		// setup the console struct
 		Console_Files[i].reader.tid = L4_nilthread;
+		Console_Files[i].vnode = console;
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
@@ -183,8 +184,8 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 void
 console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval) {
-
+		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval)) {
 	dprintf(1, "*** console_read: %d, %p, %d from %p\n", file, buf, nbyte, tid.raw);
 
 	// make sure console exists
@@ -207,17 +208,20 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 
 	// store read request
 	cf->reader.tid = tid;
+	cf->reader.file = file;
 	cf->reader.buf = buf;
-	cf->reader.rval = rval;
 	cf->reader.nbyte = nbyte;
 	cf->reader.rbyte = 0;
+	cf->reader.rval = rval;
+	cf->reader.read_done = read_done;
 	*rval = 0;
 }
 
 void
 console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval) {
-
+			const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
+				VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
+				int *rval)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
 	// because it doesn't like a const
@@ -225,6 +229,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	// either use a thread just for writes or continuations.
 	char *buf2 = (char *)buf;
 	*rval = network_sendstring_char(nbyte, buf2);
+	write_done(tid, self, file, offset, buf, 0, rval);
 	syscall_reply(tid);
 }
 
@@ -256,39 +261,41 @@ serial_read_callback(struct serial *serial, char c) {
 
 	// TODO hack, need proper way of handling finding if we are
 	// going be able to handle multiple serial devices.
-	Console_File *cf = &Console_Files[0];
-	if (cf == NULL || L4_IsNilThread(cf->reader.tid)) {
+	Console_ReadRequest *rq = &(Console_Files[0].reader);
+	if (L4_IsNilThread(rq->tid)) {
 		return;
 	}
 
-	dprintf(2, "*** serial_read_callback: %c, send to %p\n", c, (cf->reader.tid).raw);
+	dprintf(2, "*** serial_read_callback: %c, send to %p\n", c, (rq->tid).raw);
 
 	// add data to buffer
-	if (cf->reader.rbyte < cf->reader.nbyte) {
-		cf->reader.buf[cf->reader.rbyte] = c;
-		cf->reader.rbyte++;
+	if (rq->rbyte < rq->nbyte) {
+		rq->buf[rq->rbyte] = c;
+		rq->rbyte++;
 	}
 
 	// if new line or buffer full, return
-	if (c == '\n' || cf->reader.rbyte >= cf->reader.nbyte) {
-		*(cf->reader.rval) = cf->reader.rbyte;
+	if (c == '\n' || rq->rbyte >= rq->nbyte) {
+		*(rq->rval) = rq->rbyte;
 
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
-				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
+				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
 
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
-				L4_ThreadNo(cf->reader.tid), cf->reader.buf, *(cf->reader.rval));
+				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
 
-		syscall_reply(cf->reader.tid);
+		rq->read_done(rq->tid, NULL, rq->file, 0, rq->buf, 0, rq->rval);
+		syscall_reply(rq->tid);
 
 		// remove request now its done
-		cf->reader.tid = L4_nilthread;
-		cf->reader.rval = NULL;
-		cf->reader.buf = NULL;
-		cf->reader.nbyte = 0;
-		cf->reader.rbyte = 0;
+		rq->tid = L4_nilthread;
+		rq->file = (fildes_t) (-1);
+		rq->rval = NULL;
+		rq->buf = NULL;
+		rq->nbyte = 0;
+		rq->rbyte = 0;
 	}
 
-	dprintf(2, "*** serial read: buf = %s\n", cf->reader.buf);
+	dprintf(2, "*** serial read: buf = %s\n", rq->buf);
 }
 

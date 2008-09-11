@@ -22,15 +22,19 @@
 // struct for storing console read requests (continuation struct)
 typedef struct {
 	L4_ThreadId_t tid;
-	int *rval;
+	fildes_t file;
 	char *buf;
 	size_t nbyte;
 	size_t rbyte;
+	int *rval;
+	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
+		char *buf, size_t nbyte, int *rval);
 } Console_ReadRequest;
 
 // struct for storing info about a console file
 typedef struct {
 	// store console device info
+	VNode vnode;
 	char *path;
 	const unsigned int Max_Readers;
 	const unsigned int Max_Writers;
@@ -59,10 +63,13 @@ void console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval));
 
 void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval);
+		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval));
 
 void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval);
+			const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
+				VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
+				int *rval));
 
 void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
 		int *rval);

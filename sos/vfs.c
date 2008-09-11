@@ -90,6 +90,8 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 void
 vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
 	dprintf(1, "*** vfs_open_done: %p (%s) %d\n", path, path, mode);
+	//TODO: Move opening of already open vnode to the vfs layer, requires moving the
+	//max readers and writers variables into the vnode struct rather then console.
 
 	// open failed
 	if (*rval < 0 || self == NULL) {
@@ -184,7 +186,8 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 
 void
 vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_read: %d %p %d\n", file, buf, nbyte);
+	dprintf(1, "*** vfs_read: %d %d %d %p %d\n", L4_ThreadNo(tid),
+			getCurrentProcNum(), file, buf, nbyte);
 
 	// get file
 	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
@@ -205,7 +208,22 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 		return;
 	}
 
-	vnode->read(tid, vnode, file, vf->fp, buf, nbyte, rval);
+	vnode->read(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_read_done);
+}
+
+void
+vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
+		size_t nbyte, int *rval) {
+	dprintf(1, "*** vfs_read_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
+			getCurrentProcNum(), file, buf, nbyte, *rval);
+
+	if (*rval < 0) {
+		return;
+	}
+	
+	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
+	// to appear from the space which called them
+	openfiles[getCurrentProcNum()][file].fp += nbyte;
 }
 
 void
@@ -231,7 +249,22 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 		return;
 	}
 
-	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval);
+	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_write_done);
+}
+
+void
+vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
+		const char *buf, size_t nbyte, int *rval) {
+	dprintf(1, "*** vfs_write_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
+			getCurrentProcNum(), file, buf, nbyte, *rval);
+
+	if (*rval < 0) {
+		return;
+	}
+	
+	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
+	// to appear from the space which called them
+	openfiles[getCurrentProcNum()][file].fp += nbyte;
 }
 
 void

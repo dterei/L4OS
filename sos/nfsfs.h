@@ -62,6 +62,9 @@ typedef struct {
 	fildes_t file;
 	char *buf;
 	int *rval;
+
+	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
+			size_t nbyte, int *rval);
 } NFS_ReadRequest;
 
 int nfsfs_init(void);
@@ -75,10 +78,13 @@ void nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			fmode_t mode, int *rval));
 
 void nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval);
+		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval));
 
 void nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval);
+		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
+			int *rval));
 
 void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
 		int *rval);
