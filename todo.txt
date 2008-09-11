@@ -69,3 +69,22 @@ the pager will try to access that region, then it will page fault.  Kaboom.
 
 - Timer driver seems to be a bit slow for some reason, compared to the Linux
 sleep at least.  Could be hardware/software on either side, or could be bug.
+
+- VFS needs a lot of commenting! none at moment and complicated interfaces and
+calling conventions.
+
+- VFS could use a general beauty clean
+
+- VFS could return better errors then just -1, actually indicate the error
+reason to user space.
+
+- Investigate moving the sync request code into the vfs layer rather then fs.
+
+- Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
+into the vfs and then handle opening already open vnodes in the vfs layer
+instead of having each fs handle it
+
+- NFS, when writing to a new file, do we need to truncate it first? If not
+we really just overwrite data, so 'cp' for example doesn't work as
+expected but I think this might be a libc and also a syscall api
+problem.

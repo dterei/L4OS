@@ -119,7 +119,9 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 		}
 		self->previous = NULL;
 		GlobalVNodes = self;
-
+	} else {
+		dprintf(2, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p\n", path,
+				self, self->next, self->previous);
 	}
 
 	// update vnode refcount

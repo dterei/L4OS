@@ -8,7 +8,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 3
 
 /*** NFS TIMEOUT THREAD ***/
 extern void nfs_timeout(void);
@@ -67,6 +67,10 @@ create_request(enum NfsRequestType rt) {
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_ReadRequest));
 			rq->rt = RT_READ;
 			break;
+		case RT_WRITE:
+			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_WriteRequest));
+			rq->rt = RT_WRITE;
+			break;
 		default:
 			return NULL;
 			dprintf(0, "nfsfs.c: create_request: invalid request type %d\n", rt);
@@ -122,6 +126,9 @@ remove_request(NFS_BaseRequest *rq) {
 		case RT_READ:
 			free((NFS_ReadRequest *) rq);
 			break;
+		case RT_WRITE:
+			free((NFS_WriteRequest *) rq);
+			break;
 		default:
 			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
@@ -141,11 +148,12 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	}
 
 	if (rq == NULL) {
-		dprintf(0, "!!!NFSFS: Corrupt lookup callback, no matching token: %d\n", token);
+		dprintf(0, "!!!nfsfs: Corrupt lookup callback, no matching token: %d\n", token);
 		return;
 	}
 
 	if (status != NFS_OK) {
+		dprintf(0, "!!!nfsfs: lookup_cb: Error occured! (%d)\n", status);
 		free((NFS_File *) rq->vnode->extra);
 		free(rq->vnode);
 		(*rq->rval) = (-1);
@@ -280,9 +288,10 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 
 	NFS_File *nf = (NFS_File *) self->extra;	
 	if (nf == NULL) {
-		dprintf(0, "!!! nfsfs: Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
+		dprintf(0, "!!! nfsfs_read: Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
 		*rval = (-1);
 		syscall_reply(tid);
+		return;
 	}
 
 	if (nbyte >= UDP_PAYLOAD) {
@@ -301,6 +310,43 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	nfs_read(&(nf->fh), pos, nbyte, read_cb, rq->token);
 }
 
+static
+void
+write_cb(uintptr_t token, int status, fattr_t *attr) {
+	dprintf(1, "*** nfsfs_write_cb: %u, %d, %p\n", token, status, attr);
+
+	// TODO: Can probably move this code to a generic function
+	NFS_WriteRequest *rq = NULL;
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(2, "nfsfs_write_cb: NFS_BaseRequest: %d\n", brq->token);
+		if (brq->token == token) {
+			rq = (NFS_WriteRequest *) brq;
+		}
+	}
+
+	if (rq == NULL) {
+		dprintf(0, "!!!nfsfs: Corrupt write callback, no matching token: %d\n", token);
+		return;
+	}
+
+	if (status != NFS_OK) {
+		free((NFS_File *) rq->vnode->extra);
+		free(rq->vnode);
+		(*rq->rval) = (-1);
+		rq->write_done(rq->tid, rq->vnode, rq->file, 0, rq->buf, 0, rq->rval);
+		syscall_reply(rq->tid);
+		remove_request((NFS_BaseRequest *) rq);
+		return;
+	}
+
+	// call vfs to handle fp and anything else
+	rq->write_done(rq->tid, rq->vnode, rq->file, 0, rq->buf, (size_t) *(rq->rval), rq->rval);
+	
+	dprintf(2, "nfsfs: Write CB Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
+	syscall_reply(rq->tid);
+	remove_request((NFS_BaseRequest *) rq);
+}
+
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
@@ -308,8 +354,36 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			int *rval)) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
-	*rval = (-1);
-	syscall_reply(tid);
+	NFS_File *nf = (NFS_File *) self->extra;	
+	if (nf == NULL) {
+		dprintf(0, "!!! nfsfs_write: Invalid NFS file (p %d, f %d), no nfs struct!\n", L4_ThreadNo(tid), file);
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	// TODO: Should be able to handle arbitary size, perhaps just change libc to loop.
+	if (nbyte >= UDP_PAYLOAD) {
+		dprintf(0, "!!! nfsfs_write: Write request size too large! (tid %d) (file %d) (size %d) (max %d)!\n",
+				L4_ThreadNo(tid), file, nbyte, UDP_PAYLOAD);
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE);
+	rq->vnode = self;
+	rq->tid = tid;
+	rq->file = file;
+	rq->buf = (char *) buf;
+	rq->rval = rval;
+	rq->write_done = write_done;
+
+	// Set rval to nbyte already, will reset if error occurs in write_cb
+	*rval = nbyte;
+
+	dprintf(2, "nfsfs: nfs_write call (token %u)\n", rq->token);
+	nfs_write(&(nf->fh), offset, nbyte, rq->buf, write_cb, rq->token);
 }
 
 void

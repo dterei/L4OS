@@ -162,7 +162,7 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_READ, YES_REPLY, &msg);
+	makeSyscall(SOS_WRITE, YES_REPLY, &msg);
 	return rval;
 }
 
