@@ -27,13 +27,14 @@ nfsfs_timeout_thread(void) {
 	while (1) {
 		sos_usleep(NFSFS_TIMEOUT_MS);
 		nfs_timeout();
-		dprintf(2, "*** nfs_timeout_thread: timout event!\n");
+		dprintf(3, "*** nfs_timeout_thread: timout event!\n");
 	}
 }
 
 /*** NFS FS ***/
 #define UDP_PAYLOAD 500
 #define NULL_TOKEN ((uintptr_t) (-1))
+#define DEFAULT_SATTR { (0), (0), (0), (0), {(0), (0)}, {(0), (0)} }
 
 NFS_BaseRequest *NfsRequests;
 
@@ -139,6 +140,7 @@ void
 lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	dprintf(1, "*** nfsfs_lookup_cb: %d, %d, %p, %p\n", token, status, fh, attr);
 
+	// TODO: There is a loop in the BaseRequest loop code
 	NFS_LookupRequest *rq = NULL;
 	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
 		dprintf(1, "nfsfs_lookup_cb: NFS_BaseRequest: %d\n", brq->token);
@@ -152,25 +154,40 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		return;
 	}
 
-	if (status != NFS_OK) {
+	// copy in cookie and fattr_t if open file was good or we are about to create
+	NFS_File *nf = NULL;
+	if (status == NFS_OK || ((status == NFSERR_NOENT) && (rq->mode & FM_WRITE))) {
+		nf = (NFS_File *) rq->vnode->extra;
+		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
+		memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
+	}
+
+	// file open
+	if (status == NFS_OK) {
+		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
+		*(rq->rval) = 0;
+		rq->open_done(rq->tid, rq->vnode, rq->vnode->path, rq->mode, rq->rval);
+		syscall_reply(rq->tid);
+		remove_request((NFS_BaseRequest *) rq);
+	}
+
+	// create the file
+	else if ((status == NFSERR_NOENT) && (rq->mode & FM_WRITE)) {
+		dprintf(1, "nfsfs: Create new file!\n");
+		// reuse current rq struct, has all we need and is hot and ready
+		sattr_t sat = DEFAULT_SATTR;
+		nfs_create(&(nf->fh), rq->vnode->path, &sat, lookup_cb, rq->token);
+	}
+
+	// error
+	else {
 		dprintf(0, "!!!nfsfs: lookup_cb: Error occured! (%d)\n", status);
 		free((NFS_File *) rq->vnode->extra);
 		free(rq->vnode);
 		(*rq->rval) = (-1);
 		syscall_reply(rq->tid);
 		remove_request((NFS_BaseRequest *) rq);
-		return;
 	}
-
-	NFS_File *nf = (NFS_File *) rq->vnode->extra;
-	memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
-	memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
-
-	dprintf(1, "Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
-	*(rq->rval) = 0;
-	rq->open_done(rq->tid, rq->vnode, rq->vnode->path, rq->mode, rq->rval);
-	syscall_reply(rq->tid);
-	remove_request((NFS_BaseRequest *) rq);
 }
 
 static

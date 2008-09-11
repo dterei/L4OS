@@ -52,7 +52,8 @@ typedef struct {
 } NFS_LookupRequest;
 
 /* Could combine read and write since are the same, but prefer separate for
- * easy extension */
+ * easy extension
+ */
 typedef struct {
 	enum NfsRequestType rt;
 	uintptr_t token;

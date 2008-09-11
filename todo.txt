@@ -88,3 +88,5 @@ instead of having each fs handle it
 we really just overwrite data, so 'cp' for example doesn't work as
 expected but I think this might be a libc and also a syscall api
 problem.
+
+- loop bug with NFS request list struct
