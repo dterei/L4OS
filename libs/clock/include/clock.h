@@ -55,7 +55,7 @@ int stop_timer(void);
  * whatever reason - network_irq needs it).  Similarly
  * for send.  The expectation is that neither will change.
  */
-int timestamp_irq(L4_ThreadIt_t *tid, int *send);
-int timer_irq(L4_ThreadIt_t *tid, int *send);
+int timestamp_irq(L4_ThreadId_t *tid, int *send);
+int timer_irq(L4_ThreadId_t *tid, int *send);
 
 #endif /* _CLOCK_H_ */
