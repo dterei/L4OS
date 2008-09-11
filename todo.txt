@@ -66,3 +66,6 @@ the pager will try to access that region, then it will page fault.  Kaboom.
 - Milestone 6 - we have until week 8, hooray.
 
 - Testing.  Jesus we need to do more testing.
+
+- Timer driver seems to be a bit slow for some reason, compared to the Linux
+sleep at least.  Could be hardware/software on either side, or could be bug.
