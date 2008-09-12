@@ -257,8 +257,23 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 
-	*rval = (-1);
+	if (self == NULL) {
+		dprintf(0, "!!! nfsfs_close: Trying to close null file!\n");
+		*rval = -1;
+		syscall_reply(tid);
+	}
+
+	// reduce ref count and free if no longer needed
+	self->refcount--;
+	if (self->refcount <= 0) {
+		free((NFS_File *) self->extra);
+		free(self);
+		self = NULL;
+	}
+
+	*rval = (0);
 	syscall_reply(tid);
+	close_done(tid, self, file, mode, rval);
 }
 
 static

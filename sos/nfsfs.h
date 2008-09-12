@@ -102,6 +102,16 @@ typedef struct {
 	int *rval;
 } NFS_StatRequest;
 
+struct NFS_DirRequest_t {
+	enum NfsRequestType rt;
+	uintptr_t token;
+	VNode vnode;
+	L4_ThreadId_t tid;
+
+	NFS_BaseRequest *previous;
+	NFS_BaseRequest *next;
+};
+
 int nfsfs_init(void);
 
 void nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
