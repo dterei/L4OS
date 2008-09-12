@@ -282,8 +282,19 @@ void
 vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** vfs_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
 			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
-	*rval = (-1);
-	syscall_reply(tid);
+	
+	// Check open vnodes (special files are stored here)
+	for (VNode vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
+		dprintf(2, "*** vfs_stat: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
+		if (strcmp(vnode->path, path) == 0) {
+			dprintf(2, "*** vfs_stat: found already open vnode: %s ***\n", vnode->path);
+			vnode->stat(tid, vnode, path, buf, rval);
+			return;
+		}
+	}
+
+	// not open so assume nfs
+	nfsfs_stat(tid, NULL, path, buf, rval);
 }
 
 fildes_t

@@ -17,7 +17,8 @@ typedef struct {
 enum NfsRequestType {
 	RT_LOOKUP, /* aka OPEN */
 	RT_READ,
-	RT_WRITE
+	RT_WRITE,
+	RT_STAT
 };
 
 typedef struct NFS_BaseRequest_t NFS_BaseRequest;
@@ -87,6 +88,19 @@ typedef struct {
 	void (*write_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			const char *buf, size_t nbyte, int *rval);
 } NFS_WriteRequest;
+
+typedef struct {
+	enum NfsRequestType rt;
+	uintptr_t token;
+	VNode vnode;
+	L4_ThreadId_t tid;
+
+	NFS_BaseRequest *previous;
+	NFS_BaseRequest *next;
+
+	stat_t *stat;
+	int *rval;
+} NFS_StatRequest;
 
 int nfsfs_init(void);
 

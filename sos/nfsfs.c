@@ -34,7 +34,7 @@ nfsfs_timeout_thread(void) {
 /*** NFS FS ***/
 #define UDP_PAYLOAD 500
 #define NULL_TOKEN ((uintptr_t) (-1))
-#define DEFAULT_SATTR { (0), (0), (0), (0), {(0), (0)}, {(0), (0)} }
+#define DEFAULT_SATTR { (FM_READ | FM_WRITE), (0), (0), (0), {(0), (0)}, {(0), (0)} }
 
 NFS_BaseRequest *NfsRequests;
 
@@ -72,12 +72,22 @@ create_request(enum NfsRequestType rt) {
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_WriteRequest));
 			rq->rt = RT_WRITE;
 			break;
+		case RT_STAT:
+			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_StatRequest));
+			rq->rt = RT_STAT;
 		default:
 			return NULL;
 			dprintf(0, "nfsfs.c: create_request: invalid request type %d\n", rt);
 	}
 
 	rq->token = newtoken();
+
+	// make sure not in list alredy
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		if (brq == rq) {
+			return rq;
+		}
+	}
 
 	// handle empty list
 	if (NfsRequests == NULL) {
@@ -130,6 +140,8 @@ remove_request(NFS_BaseRequest *rq) {
 		case RT_WRITE:
 			free((NFS_WriteRequest *) rq);
 			break;
+		case RT_STAT:
+			free((NFS_StatRequest *) rq);
 		default:
 			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
@@ -154,16 +166,11 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		return;
 	}
 
-	// copy in cookie and fattr_t if open file was good or we are about to create
-	NFS_File *nf = NULL;
-	if (status == NFS_OK || ((status == NFSERR_NOENT) && (rq->mode & FM_WRITE))) {
-		nf = (NFS_File *) rq->vnode->extra;
+	// open done
+	if (status == NFS_OK) {
+		NFS_File *nf = (NFS_File *) rq->vnode->extra;
 		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
 		memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
-	}
-
-	// file open
-	if (status == NFS_OK) {
 		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->tid));
 		*(rq->rval) = 0;
 		rq->open_done(rq->tid, rq->vnode, rq->vnode->path, rq->mode, rq->rval);
@@ -176,7 +183,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		dprintf(1, "nfsfs: Create new file!\n");
 		// reuse current rq struct, has all we need and is hot and ready
 		sattr_t sat = DEFAULT_SATTR;
-		nfs_create(&(nf->fh), rq->vnode->path, &sat, lookup_cb, rq->token);
+		nfs_create(&mnt_point, rq->vnode->path, &sat, lookup_cb, rq->token);
 	}
 
 	// error
@@ -412,11 +419,76 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	syscall_reply(tid);
 }
 
+static
+void 
+stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
+	dprintf(1, "*** nfsfs_stat_cb: %d, %d, %p, %p\n", token, status, fh, attr);
+
+	NFS_StatRequest *rq = NULL;
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(1, "nfsfs_stat_cb: NFS_BaseRequest: %d\n", brq->token);
+		if (brq->token == token) {
+			rq = (NFS_StatRequest *) brq;
+		}
+	}
+
+	if (rq == NULL) {
+		dprintf(0, "!!!nfsfs: Corrupt stat callback, no matching token: %d\n", token);
+		return;
+	}
+
+	// fail
+	if (status != NFS_OK) {
+		*(rq->rval) = (-1);
+		syscall_reply(rq->tid);
+		remove_request((NFS_BaseRequest *) rq);
+		return;
+	}
+
+	// good
+	rq->stat->st_type = attr->type;
+	rq->stat->st_fmode = attr->mode;
+	rq->stat->st_size = attr->size;
+	rq->stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
+	rq->stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+	*(rq->rval) = (0);
+	syscall_reply(rq->tid);
+	remove_request((NFS_BaseRequest *) rq);
+}
+
 void
 nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
-	dprintf(1, "*** nfsfs_write: %p, %s, %p\n", self, path, buf);
+	dprintf(1, "*** nfsfs_stat: %p, %s, %p\n", self, path, buf);
 
-	*rval = (-1);
-	syscall_reply(tid);
+	if (self != NULL) {
+		NFS_File *nf = (NFS_File *) self->extra;
+		if (nf == NULL) {
+			dprintf(0, "!!! nfsfs_stat: Broken NFS file! No nfs struct! (file %s)\n", path);
+			*rval = (-1);
+			syscall_reply(tid);
+			return;
+		}
+		buf->st_type = nf->attr.type;
+		buf->st_fmode = nf->attr.mode;
+		buf->st_size = nf->attr.size;
+		buf->st_ctime = (nf->attr.ctime.seconds * 1000) + (nf->attr.ctime.useconds);
+		buf->st_atime = (nf->attr.atime.seconds * 1000) + (nf->attr.atime.useconds);
+		*rval = (0);
+		syscall_reply(tid);
+		return;
+	}
+
+	// stat non open file
+	dprintf(1, "*** nfsfs_stat: trying to stat non open file! (file %s)\n", path);
+
+	NFS_StatRequest *rq = (NFS_StatRequest *) create_request(RT_STAT);
+
+	rq->vnode = self;
+	rq->tid = tid;
+	rq->stat = buf;
+	rq->rval = rval;
+
+	char *path2 = (char *) path;
+	nfs_lookup(&mnt_point, path2, stat_cb, rq->token);
 }
 
