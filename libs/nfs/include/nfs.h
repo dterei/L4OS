@@ -6,6 +6,8 @@
 
 #include <nfs/rpc.h>
 
+#define NFS_BUFSIZ 500
+
 /* to initialise the lot */
 int nfs_init(struct ip_addr server);
 

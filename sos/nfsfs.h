@@ -18,7 +18,8 @@ enum NfsRequestType {
 	RT_LOOKUP, /* aka OPEN */
 	RT_READ,
 	RT_WRITE,
-	RT_STAT
+	RT_STAT,
+	RT_DIR
 };
 
 typedef struct NFS_BaseRequest_t NFS_BaseRequest;
@@ -102,7 +103,7 @@ typedef struct {
 	int *rval;
 } NFS_StatRequest;
 
-struct NFS_DirRequest_t {
+typedef struct {
 	enum NfsRequestType rt;
 	uintptr_t token;
 	VNode vnode;
@@ -110,7 +111,14 @@ struct NFS_DirRequest_t {
 
 	NFS_BaseRequest *previous;
 	NFS_BaseRequest *next;
-};
+
+	int pos;
+	char *buf;
+	size_t nbyte;
+	int *rval;
+
+	int cpos;
+} NFS_DirRequest;
 
 int nfsfs_init(void);
 

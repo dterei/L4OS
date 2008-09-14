@@ -219,15 +219,15 @@ dir(int argc, char **argv)
 		} else if (!r) {
 			break;
 		}
-#if 0
+#if 1
 		printf("dirent(%d): \"%s\"\n", i, buf);
 #endif
-		r = stat(buf, &sbuf);
-		if (r<0) {
-			printf("stat(%s) failed: %d\n", buf, r);
-			break;
-		}
-		prstat(buf);
+		//r = stat(buf, &sbuf);
+		//if (r<0) {
+		//	printf("stat(%s) failed: %d\n", buf, r);
+		//	break;
+		//}
+		//prstat(buf);
 		i++;
 	}
 	return 0;

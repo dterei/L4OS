@@ -15,8 +15,6 @@
 
 #include "libsos.h"
 
-#define UDP_PAYLOAD 500
-
 // Needs to be called every 100ms by somebody
 extern void nfs_timeout(void);
 
@@ -32,6 +30,7 @@ extern void nfs_timeout(void);
 
 #define NFS_LOCAL_PORT 200
 #define NFS_MACHINE_NAME "boggo"
+#define UDP_SIZE NFS_BUFSIZ
 
 
 /************************************************************
@@ -204,7 +203,7 @@ initbuf(int prognum, int vernum, int procnum)
     int tval;
     struct pbuf *pbuf;
     
-    pbuf = pbuf_alloc(PBUF_TRANSPORT, UDP_PAYLOAD, PBUF_RAM);
+    pbuf = pbuf_alloc(PBUF_TRANSPORT, UDP_SIZE, PBUF_RAM);
     assert(pbuf != NULL);
 
     pbuf->arg[0] = pbuf->payload;
@@ -489,7 +488,7 @@ init_transport(struct ip_addr server)
     udp_connect(udp_cnx, &server, 37 /* Time port */);
 
     do {
-	pbuf = pbuf_alloc(PBUF_TRANSPORT, UDP_PAYLOAD, PBUF_RAM);
+	pbuf = pbuf_alloc(PBUF_TRANSPORT, UDP_SIZE, PBUF_RAM);
 	udp_send(udp_cnx, pbuf);
 	sos_usleep(100);
 	pbuf_free(pbuf);

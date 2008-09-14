@@ -273,7 +273,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 
 void
 vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_getdirent: %d, %s, %d\n", pos, name, nbyte);
+	dprintf(1, "*** vfs_getdirent: %d, %p, %d\n", pos, name, nbyte);
 
 	nfsfs_getdirent(tid, NULL, pos, name, nbyte, rval);
 }
