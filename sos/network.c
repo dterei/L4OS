@@ -34,14 +34,6 @@ static struct serial *serial = NULL;
  * Watch out for possible swap file collisions with your partner! :)
  */
 
-#if defined(CUST_ETHZ)
-#define NFS_DIR "/mnt/hgfs/tftpboot"
-#else
-/* UNSW (set your username here) */
-//#define NFS_DIR "/var/tftpboot/<$USER>"
-#define NFS_DIR "/srv/tftp"
-#endif
-
 // Internal APIs, just direct publish from ixp_osal
 extern uint32_t ixOsalOemInit(void);
 extern void ixOsalOSServicesFinaliseInit(void);

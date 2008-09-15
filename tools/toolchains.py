@@ -104,8 +104,14 @@ class toolchain:
         ########################################################################
         # Setup default C compiler
         ########################################################################
+        
+        nfsdir = '/srv/tftp'
+
+        if 'NFS_DIR' in os.environ:
+            nfsdir = os.environ['NFS_DIR']
+
         self.dict["_CC_COM_FLAGS"] = []
-        self.dict["_CCFLAGS"] =  "$_CC_DEBUG $CC_STD_FLAGS $_CC_WARNINGS $CC_PLAT_FLAGS $_CC_OPTIMISATIONS  $CCFLAGS"
+        self.dict["_CCFLAGS"] =  "$_CC_DEBUG $CC_STD_FLAGS $_CC_WARNINGS $CC_PLAT_FLAGS $_CC_OPTIMISATIONS  $CCFLAGS -DNFS_DIR=\\\"%s\\\"" % (nfsdir,)
 
         self.dict["CC_PLAT_FLAGS"] = "${_platform(TOOLTYPE, 'c_flags')}"
 
