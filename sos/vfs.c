@@ -47,12 +47,12 @@ vfs_init(void) {
 
 void
 vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open: %d, %d, %p (%s) %d\n", getCurrentProcNum(),
+	dprintf(1, "*** vfs_open: %d, %d, %p (%s) %d\n", L4_ThreadNo(tid),
 			L4_ThreadNo(tid), path, path, mode);
 	VNode vnode = NULL;
 
 	// check can open more files
-	if (findNextFd(getCurrentProcNum()) < 0) {
+	if (findNextFd(L4_ThreadNo(tid)) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		*rval = (-1);
 		syscall_reply(tid);
@@ -99,13 +99,13 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 		return;
 	}
 
-	fildes_t fd = findNextFd(getCurrentProcNum());
+	fildes_t fd = findNextFd(L4_ThreadNo(tid));
 	*rval = fd;
 
 	// store file in per process table
-	openfiles[getCurrentProcNum()][fd].vnode = self;
-	openfiles[getCurrentProcNum()][fd].fmode = mode;
-	openfiles[getCurrentProcNum()][fd].fp = 0;
+	openfiles[L4_ThreadNo(tid)][fd].vnode = self;
+	openfiles[L4_ThreadNo(tid)][fd].fmode = mode;
+	openfiles[L4_ThreadNo(tid)][fd].fp = 0;
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
@@ -133,7 +133,7 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 
 	// get file
-	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
+	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
 
 	// get vnode
 	VNode vnode =vf->vnode;
@@ -154,7 +154,7 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 	dprintf(1, "*** vfs_close_done: %d\n", file);
 
 	// get file & vnode
-	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
+	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
 	VNode vnode = vf->vnode;
 
 	// clean up book keeping
@@ -189,10 +189,10 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 void
 vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read: %d %d %d %p %d\n", L4_ThreadNo(tid),
-			getCurrentProcNum(), file, buf, nbyte);
+			L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
-	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
+	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
 
 	// get vnode
 	VNode vnode = vf->vnode;
@@ -219,7 +219,7 @@ void
 vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
 		size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
-			getCurrentProcNum(), file, buf, nbyte, *rval);
+			L4_ThreadNo(tid), file, buf, nbyte, *rval);
 
 	if (*rval < 0) {
 		return;
@@ -227,7 +227,7 @@ vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char 
 	
 	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
 	// to appear from the space which called them
-	openfiles[getCurrentProcNum()][file].fp += nbyte;
+	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
 }
 
 void
@@ -235,7 +235,7 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	dprintf(1, "*** vfs_write: %d %p %d\n", file, buf, nbyte);
 
 	// get file
-	VFile_t *vf = &openfiles[getCurrentProcNum()][file];
+	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
 
 	// get vnode
 	VNode vnode = vf->vnode;
@@ -260,7 +260,7 @@ void
 vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_write_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
-			getCurrentProcNum(), file, buf, nbyte, *rval);
+			L4_ThreadNo(tid), file, buf, nbyte, *rval);
 
 	if (*rval < 0) {
 		return;
@@ -268,7 +268,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	
 	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
 	// to appear from the space which called them
-	openfiles[getCurrentProcNum()][file].fp += nbyte;
+	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
 }
 
 void

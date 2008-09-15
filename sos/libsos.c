@@ -23,6 +23,9 @@
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
+#include "vfs.h"
+
+#define STDOUT_FN "console"
 
 #define VIRTPOOL_MAP_DIRECTLY 0x3
 
@@ -452,6 +455,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 int
 bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
+	int dummy;
 
 	// Find the thread to run.
 	ThreadList thread;
@@ -474,17 +478,8 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	if (sp == 0)
 		return BI_NAME_INVALID;
 
-	// Starting thread in thread_init is impossible because that function is
-	// linked in to the rootserver (me) differently to userspace, so any
-	// functions that thread_init wants to call will also need to be mapped
-	// in and so on... bah.  Death to that idea.
-	//
-	// If only there was a way to find out the address of thread_init as
-	// it appears in userspace rather than kernelspace - but afaik there
-	// isn't one.
-	//
-	//L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
-	//		(void*) thread_init, (void*) sp);
+	// Open stdout - MUST BE FIRST since it's assumed to be 0
+	vfs_open(thread->sosid, STDOUT_FN, FM_WRITE, &dummy);
 
 	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
 			(void*) thread->ip, (void*) sp);

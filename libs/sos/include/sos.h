@@ -65,9 +65,7 @@ typedef int fildes_t;
 
 /* The FD to which printf() will ultimately write() */
 extern fildes_t stdout_fd;
-
-/* All user programs must call this on startup! */
-void sosuser_init(void);
+extern fildes_t stdin_fd;
 
 typedef struct {
   pid_t     pid;
