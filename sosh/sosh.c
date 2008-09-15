@@ -271,6 +271,7 @@ struct command {
 };
 
 static int help(int argc, char *argv[]);
+static int time(int argc, char *argv[]);
 
 struct command commands[] = {
 	{"dir", dir},
@@ -283,6 +284,7 @@ struct command commands[] = {
 	{"sleep", nap},
 	{"uptime", howlong},
 	{"help", help},
+	{"time", time},
 	{"null", NULL}
 };
 
@@ -293,6 +295,29 @@ help(int argc, char *argv[]) {
 		printf("\t%s\n", commands[i].name);
 	}
 	return 0;
+}
+
+static int
+time(int argc, char **argv) {
+	long int start = 0, finish = 0;
+
+	if (argc < 2) {
+		printf("Usage: time cmd [args]\n");
+		return 1;
+	}
+
+	for (int i = 0; commands[i].name != NULL; i++) {
+		if (strcmp(commands[i].name, argv[1]) == 0) {
+			start = uptime();
+			commands[i].command(argc - 1, argv + 1);
+			finish = uptime();
+			printf("*******\n%ld us\n", finish - start);
+			return 0;
+		}
+	}
+
+	printf("time: command %s not found\n", argv[1]);
+	return 1;
 }
 
 int
