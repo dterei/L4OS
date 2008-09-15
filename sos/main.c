@@ -144,7 +144,7 @@ syscall_loop(void)
 
 		if (L4_IsNilThread(tid)) {
 			L4_Word_t notify_bits = L4_MsgWord(&msg, 0);
-			dprintf(-1, "*** syscall_loop: async notify %lx\n", notify_bits);
+			dprintf(2, "*** syscall_loop: async notify %lx\n", notify_bits);
 
 			if (notify_bits & IRQ_MASK) {
 				int irq = __L4_TCR_PlatformReserved(0);
@@ -191,8 +191,8 @@ syscall_loop(void)
 				break;
 
 			default:
-				send = syscall_handle(tag, tid, &msg);
-
+				// Turn the tid cap in to an actual tid
+				send = syscall_handle(tag, sos_sid2tid(L4_SenderSpace()), &msg);
 		}
 	}
 }

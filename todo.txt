@@ -1,26 +1,3 @@
-- Get rid of ttyout.[ch], the only thing it exists for is for userspace printf
-to print to console.  They should do this through the stdout fd anyway - and
-the important things from ttyout (i.e. the serial sending etc) should (and I
-think, are?) in network.[ch].  This would fix the hack that is the message
-contents being sent through the IPC.  It should be through the write sycall.
-
-- Speaking of this, set up stdin/out/err.  The cleanest way to do this would
-be to change the way threads are being created - at the moment it's through
-L4_ThreadControl in libsos.c, telling L4 to create a thread directly in the
-function.  Rather - we should have some kind of generic init thread function
-which threads should always start in, which sets up the file descriptors (and
-maybe some other stuff later - who knows) and then calls the real main function
-which it would be passed somehow.
-
-- Okay, so it isn't trivial to do what I mentioned above.  What it probably
-involves is to use the ExchangeRegisters system call to change the value of the
-IP once the thread has started.  So something like:
-	- Instead of starting at the real IP, start in a generic thread_init function
-	  to set up the address space (i.e. open file pointers etc).
-	- thread_init does some kind of IPC to signal to SOS that it's finished.
-	- SOS uses L4_ExchangeRegisters to change the value of the IP.  Or hmmm maybe
-	  it would just be enough to use the L4_Start_SpIp.
-
 - Use sender2kernel for EVERY userspace pointer dereference.  It would be nice
 to get the *complier* to actually enforce some kind of safety with that, but
 given this is C we'll probably just have to enforce it ourselves.  Perhaps wrap
@@ -37,6 +14,9 @@ offsets, easy through wrapper function) but I think it's a good idea given how
 - As part of the above point, any time sender2kernel is used we should check
 it doesn't return NULL.  And fail nicely (from the kernel's perspective) if
 it does.  Should kill thread though.
+
+- As part of the two above points, need a simpler/nicer way to do this that
+handles demand paging.  Think...
 
 - Also as part of the sender2kernel point, there needs to be some way to check
 the access rights of the regions.  This is because the kernel has write access

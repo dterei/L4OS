@@ -189,6 +189,8 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		}
 	}
 
+	dprintf(1, "*** nfsfs_lookup_cb: Finished NFS_BaseRequests\n");
+
 	if (rq == NULL) {
 		dprintf(0, "!!!nfsfs: Corrupt lookup callback, no matching token: %d\n", token);
 		return;

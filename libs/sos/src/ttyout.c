@@ -9,8 +9,8 @@
  *
  ****************************************************************************/
 
-#include <stdarg.h>
 #include <assert.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 #include <sos/sos.h>
@@ -20,53 +20,26 @@
 #include <l4/kdebug.h>
 #include <l4/ipc.h>
 
-#define MAX_NETPRINT 31
-
 void
 ttyout_init(void) {
 }
 
 size_t
-sos_write(const void *vData, long int position, size_t count, void *handle)
-{
-	L4_Msg_t msg;
-	int i, j, k;
-	const char *realdata = vData;
-
-	for (i = 0; i < count; i += k) {
-		L4_MsgClear(&msg);
-		L4_Set_MsgLabel(&msg, SOS_NETPRINT);
-
-		k = MAX_NETPRINT;
-		if (k > count - i) {
-			k = count - i;
-		}
-
-		for (j = i; j < i + k; j++) {
-			L4_MsgAppendWord(&msg, realdata[j]);
-		}
-
-		L4_MsgLoad(&msg);
-		L4_Send(L4_rootserver);
-	}
-
-	return count;
+sos_write(const void *vData, long int position, size_t count, void *handle) {
+	(void) position;
+	(void) handle;
+	return write(stdout_fd, vData, count);
 }
 
 size_t
-sos_read(void *vData, long int position, size_t count, void *handle)
-{
-	size_t i;
-	okl4_kdb_res_t res;
-	char *realdata = vData;
-	for (i = 0; i < count; i++) // Fix this to use your syscall
-		res = L4_KDB_ReadChar_Blocked(&(realdata[i]));
-	return count;
+sos_read(void *vData, long int position, size_t count, void *handle) {
+	assert(!"sos_read called, open console read instead!");
+	(void) position;
+	(void) handle;
+	return read(stdin_fd, vData, count);
 }
 
-void
-abort(void)
-{
+void abort(void) {
 	L4_KDB_Enter("sos abort()ed");
 	while (1);
 }
