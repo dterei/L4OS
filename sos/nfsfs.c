@@ -34,7 +34,14 @@ nfsfs_timeout_thread(void) {
 /*** NFS FS ***/
 #define NFS_BUFSIZ 500
 #define NULL_TOKEN ((uintptr_t) (-1))
-#define DEFAULT_SATTR { (FM_READ | FM_WRITE), (0), (0), (0), {(0), (0)}, {(0), (0)} }
+/*
+ * NFS Permissions.
+ * _ | ___ | ___ | ___
+ * s u rwx g rwx o rwx
+ * 512     ...       1
+ * Set default to rw for all.
+ */
+#define DEFAULT_SATTR { (438), (0), (0), (0), {(0), (0)}, {(0), (0)} }
 
 NFS_BaseRequest *NfsRequests;
 
