@@ -47,13 +47,13 @@ console_init(VNode sflist) {
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
+		console->next = NULL;
+		console->previous = NULL;
+		// add to list if list not empty
 		if (sflist != NULL) {
 			console->next = sflist;
 			sflist->previous = console;
-		} else {
-			console->next = NULL;
 		}
-		console->previous = NULL;
 		sflist = console;
 	}
 

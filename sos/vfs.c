@@ -111,13 +111,16 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
 		dprintf(2, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p\n", path,
 				self, self->next, self->previous);
+
+		self->next = NULL;
+		self->previous = NULL;
+
+		// add to list if list not empty
 		if (GlobalVNodes != NULL) {
 			self->next = GlobalVNodes;
 			GlobalVNodes->previous = self;
-		} else {
-			self->next = NULL;
 		}
-		self->previous = NULL;
+
 		GlobalVNodes = self;
 	} else {
 		dprintf(2, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p\n", path,

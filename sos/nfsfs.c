@@ -98,21 +98,27 @@ create_request(enum NfsRequestType rt) {
 	// make sure not in list alredy
 	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
 		if (brq == rq) {
+			dprintf(0, "!!! BaseRequest already in list! %p %p %p %p\n", NfsRequests, brq, brq->next, brq->previous);
 			return rq;
 		}
 	}
 
-	// handle empty list
-	if (NfsRequests == NULL) {
-		NfsRequests = rq;
-	} else {
+	rq->next = NULL;
+	rq->previous = NULL;
+
+	// add to list if list not empty
+	if (NfsRequests != NULL) {
 		rq->next = NfsRequests;
-		rq->previous = NULL;
 		NfsRequests->previous = rq;
-		NfsRequests = rq;
 	}
 
-	return rq;
+	NfsRequests = rq;
+
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(1, "&&& Add NFS_BaseRequest: %d, %p, %p, %p\n", brq->token, brq, brq->next, brq->previous);
+	}
+
+	return NfsRequests;
 }
 
 static
@@ -162,6 +168,10 @@ remove_request(NFS_BaseRequest *rq) {
 		default:
 			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
+
+	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
+		dprintf(1, "&&& Rem NFS_BaseRequest: %d, %p, %p, %p\n", brq->token, brq, brq->next, brq->previous);
+	}
 }
 
 static
@@ -175,6 +185,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		dprintf(1, "nfsfs_lookup_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_LookupRequest *) brq;
+			break;
 		}
 	}
 
@@ -304,6 +315,7 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 		dprintf(2, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_ReadRequest *) brq;
+			break;
 		}
 	}
 
@@ -377,6 +389,7 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 		dprintf(2, "nfsfs_write_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_WriteRequest *) brq;
+			break;
 		}
 	}
 
@@ -453,6 +466,7 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		dprintf(1, "nfsfs_dirent_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_DirRequest *) brq;
+			break;
 		}
 	}
 
@@ -482,9 +496,9 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		return;
 	}
 
-	// error case
-	dprintf(2, "!!! didnt find file, error!\n");
-	*(rq->rval) = -1;
+	// error case, just return 0 to say nothing read, its not an error just eof
+	dprintf(2, "nfsfs_getdirent: didnt find file (%d)\n", rq->pos);
+	*(rq->rval) = 0;
 	syscall_reply(rq->tid);
 	remove_request((NFS_BaseRequest *) rq);
 }
@@ -517,6 +531,7 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		dprintf(1, "nfsfs_stat_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			rq = (NFS_StatRequest *) brq;
+			break;
 		}
 	}
 
