@@ -23,9 +23,8 @@
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
+#include "process.h"
 #include "vfs.h"
-
-#define STDOUT_FN "console"
 
 #define VIRTPOOL_MAP_DIRECTLY 0x3
 
@@ -50,7 +49,34 @@ extern void *__okl4_bootinfo;
 static bi_name_t bootinfo_id = 1;
 
 // List of threads as identified by bootinfo.
-ThreadList threads = NULL;
+/*
+typedef struct ThreadListT *ThreadList;
+struct ThreadListT {
+	bi_name_t tid;       // thread id as assigned by bootinfo
+	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
+	L4_ThreadId_t sosid; // the id we (as sos) will give it
+	uintptr_t ip;        // ip for when thread is started
+	void *sp;            // stack for when thread is started
+	ThreadList next;
+};
+*/
+
+typedef struct BootinfoRegion_t {
+	Region *region;
+	bi_name_t id;
+	struct BootinfoRegion_t *next;
+} BootinfoRegion;
+
+typedef struct BootinfoProcess_t {
+	Process *process;
+	BootinfoRegion *regions;
+	bi_name_t tid; // needed to run the thread on callback
+	bi_name_t sid; // needed to identify the address space
+	struct BootinfoProcess_t *next;
+} BootinfoProcess;
+
+// List of processes from bootinfo
+static BootinfoProcess *bips = NULL;
 
 /* Initialise the L4 Environment library */
 int
@@ -289,11 +315,22 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	return tid;
 }
 
+/******************
+ * BOOTINFO STUFF *
+ ******************/
+
+static void addRegion(BootinfoProcess *bip, Region *r, bi_name_t id) {
+	BootinfoRegion *new = (BootinfoRegion*) malloc(sizeof(BootinfoRegion));
+	new->region = r;
+	new->id = id;
+	new->next = bip->regions;
+	bip->regions = new;
+}
+
 bi_name_t
 bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
-		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data)
-{
+		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data) {
 	dprintf(1, "*** bootinfo_new_ms: (owner %d) = %d\n", owner, bootinfo_id);
 
 	if (owner == 0) {
@@ -301,22 +338,26 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		return ++bootinfo_id;
 	}
 
-	// Look for which thread (address space) it wants.
-	ThreadList thread;
+	// Look for which address space it wants.
+	BootinfoProcess *bip;
 
-	for (thread = threads; thread != NULL; thread = thread->next) {
-		if (thread->pd == owner) break;
+	for (bip = bips; bip != NULL; bip = bip->next) {
+		if (bip->sid == owner) break;
 	}
 
-	if (thread == NULL) {
-		dprintf(0, "!!! bootinfo_new_ms: didn't find relevant thread!\n");
+	if (bip == NULL) {
+		dprintf(0, "!!! bootinfo_new_ms: didn't find relevant process!\n");
 		return ++bootinfo_id;
 	} else {
-		dprintf(1, "*** bootinfo_new_ms: found thread %d\n",
-				L4_ThreadNo(thread->sosid));
+		dprintf(1, "*** bootinfo_new_ms: found process at %p\n", bip);
 	}
 
 	// Create new region.
+	int dirmap = (virtpool == VIRTPOOL_MAP_DIRECTLY);
+	Region *new = region_init(REGION_OTHER, base, size, 0, dirmap);
+	addRegion(bip, new, bootinfo_id);
+
+	/*
 	Region *newreg = (Region *)malloc(sizeof(Region));
 	newreg->type = REGION_OTHER;
 	newreg->base = base;
@@ -324,22 +365,24 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	newreg->mapDirectly = (virtpool == VIRTPOOL_MAP_DIRECTLY);
 	newreg->rights = 0;
 	newreg->id = bootinfo_id;
+	*/
 
-	dprintf(1, "*** bootinfo_new_ms: created new ms with id=%d\n", newreg->id);
+	//dprintf(1, "*** bootinfo_new_ms: created new ms with id=%d\n", newreg->id);
 
 	// Add region to that address space.
+	/*
 	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
 
 	newreg->next = as->regions;
 	as->regions = newreg;
+	*/
 
 	return ++bootinfo_id;
 }
 
 int
 bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
-		const bi_user_data_t *data)
-{
+		const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_attach: (pd %d, ms %d) = %d\n", pd, ms, bootinfo_id);
 
 	if (pd == 0) {
@@ -348,36 +391,35 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	}
 
 	// Look for which thread (address space) it wants.
-	ThreadList thread;
+	BootinfoProcess *bip;
 
-	for (thread = threads; thread != NULL; thread = thread->next) {
-		if (thread->pd == pd) break;
+	for (bip = bips; bip != NULL; bip = bip->next) {
+		if (bip->sid == pd) break;
 	}
 
-	if (thread == NULL) {
-		dprintf(0, "!!! bootinfo_attach: didn't find relevant thread!\n");
+	if (bip == NULL) {
+		dprintf(0, "!!! bootinfo_attach: didn't find relevant process!\n");
 		return BI_NAME_INVALID;
 	} else {
-		dprintf(1, "*** bootinfo_attach: found thread %d\n",
-				L4_ThreadNo(thread->sosid));
+		dprintf(1, "*** bootinfo_attach: found process at %p\n", bip);
 	}
 
 	// Look for the region.
-	Region *region = addrspace[L4_ThreadNo(thread->sosid)].regions;
+	BootinfoRegion *region;
 
-	for (; region != NULL; region = region->next) {
+	for (region = bip->regions; region != NULL; region = region->next) {
 		if (region->id == ms) break;
 	}
 
 	if (region == NULL) {
-		dprintf(0, "!!! bootinfo_attach: didn't find relevant ms!\n");
+		dprintf(0, "!!! bootinfo_attach: didn't find relevant region!\n");
 		return BI_NAME_INVALID;
 	} else {
-		dprintf(1, "*** bootinfo_attach: found relevant ms at %p\n", thread);
+		dprintf(1, "*** bootinfo_attach: found relevant region at %p\n", region);
 	}
 
 	// Make necessary changes to the region.
-	region->rights = rights;
+	region_set_rights(region->region, rights);
 
 	return 0;
 }
@@ -397,23 +439,21 @@ bi_name_t
 bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
 	dprintf(1, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
 
-	// Record the existence of the new pd via the creation of a
-	// new thread info struct.  Will fill this in as we go through
-	// the various callbacks.
-	ThreadList newThread = (ThreadList) malloc(sizeof(struct ThreadListT));
-	newThread->pd = bootinfo_id;
-	newThread->next = threads;
-	threads = newThread;
+	BootinfoProcess *bip = (BootinfoProcess*) malloc(sizeof(BootinfoProcess));
+	bip->process = process_init();
+	bip->regions = NULL;
+	//bip->tid = found later
+	bip->sid = bootinfo_id;
+	bip->next = bips;
+	bips = bip;
 
 	return ++bootinfo_id;
 }
 
 static bi_name_t
 bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
-                    uintptr_t user_main, int priority,
-                    char* name, size_t name_len,
-                    const bi_user_data_t *data)
-{
+		uintptr_t user_main, int priority, char* name,
+		size_t name_len, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_new_thread: (owner %d) = %d\n", bi_owner, bootinfo_id);
 
 	if (bi_owner == 0) {
@@ -422,32 +462,19 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	}
 
 	// Find pd that owns this thread (and by doing so the thread info).
-	ThreadList thread;
-	for (thread = threads; thread != NULL; thread = thread->next) {
-		if (thread->pd == bi_owner) break;
+	BootinfoProcess *bip;
+	for (bip = bips; bip != NULL; bip = bip->next) {
+		if (bip->sid == bi_owner) break;
 	}
 
-	if (thread == NULL) {
-		dprintf(0, "!!! bootinfo_new_thread: didn't find pd owner!\n");
+	if (bip == NULL) {
+		dprintf(0, "!!! bootinfo_new_thread: didn't find process!\n");
 		return ++bootinfo_id;
 	}
 
 	// Fill in some more info.
-	thread->tid = bootinfo_id;
-	thread->ip = ip;
-	thread->sp = data->user_data;
-	thread->sosid = sos_get_new_tid();
-	dprintf(1, "I was just allocated threadid %lx\n", L4_ThreadNo(thread->sosid));
-
-	// Now would be a good time to initialise our address space properly.
-	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
-	as->pagetb = (PageTable1 *) malloc(sizeof(PageTable1));
-	as->regions = NULL;
-
-	for (int i = 0; i < PAGETABLE_SIZE1; i++)
-	{
-		as->pagetb->pages2[i] = NULL;
-	}
+	bip->tid = bootinfo_id;
+	process_set_ip(bip->process, (void*) ip);
 
 	return ++bootinfo_id;
 }
@@ -455,39 +482,32 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 int
 bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
-	int dummy;
 
-	// Find the thread to run.
-	ThreadList thread;
-	for (thread = threads; thread != NULL; thread = thread->next) {
-		if (thread->tid == tid) break;
+	// Find the process to run.
+	BootinfoProcess *bip;
+	for (bip = bips; bip != NULL; bip = bip->next) {
+		if (bip->tid == tid) break;
 	}
 
-	if (thread == NULL) {
-		dprintf(0, "!!! bootinfo_run_thread: didn't find matching thread!\n");
+	if (bip == NULL) {
+		dprintf(0, "!!! bootinfo_run_bip: didn't find matching process!\n");
 		return BI_NAME_INVALID;
+	}
+
+	// Add all the regions to that process
+	BootinfoRegion *region;
+	for (region = bip->regions; region != NULL; region = region->next) {
+		process_add_region(bip->process, region->region);
 	}
 
 	// Start a new task from the thread.
 	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n",
-			L4_ThreadNo(thread->sosid));
+			L4_ThreadNo(process_get_tid(bip->process)));
 
-	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
-	uintptr_t sp = add_regions(as);
-
-	if (sp == 0)
-		return BI_NAME_INVALID;
-
-	// Open stdout - MUST BE FIRST since it's assumed to be 0
-	vfs_open(thread->sosid, STDOUT_FN, FM_WRITE, &dummy);
-
-	L4_ThreadId_t newtid = sos_task_new(L4_ThreadNo(thread->sosid), L4_Pager(),
-			(void*) thread->ip, (void*) sp);
-
-	dprintf(1, "*** bootinfo_run_thread: sos_task_new gave me %d\n", L4_ThreadNo(newtid));
+	L4_ThreadId_t newtid = process_run(bip->process);
+	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
-		//dprintf(0, "Created task: %lx\n", sos_tid2task(newtid));
 		dprintf(0, "Created thread: %d\n", (int) L4_ThreadNo(newtid));
 	} else {
 		dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
@@ -501,16 +521,22 @@ int
 bootinfo_cleanup(const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_cleanup\n");
 
-	// Cleaning up now done on startme system call.
+	BootinfoProcess *freeMe;
+	BootinfoRegion *freeMeToo;
 
-	/*
-	ThreadList freeMe;
-	while (threads != NULL) {
-		freeMe = threads->next;
-		free(threads);
-		threads = freeMe;
+	while (bips != NULL) {
+		while (bips->regions != NULL) {
+			freeMeToo = bips->regions->next;
+			free(bips->regions);
+			bips->regions = freeMeToo;
+		}
+
+		freeMe = bips->next;
+		free(bips);
+		bips = freeMe;
 	}
-	*/
+
+	dprintf(1, "*** bootinfo_cleanup done\n");
 
 	return 0;
 }

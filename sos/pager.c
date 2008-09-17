@@ -21,9 +21,33 @@
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
+#include "process.h"
 #include "thread.h"
 
-#define verbose 1
+#define verbose 2
+
+// Page table structures
+typedef struct PageTable2_t {
+	L4_Word_t pages[PAGETABLE_SIZE2];
+} PageTable2;
+
+typedef struct PageTable1_t {
+	PageTable2 *pages2[PAGETABLE_SIZE1];
+} PageTable1;
+
+// Region structure
+struct Region_t {
+	region_type type; // type of region (heap? stack?)
+	uintptr_t base;   // base of the region
+	uintptr_t size;   // size of region
+	int rights;       // access rights of region (read, write, execute)
+	int mapDirectly;  // do we directly (1:1) map it?
+	int id;           // what bootinfo uses to identify the region
+	struct Region_t *next;
+};
+
+// The pager process
+L4_ThreadId_t sos_pager; // will be initialised to 0 (nilthread) automatically
 
 // XXX
 //
@@ -32,87 +56,52 @@
 // 	rights r;
 // } userptr_t;
 
-AddrSpace addrspace[MAX_ADDRSPACES];
+Region *region_init(region_type type, uintptr_t base,
+		uintptr_t size, int rights, int dirmap) {
+	Region *new = (Region*) malloc(sizeof(Region));
 
-static uintptr_t
-page_align_up(uintptr_t adr)
-{
-	int pageoffset = adr % PAGESIZE;
-	if (pageoffset > 0) {
-		adr += (PAGESIZE - pageoffset);
+	new->type = type;
+	new->base = base;
+	new->size = size;
+	new->rights = rights;
+	new->mapDirectly = dirmap;
+
+	return new;
+}
+
+uintptr_t region_base(Region *r) {
+	return r->base;
+}
+
+uintptr_t region_size(Region *r) {
+	return r->size;
+}
+
+Region *region_next(Region *r) {
+	return r->next;
+}
+
+void region_set_rights(Region *r, int rights) {
+	r->rights = rights;
+}
+
+void region_append(Region *r, Region *toAppend) {
+	r->next = toAppend;
+}
+
+PageTable *pagetable_init(void) {
+	PageTable1 *pt = (PageTable1*) malloc(sizeof(PageTable1));
+
+	for (int i = 0; i < PAGETABLE_SIZE1; i++) {
+		pt->pages2[i] = NULL;
 	}
 
-	return adr;
+	return (PageTable*) pt;
 }
 
 void
 pager_init(void) {
-	// Set up address spaces
-	for (int i = 0; i < MAX_ADDRSPACES; i++) {
-		addrspace[i].pagetb = NULL;
-		addrspace[i].regions = NULL;
-	}
-
-	// Manually map in thread_init so it won't page fault
-	// Argh, I'm getting sick of this boilerplate.
-	/*
-	dprintf(0, "!!! %p\n", thread_init);
-	L4_Word_t addr = ((L4_Word_t) thread_init) & PAGEALIGN;
-	dprintf(0, "!!! %p %p\n", thread_init, addr);
-	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
-	L4_Set_Rights(&fpage, L4_ReadeXecOnly);
-	L4_PhysDesc_t ppage = L4_PhysDesc(addr, L4_DefaultMemory);
-
-	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
-		sos_print_error(L4_ErrorCode());
-		dprintf(0, "!!! pager_init: failed to map thread_init (%p, %p)\n",
-				thread_init, addr);
-	}
-	*/
-}
-
-uintptr_t
-add_regions(AddrSpace *as) {
-	uintptr_t top = 0;
-
-	// Find the highest address from bootinfo and put the
-	// heap above it.
-	for (Region *r = as->regions; r != NULL; r = r->next)
-	{
-		if ((r->base + r->size) > top)
-			top = r->base + r->size;
-	}
-
-	top = page_align_up(top);
-
-	// Size of the region is zero for now, expand as we get
-	// syscalls (more_heap).
-	Region *heap = (Region *)malloc(sizeof(Region));
-	heap->type = REGION_HEAP;
-	heap->size = 0;
-	heap->base = top;
-	heap->rights = REGION_READ | REGION_WRITE;
-	heap->mapDirectly = 0;
-
-	// Put the stack half way up the address space - at the top
-	// causes pagefaults, so halfway up seems like a nice compromise.
-	top = page_align_up(((unsigned int) -1) >> 1);
-
-	Region *stack = (Region *)malloc(sizeof(Region));
-	stack->type = REGION_STACK;
-	stack->size = ONE_MEG;
-	stack->base = top - stack->size;
-	stack->rights = REGION_READ | REGION_WRITE;
-	stack->mapDirectly = 0;
-
-	// Add them to the region list.
-	stack->next = heap;
-	heap->next = as->regions;
-	as->regions = stack;
-
-	// crt0 (whatever that is) will pop 3 words off stack,
-	// hence the need to subtact 3 words from the sp.
-	return stack->base + stack->size - (3 * sizeof(L4_Word_t));
+	;
 }
 
 int
@@ -120,10 +109,12 @@ sos_moremem(uintptr_t *base, unsigned int nb) {
 	dprintf(1, "*** sos_moremem(%p, %lx)\n", base, nb);
 
 	// Find the current heap section.
-	AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
+	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
+
+	//AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 	Region *heap;
 
-	for (heap = as->regions; heap != NULL; heap = heap->next) {
+	for (heap = process_get_regions(p); heap != NULL; heap = heap->next) {
 		if (heap->type == REGION_HEAP) {
 			break;
 		}
@@ -149,7 +140,9 @@ sos_moremem(uintptr_t *base, unsigned int nb) {
 }
 
 static L4_Word_t*
-findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
+findPageTableWord(PageTable *pt, L4_Word_t addr) {
+	PageTable1 *level1 = (PageTable1*) pt;
+
 	addr /= PAGESIZE;
 	int offset1 = addr / PAGETABLE_SIZE2;
 	int offset2 = addr - (offset1 * PAGETABLE_SIZE2);
@@ -174,10 +167,10 @@ findPageTableWord(PageTable1 *level1, L4_Word_t addr) {
 }
 
 static Region*
-findRegion(AddrSpace *as, L4_Word_t addr) {
+findRegion(Region *regions, L4_Word_t addr) {
 	Region *r;
 
-	for (r = as->regions; r != NULL; r = r->next) {
+	for (r = regions; r != NULL; r = r->next) {
 		if (addr >= r->base && addr < r->base + r->size) {
 			break;
 		} else {
@@ -191,8 +184,7 @@ findRegion(AddrSpace *as, L4_Word_t addr) {
 
 static void
 doPager(L4_Word_t addr, L4_Word_t ip) {
-	int sid = L4_SpaceNo(L4_SenderSpace());
-	AddrSpace *as = &addrspace[sid];
+	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
 	L4_Word_t frame;
 	int rights;
 	int mapKernelToo = 0;
@@ -209,16 +201,16 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		rights = L4_FullyAccessible;
 	} else {
 		// Find region it belongs in.
-		Region *r = findRegion(as, addr);
+		Region *r = findRegion(process_get_regions(p), addr);
 
 		if (r == NULL) {
 			printf("Segmentation fault\n");
-			thread_kill(L4_GlobalId(sid, 1));
+			thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
 			return;
 		}
 
 		// Place in, or retrieve from, page table.
-		L4_Word_t *entry = findPageTableWord(as->pagetb, addr);
+		L4_Word_t *entry = findPageTableWord(process_get_pagetable(p), addr);
 
 		if (*entry != 0) {
 			// Already appears in page table, just got unmapped somehow.
@@ -276,13 +268,12 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
 L4_Word_t*
 sender2kernel(L4_Word_t addr) {
 	dprintf(1, "*** sender2kernel: addr=%p\n", addr);
-	int sid = L4_SpaceNo(L4_SenderSpace());
-	AddrSpace *as = &addrspace[sid];
+	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
 
 	// Check that addr is in valid region
-	Region *r = findRegion(as, addr);
+	Region *r = findRegion(process_get_regions(p), addr);
 	if (r == NULL) {
-		thread_kill(L4_GlobalId(sid, 1));
+		thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
 		return NULL;
 	}
 
@@ -290,7 +281,7 @@ sender2kernel(L4_Word_t addr) {
 	// not actually be in the page table yet, so may need to
 	// invoke pager manually.
 	L4_Word_t physAddr;
-	while ((physAddr = *findPageTableWord(as->pagetb, addr & PAGEALIGN)) == 0) {
+	while ((physAddr = *findPageTableWord(process_get_pagetable(p), addr & PAGEALIGN)) == 0) {
 		dprintf(1, "*** sender2kernel: %p wasn't mapped in, doing manually\n", addr);
 		doPager(addr, (L4_Word_t) -1);
 	}

@@ -62,38 +62,6 @@ init_thread(void)
         sos_usleep(30 * 1000 * 1000);
 }
 
-// Start a given thread from the list of unstarted threads.
-static void
-start_thread(L4_ThreadId_t tid) {
-	(void) start_thread;
-
-	// Look for which thread (address space) it wants.
-	ThreadList thread, prev = NULL;
-
-	for (thread = threads; thread != NULL; thread = thread->next) {
-		if (L4_IsThreadEqual(thread->sosid, tid)) {
-			break;
-		} else {
-			prev = thread;
-		}
-	}
-
-	if (thread == NULL) {
-		dprintf(0, "!!! start_thread: didn't find relevant thread!\n");
-		return;
-	} else {
-		dprintf(1, "*** start_thread: found thread %d\n", L4_ThreadNo(tid));
-	}
-
-	// Start it
-	L4_Start_SpIp(tid, (L4_Word_t) thread->sp, (L4_Word_t) thread->ip);
-
-	// Remove it from the list of threads
-	if (prev != NULL) prev->next = thread->next;
-	if (thread == threads) threads = thread->next;
-	free(thread);
-}
-
 /* Some IPC labels defined in the L4 documentation */
 #define L4_PAGEFAULT	((L4_Word_t) -2)
 #define L4_INTERRUPT	((L4_Word_t) -1)

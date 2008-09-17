@@ -20,19 +20,6 @@
 
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
-// List of threads as identified by bootinfo.
-typedef struct ThreadListT *ThreadList;
-struct ThreadListT {
-	bi_name_t tid;       // thread id as assigned by bootinfo
-	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
-	L4_ThreadId_t sosid; // the id we (as sos) will give it
-	uintptr_t ip;        // ip for when thread is started
-	void *sp;            // stack for when thread is started
-	ThreadList next;
-};
-
-extern ThreadList threads;
-
 // Bootinfo required callbacks
 bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,

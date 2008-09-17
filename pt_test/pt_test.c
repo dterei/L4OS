@@ -51,8 +51,6 @@ pt_test(void)
 int
 main(int argc, char *argv[])
 {
-	sosuser_init();
-
 	printf("Starting pt_test...\n");
 	pt_test();
 	printf("Finished pt_test.  Did it work?\n");
