@@ -25,7 +25,7 @@
 #include "thread.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 1
 
 // Page table structures
 typedef struct PageTable2_t {

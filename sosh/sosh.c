@@ -13,6 +13,8 @@
 
 #include <sos/sos.h>
 
+#include "m5bench.h"
+
 #define verbose 0
 
 #define BUF_SIZ 128
@@ -273,6 +275,7 @@ struct command {
 static int help(int argc, char *argv[]);
 static int time(int argc, char *argv[]);
 
+static
 struct command commands[] = {
 	{"dir", dir},
 	{"ls", dir},
@@ -285,6 +288,7 @@ struct command commands[] = {
 	{"uptime", howlong},
 	{"help", help},
 	{"time", time},
+	{"m5bench", m5bench},
 	{"null", NULL}
 };
 
