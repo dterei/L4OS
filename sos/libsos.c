@@ -32,7 +32,7 @@
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 2
+#define verbose 1
 
 extern void _start(void);
 

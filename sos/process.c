@@ -5,7 +5,7 @@
 
 #define STDOUT_FN "console"
 
-#define verbose 2
+#define verbose 1
 
 struct Process_t {
 	L4_ThreadId_t tid;
@@ -69,7 +69,7 @@ static void addBuiltinRegions(Process *p) {
 	// Put the stack half way up the address space - at the top
 	// causes pagefaults, so halfway up seems like a nice compromise
 	base = (((unsigned int) -1) >> 1) & PAGEALIGN;
-	addRegion(p, REGION_STACK, base - ONE_MEG, ONE_MEG, REGION_READ | REGION_WRITE, 1);
+	addRegion(p, REGION_STACK, base - ONE_MEG, ONE_MEG, REGION_READ | REGION_WRITE, 0);
 
 	// Some times, 3 words are popped unvoluntarily so may as well just
 	// always allow for this

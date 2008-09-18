@@ -26,7 +26,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 0
+#define verbose 1
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
@@ -147,7 +147,7 @@ syscall_loop(void)
 
 			case L4_INTERRUPT:
 				/* actually an IRQ lock/unlock message */
-				dprintf(0, "got interrupt\n");
+				dprintf(3, "got interrupt\n");
 				network_irq(&tid, &send);
 				break;
 
