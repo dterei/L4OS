@@ -129,19 +129,14 @@ L4_ThreadId_t process_run(Process *p) {
 	L4_ThreadId_t tid;
 	process_dump(p);
 
-#if 0
 	if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
 		dprintf(1, "*** %s: using parent pager\n", __FUNCTION__);
 		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
 	} else {
 		dprintf(1, "*** %s: using virtual pager\n", __FUNCTION__);
 		tid = sos_task_new(L4_ThreadNo(p->tid), virtual_pager, p->ip, p->sp);
+		//tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
 	}
-
-#else
-	tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
-
-#endif
 
 	return tid;
 }

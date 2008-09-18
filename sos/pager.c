@@ -50,9 +50,10 @@ struct Region_t {
 // The pager process
 #define PAGER_STACK_SIZE (4 * (PAGESIZE))
 
-static L4_Word_t virtual_pager_stack[PAGER_STACK_SIZE];
+static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
-static void virtual_pager_handler(void);
+static void virtualPagerHandler(void);
+static int virtualPagerStarted = 0;
 
 // XXX
 //
@@ -108,18 +109,32 @@ PageTable *pagetable_init(void) {
 
 void
 pager_init(void) {
-#if 0
+#ifdef USE_VIRTUAL_PAGER
 	// Start the real pager process
 	Process *pager = process_init();
 
 	process_prepare(pager);
-	process_set_ip(pager, (void*) virtual_pager_handler);
-	process_set_sp(pager, virtual_pager_stack + PAGER_STACK_SIZE - 1);
+	process_set_ip(pager, (void*) virtualPagerHandler);
+	process_set_sp(pager, virtualPagerStack + PAGER_STACK_SIZE - 1);
 
-	// XXX race condition with other processes?
-	// May want to use IPC synchronisation with SOS
+	// Start pager, but wait until it has actually started before
+	// trying to assign virtual_pager to anything
+	dprintf(1, "*** pager_init: about to run pager\n");
 	process_run(pager);
+
+	dprintf(1, "*** pager_init: waiting until pager has started\n");
+	while (!virtualPagerStarted) {
+		dprintf(1, ".");
+	}
+	dprintf(1, "\n");
+
+	dprintf(1, "*** pager_init: pager started, setting it to virtual_pager\n");
 	virtual_pager = process_get_tid(pager);
+
+#else
+	(void) virtualPagerHandler;
+	(void) virtualPagerStack;
+
 #endif
 }
 
@@ -218,12 +233,6 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		// set up, so map 1:1.
 		frame = addr;
 		rights = L4_FullyAccessible;
-	} else if (L4_SpaceNo(L4_SenderSpace()) == L4_ThreadNo(virtual_pager)) {
-		// Hack pager thread for now - eventually the roottask will do
-		// this automatically, and everything below will actually be
-		// handled in the pager process
-		frame = addr;
-		rights = L4_FullyAccessible;
 	} else {
 		// Find region it belongs in.
 		Region *r = findRegion(process_get_regions(p), addr);
@@ -310,20 +319,22 @@ sender2kernel(L4_Word_t addr) {
 	return (L4_Word_t*) physAddr;
 }
 
-static void virtual_pager_handler(void) {
-	dprintf(1, "*** virtual_pager_handler: started\n");
-	(void) virtual_pager_handler;
-	(void) virtual_pager_stack;
+static void virtualPagerHandler(void) {
+	dprintf(1, "*** virtualPagerHandler: started\n");
 
+	// Accept the pages and signal we've actually started
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
+	virtualPagerStarted = 1;
+	L4_CacheFlushAll();
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
 
 	for (;;) {
+		dprintf(1, "*** virtualPagerHandler: waiting for a message\n");
 		tag = L4_Wait(&tid);
-		dprintf(1, "*** virtual_pager_handler: got a message!\n");
+		dprintf(1, "*** virtualPagerHandler: got a message\n");
 		L4_MsgStore(tag, &msg);
 
 		switch (TAG_SYSLAB(tag)) {
@@ -333,13 +344,13 @@ static void virtual_pager_handler(void) {
 				break;
 
 			default:
-				dprintf(0, "!!! virtual_pager_handler: unhandled message!\n");
+				dprintf(0, "!!! virtualPagerHandler: unhandled message!\n");
 		}
 	}
 }
 
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
-#if 0
+#ifdef USE_VIRTUAL_PAGER
 	addr &= PAGEALIGN;
 
 	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
@@ -349,7 +360,7 @@ void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) { 
 		sos_print_error(L4_ErrorCode());
 		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
-	}   
+	}  
 
 #else
 	doPager(addr, ip);

@@ -303,6 +303,20 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 			L4_rootserver, clistId);
 	assert(res);
 
+	// And the pager?
+	if (L4_IsThreadEqual(pager, virtual_pager)) {
+		//res = L4_CreateIpcCap(pager, L4_rootclist,
+		//		pager, clistId);
+		/*
+		res = L4_CreateIpcCap(
+				virtual_pager,
+				L4_ClistId(L4_ThreadNo(virtual_pager)),
+				virtual_pager,
+				clistId);
+		assert(res);
+		*/
+	}
+
 	// Create the thread
 	L4_ThreadId_t tid = L4_GlobalId(task, 1);
 	res = L4_ThreadControl(tid, spaceId, L4_rootserver,

@@ -136,6 +136,17 @@ syscall_loop(void)
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
+				/*
+				printf("virtual_pager exists, trying to send fake message\n");
+				if (!L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
+					L4_Msg_t clear;
+					L4_MsgClear(&clear);
+					L4_Set_MsgLabel(&clear, L4_PAGEFAULT << 4);
+					L4_MsgLoad(&clear);
+					L4_Send(virtual_pager);
+				}
+				*/
+
 				sos_pager_handler(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
 				L4_Set_MsgTag(L4_Niltag);
 				break;
@@ -162,6 +173,7 @@ syscall_loop(void)
 			default:
 				// Turn the tid cap in to an actual tid
 				send = syscall_handle(tag, sos_sid2tid(L4_SenderSpace()), &msg);
+
 		}
 	}
 }
