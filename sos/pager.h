@@ -29,19 +29,8 @@ typedef enum {
 
 typedef struct Region_t Region;
 
-/* Address space Struct */
-/*
-typedef struct {
-	PageTable1 *pagetb;
-	Region *regions;
-} AddrSpace;
-*/
-
-/* Max of 256 Address Spaces */
-//extern AddrSpace addrspace[MAX_ADDRSPACES];
-
 // The thread id of the main pager process
-extern L4_ThreadId_t sos_pager;
+extern L4_ThreadId_t virtual_pager;
 
 Region *region_init(region_type type, uintptr_t base,
 		uintptr_t size, int rights, int dirmap);
@@ -53,10 +42,10 @@ void region_append(Region *r, Region *toAppend);
 
 PageTable *pagetable_init(void);
 void pager_init(void);
-void pager(L4_ThreadId_t tid, L4_Msg_t *msg);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 int sos_moremem(uintptr_t *base, unsigned int nb);
 L4_Word_t *sender2kernel(L4_Word_t addr);
+void sos_pager_handler(L4_Word_t addr, L4_Word_t ip);
 
 // XXX
 //

@@ -26,7 +26,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
@@ -62,11 +62,6 @@ init_thread(void)
 	for (;;)
 		sos_usleep(30 * 1000 * 1000);
 }
-
-/* Some IPC labels defined in the L4 documentation */
-#define L4_PAGEFAULT	((L4_Word_t) -2)
-#define L4_INTERRUPT	((L4_Word_t) -1)
-#define L4_EXCEPTION    ((L4_Word_t) -5)
 
 /*
   Syscall loop.
@@ -141,10 +136,15 @@ syscall_loop(void)
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				// A pagefault occured. Dispatch to the pager
+				sos_pager_handler(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+				L4_Set_MsgTag(L4_Niltag);
+				break;
+
+				/*
 				pager(tid, &msg);
 				L4_Set_MsgTag(L4_Niltag);
 				break;
+				*/
 
 			case L4_INTERRUPT:
 				/* actually an IRQ lock/unlock message */

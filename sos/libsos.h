@@ -16,6 +16,10 @@
 #include <l4/thread.h>
 #include <bootinfo/bootinfo.h>
 
+#define L4_PAGEFAULT	((L4_Word_t) -2)
+#define L4_INTERRUPT	((L4_Word_t) -1)
+#define L4_EXCEPTION ((L4_Word_t) -5)
+
 #define ONE_MEG (1 * 1024 * 1024)
 
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)

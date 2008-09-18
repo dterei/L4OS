@@ -23,8 +23,9 @@
 #include "pager.h"
 #include "process.h"
 #include "thread.h"
+#include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // Page table structures
 typedef struct PageTable2_t {
@@ -49,9 +50,9 @@ struct Region_t {
 // The pager process
 #define PAGER_STACK_SIZE (4 * (PAGESIZE))
 
-L4_Word_t sos_pager_stack[PAGER_STACK_SIZE];
-L4_ThreadId_t sos_pager; // automatically initialised to 0 (L4_nilthread)
-static void pager_handler(void);
+static L4_Word_t virtual_pager_stack[PAGER_STACK_SIZE];
+L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
+static void virtual_pager_handler(void);
 
 // XXX
 //
@@ -94,6 +95,8 @@ void region_append(Region *r, Region *toAppend) {
 }
 
 PageTable *pagetable_init(void) {
+	// XXX think about malloc inside pager now!
+	// This is actually the size of a frame, use frame_alloc.
 	PageTable1 *pt = (PageTable1*) malloc(sizeof(PageTable1));
 
 	for (int i = 0; i < PAGETABLE_SIZE1; i++) {
@@ -105,17 +108,19 @@ PageTable *pagetable_init(void) {
 
 void
 pager_init(void) {
+#if 0
 	// Start the real pager process
 	Process *pager = process_init();
 
 	process_prepare(pager);
-	process_set_ip(pager, (void*) pager_handler);
-	process_set_sp(pager, sos_pager_stack + PAGER_STACK_SIZE - 1);
+	process_set_ip(pager, (void*) virtual_pager_handler);
+	process_set_sp(pager, virtual_pager_stack + PAGER_STACK_SIZE - 1);
 
 	// XXX race condition with other processes?
 	// May want to use IPC synchronisation with SOS
 	process_run(pager);
-	sos_pager = process_get_tid(pager);
+	virtual_pager = process_get_tid(pager);
+#endif
 }
 
 int
@@ -168,6 +173,8 @@ findPageTableWord(PageTable *pt, L4_Word_t addr) {
 	}
 
 	if (level1->pages2[offset1] == NULL) {
+		// XXX think about malloc inside pager now!
+		// This is actually the size of a frame, use frame_alloc.
 		level1->pages2[offset1] = (PageTable2*) malloc(sizeof(PageTable2));
 
 		for (int i = 0; i < PAGETABLE_SIZE2; i++) {
@@ -201,7 +208,7 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 	int rights;
 	int mapKernelToo = 0;
 
-	dprintf(1, "*** pager: fault on ss=%d, addr=%p (%p), ip=%p\n",
+	dprintf(1, "*** doPager: fault on ss=%d, addr=%p (%p), ip=%p\n",
 			L4_SpaceNo(L4_SenderSpace()), addr, addr & PAGEALIGN, ip);
 
 	addr &= PAGEALIGN;
@@ -211,7 +218,7 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		// set up, so map 1:1.
 		frame = addr;
 		rights = L4_FullyAccessible;
-	} else if (L4_SpaceNo(L4_SenderSpace()) == L4_ThreadNo(sos_pager)) {
+	} else if (L4_SpaceNo(L4_SenderSpace()) == L4_ThreadNo(virtual_pager)) {
 		// Hack pager thread for now - eventually the roottask will do
 		// this automatically, and everything below will actually be
 		// handled in the pager process
@@ -262,13 +269,8 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 			dprintf(0, "Failed mapping to kernel too\n");
 		}
 	}
-}
 
-void
-pager(L4_ThreadId_t tid, L4_Msg_t *msgP) {
-	dprintf(2, "*** pager: about to invoke doPager\n");
-	doPager(L4_MsgWord(msgP, 0), L4_MsgWord(msgP, 1));
-	dprintf(2, "*** pager: successfully invoked doPager\n");
+	syscall_reply(sos_sid2tid(L4_SenderSpace()));
 }
 
 void
@@ -308,12 +310,50 @@ sender2kernel(L4_Word_t addr) {
 	return (L4_Word_t*) physAddr;
 }
 
-static void pager_handler(void) {
-	printf("pager handler started\n");
-	
-	// syscall loop
+static void virtual_pager_handler(void) {
+	dprintf(1, "*** virtual_pager_handler: started\n");
+	(void) virtual_pager_handler;
+	(void) virtual_pager_stack;
+
+	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
+
+	L4_Msg_t msg;
+	L4_MsgTag_t tag;
+	L4_ThreadId_t tid = L4_nilthread;
+
 	for (;;) {
-		;
+		tag = L4_Wait(&tid);
+		dprintf(1, "*** virtual_pager_handler: got a message!\n");
+		L4_MsgStore(tag, &msg);
+
+		switch (TAG_SYSLAB(tag)) {
+			case L4_PAGEFAULT:
+				doPager(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+				// pager is asynchronous, don't reply
+				break;
+
+			default:
+				dprintf(0, "!!! virtual_pager_handler: unhandled message!\n");
+		}
 	}
+}
+
+void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
+#if 0
+	addr &= PAGEALIGN;
+
+	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
+	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
+	L4_PhysDesc_t phys = L4_PhysDesc(addr, L4_DefaultMemory);
+
+	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) { 
+		sos_print_error(L4_ErrorCode());
+		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
+	}   
+
+#else
+	doPager(addr, ip);
+
+#endif
 }
 
