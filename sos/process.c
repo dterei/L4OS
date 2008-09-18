@@ -44,6 +44,17 @@ void process_set_ip(Process *p, void *ip) {
 	p->ip = ip;
 }
 
+void process_set_sp(Process *p, void *sp) {
+	// Set the stack pointer to something else -
+	// Only possible AFTER process_prepare and
+	// BEFORE process_run.  Moving the sp is
+	// necessary if a process is to run without
+	// the use of virtual memory, although it
+	// will then need to manage its memory
+	// manually.  
+	p->sp = sp;
+}
+
 static void addRegion(Process *p, region_type type,
 		uintptr_t base, uintptr_t size, int rights, int dirmap) {
 	Region *new = region_init(type, base, size, rights, dirmap);
@@ -59,6 +70,15 @@ static void addBuiltinRegions(Process *p) {
 		if ((region_base(r) + region_size(r)) > base) {
 			base = region_base(r) + region_size(r);
 		}
+	}
+
+	if (base == 0) {
+		// No regions yet!  This must be some kind of special process
+		// creation (i.e. the pager) that needs to be in physical memory,
+		// so just let it do its stuff and set the sp manually, etc.
+		return;
+	} else {
+		dprintf(1, "Base is at %p\n", (void*) base);
 	}
 
 	base = ((base - 1) & PAGEALIGN) + PAGESIZE; // Page align up
@@ -77,6 +97,8 @@ static void addBuiltinRegions(Process *p) {
 }
 
 static void process_dump(Process *p) {
+	(void) process_dump;
+
 	dprintf(1, "*** %s on %ld\n", __FUNCTION__, L4_ThreadNo(p->tid));
 	dprintf(1, "*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
 	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
@@ -90,7 +112,7 @@ static void process_dump(Process *p) {
 	dprintf(1, "*** %s: ip: %p\n", __FUNCTION__, p->ip);
 }
 
-L4_ThreadId_t process_run(Process *p) {
+void process_prepare(Process *p) {
 	// Add the builtin regions (stack, heap)
 	// This will set the stack pointer too
 	addBuiltinRegions(p);
@@ -102,17 +124,25 @@ L4_ThreadId_t process_run(Process *p) {
 	// Open stdout
 	int dummy;
 	vfs_open(p->tid, STDOUT_FN, FM_WRITE, &dummy);
+}
 
-	// Start the process
+L4_ThreadId_t process_run(Process *p) {
 	L4_ThreadId_t tid;
+	process_dump(p);
 
+	// XXX
+
+	/*
 	if (L4_IsThreadEqual(sos_pager, L4_nilthread)) {
 		dprintf(1, "*** %s: using parent pager\n", __FUNCTION__);
+		*/
 		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
+		/*
 	} else {
 		dprintf(1, "*** %s: using dedicated pager\n", __FUNCTION__);
 		tid = sos_task_new(L4_ThreadNo(p->tid), sos_pager, p->ip, p->sp);
 	}
+	*/
 
 	return tid;
 }

@@ -504,6 +504,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n",
 			L4_ThreadNo(process_get_tid(bip->process)));
 
+	process_prepare(bip->process);
 	L4_ThreadId_t newtid = process_run(bip->process);
 	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 

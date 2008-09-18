@@ -40,7 +40,7 @@ vfs_init(void) {
 	}
 
 	// Init file systems
-	dprintf(2, "*** vfs_init\n");
+	dprintf(1, "*** vfs_init\n");
 	GlobalVNodes = console_init(GlobalVNodes);
 	nfsfs_init();
 }
@@ -69,16 +69,16 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 
 	// Check open vnodes (special files are stored here)
 	for (vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
-		dprintf(2, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
+		dprintf(1, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
 		if (strcmp(vnode->path, path) == 0) {
-			dprintf(2, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
+			dprintf(1, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
 			break;
 		}
 	}
 
 	// Not an open file so open nfs file
 	if (vnode == NULL) {
-		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
+		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
 		return;
 	}
@@ -95,7 +95,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// open failed
 	if (*rval < 0 || self == NULL) {
-		dprintf(2, "*** vfs_open_done: can't open file: error code %d\n", *rval);
+		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", *rval);
 		return;
 	}
 
@@ -109,7 +109,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
-		dprintf(2, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p\n", path,
+		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p\n", path,
 				self, self->next, self->previous);
 
 		self->next = NULL;
@@ -123,7 +123,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 		GlobalVNodes = self;
 	} else {
-		dprintf(2, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p\n", path,
+		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p\n", path,
 				self, self->next, self->previous);
 	}
 
@@ -141,7 +141,7 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 	// get vnode
 	VNode vnode =vf->vnode;
 	if (vnode == NULL) {
-		dprintf(2, "*** vfs_close: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_close: invalid file handler: %d\n", file);
 		*rval = (-1);
 		return;
 	}
@@ -200,7 +200,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	// get vnode
 	VNode vnode = vf->vnode;
 	if (vnode == NULL) {
-		dprintf(2, "*** vfs_read: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
 		*rval = (-1);
 		syscall_reply(tid);
 		return;
@@ -208,7 +208,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 
 	// check permissions
 	if (!(vf->fmode & FM_READ)) {
-		dprintf(2, "*** vfs_read: invalid read permissions for file: %d, %d\n",
+		dprintf(1, "*** vfs_read: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
 		*rval = (-1);
 		syscall_reply(tid);
@@ -243,14 +243,14 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	// get vnode
 	VNode vnode = vf->vnode;
 	if (vnode == NULL) {
-		dprintf(2, "*** vfs_write: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_write: invalid file handler: %d\n", file);
 		*rval = (-1);
 		return;
 	}
 
 	// check permissions
 	if (!(vf->fmode & FM_WRITE)) {
-		dprintf(2, "*** vfs_write: invalid read permissions for file: %d, %d\n",
+		dprintf(1, "*** vfs_write: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
 		*rval = (-1);
 		return;
@@ -288,9 +288,9 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
 	
 	// Check open vnodes (special files are stored here)
 	for (VNode vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
-		dprintf(2, "*** vfs_stat: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
+		dprintf(1, "*** vfs_stat: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
 		if (strcmp(vnode->path, path) == 0) {
-			dprintf(2, "*** vfs_stat: found already open vnode: %s ***\n", vnode->path);
+			dprintf(1, "*** vfs_stat: found already open vnode: %s ***\n", vnode->path);
 			vnode->stat(tid, vnode, path, buf, rval);
 			return;
 		}

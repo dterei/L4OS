@@ -21,6 +21,9 @@ void process_set_sp(Process *p, void *sp);
 // Set an initial instruction pointer for the process
 void process_set_ip(Process *p, void *ip);
 
+// Prepare a process to be run
+void process_prepare(Process *p);
+
 // Run a process
 L4_ThreadId_t process_run(Process *p);
 

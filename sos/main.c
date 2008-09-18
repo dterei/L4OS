@@ -46,20 +46,21 @@ static L4_Word_t user_stack_s[STACK_SIZE];
 static void
 init_thread(void)
 {
-    L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
+	L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
 
-    // Initialise the network for libsos_logf_init
-    network_init();
-	 vfs_init();
+	// Initialise the network for libsos_logf_init
+	network_init();
+	vfs_init();
+	pager_init();
 
-    // start executables listed in the the BootInfo
-    // hack: crt0 expects to be able to pop 3 words off the stack
-    dprintf(0, "user_stack_s start at %lx, end at %lx\n", user_stack_s, &user_stack_s[STACK_SIZE]);
-    sos_start_binfo_executables(&user_stack_s[STACK_SIZE-3]);
+	// start executables listed in the the BootInfo
+	// hack: crt0 expects to be able to pop 3 words off the stack
+	dprintf(0, "user_stack_s start at %lx, end at %lx\n", user_stack_s, &user_stack_s[STACK_SIZE]);
+	sos_start_binfo_executables(&user_stack_s[STACK_SIZE-3]);
 
-    // Thread finished - block forever
-    for (;;)
-        sos_usleep(30 * 1000 * 1000);
+	// Thread finished - block forever
+	for (;;)
+		sos_usleep(30 * 1000 * 1000);
 }
 
 /* Some IPC labels defined in the L4 documentation */
@@ -243,8 +244,6 @@ main (void)
 
 	// Initialise the various monolithic things
 	frame_init((low + HEAP_SIZE), high);
-	pager_init();
-	start_timer(); // start as soon as possible
 
 	// Add irq information
 	irq_init();
@@ -253,6 +252,8 @@ main (void)
 	irq_add(NSLU2_QM1_IRQ, network_irq);
 	irq_add(NSLU2_TIMESTAMP_IRQ, timestamp_irq);
 	irq_add(NSLU2_TIMER0_IRQ, timer_irq);
+
+	start_timer();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

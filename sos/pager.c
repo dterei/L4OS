@@ -47,7 +47,11 @@ struct Region_t {
 };
 
 // The pager process
-L4_ThreadId_t sos_pager; // will be initialised to 0 (nilthread) automatically
+#define PAGER_STACK_SIZE (4 * (PAGESIZE))
+
+L4_Word_t sos_pager_stack[PAGER_STACK_SIZE];
+L4_ThreadId_t sos_pager; // automatically initialised to 0 (L4_nilthread)
+static void pager_handler(void);
 
 // XXX
 //
@@ -101,7 +105,17 @@ PageTable *pagetable_init(void) {
 
 void
 pager_init(void) {
-	;
+	// Start the real pager process
+	Process *pager = process_init();
+
+	process_prepare(pager);
+	process_set_ip(pager, (void*) pager_handler);
+	process_set_sp(pager, sos_pager_stack + PAGER_STACK_SIZE - 1);
+
+	// XXX race condition with other processes?
+	// May want to use IPC synchronisation with SOS
+	process_run(pager);
+	sos_pager = process_get_tid(pager);
 }
 
 int
@@ -110,8 +124,6 @@ sos_moremem(uintptr_t *base, unsigned int nb) {
 
 	// Find the current heap section.
 	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
-
-	//AddrSpace *as = &addrspace[L4_SpaceNo(L4_SenderSpace())];
 	Region *heap;
 
 	for (heap = process_get_regions(p); heap != NULL; heap = heap->next) {
@@ -197,6 +209,12 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 	if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
 		// Root task will page fault before page table is actually
 		// set up, so map 1:1.
+		frame = addr;
+		rights = L4_FullyAccessible;
+	} else if (L4_SpaceNo(L4_SenderSpace()) == L4_ThreadNo(sos_pager)) {
+		// Hack pager thread for now - eventually the roottask will do
+		// this automatically, and everything below will actually be
+		// handled in the pager process
 		frame = addr;
 		rights = L4_FullyAccessible;
 	} else {
@@ -288,5 +306,14 @@ sender2kernel(L4_Word_t addr) {
 
 	physAddr += (L4_Word_t) (addr & (PAGESIZE - 1));
 	return (L4_Word_t*) physAddr;
+}
+
+static void pager_handler(void) {
+	printf("pager handler started\n");
+	
+	// syscall loop
+	for (;;) {
+		;
+	}
 }
 
