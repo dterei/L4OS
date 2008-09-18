@@ -64,6 +64,8 @@ cat(int argc, char **argv)
 		//num_written = write(stdout_fd, buf, num_read);
 	}
 
+	close(fd);
+
 	if( num_read == -1)
 	{
 		printf( "error on read\n" );
@@ -106,6 +108,7 @@ cp(int argc, char **argv)
 
 	if (fd_out < 0) {
 		printf("%s cannot be opened\n", file2);
+		close(fd);
 		return 1;
 	}
 
@@ -114,10 +117,14 @@ cp(int argc, char **argv)
 
 	if( num_read == -1 || num_written == -1 )
 	{
+		close(fd);
+		close(fd_out);
 		printf( "error on cp\n" );
 		return 1;
 	}
 
+	close(fd);
+	close(fd_out);
 	return 0;
 }
 
