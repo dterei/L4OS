@@ -5,7 +5,7 @@
 
 #define STDOUT_FN "console"
 
-#define verbose 2
+#define verbose 1
 
 struct Process_t {
 	L4_ThreadId_t tid;
@@ -115,6 +115,7 @@ void process_prepare(Process *p) {
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
+	p->tid = sos_get_new_tid();
 	sos_procs[L4_ThreadNo(p->tid)] = p;
 
 	// Open stdout
@@ -127,21 +128,14 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	process_dump(p);
 
 	if (asThread == RUN_AS_THREAD) {
-		tid = sos_thread_new(p->ip, p->sp);
-		p->tid = tid;
-		sos_procs[L4_ThreadNo(tid)] = p;
+		tid = sos_thread_new(p->tid, p->ip, p->sp);
+	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
+		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
 	} else {
-		tid = sos_get_new_tid();
-		sos_procs[L4_ThreadNo(tid)] = p;
-
-		if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-			tid = sos_task_new(L4_ThreadNo(tid), L4_Pager(), p->ip, p->sp);
-		} else {
-			tid = sos_task_new(L4_ThreadNo(tid), virtual_pager, p->ip, p->sp);
-		}
+		tid = sos_task_new(L4_ThreadNo(p->tid), virtual_pager, p->ip, p->sp);
 	}
 
-	dprintf(1, "*** %s: running thread %ld\n", __FUNCTION__, L4_ThreadNo(tid));
+	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
 
 	return tid;
 }

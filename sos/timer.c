@@ -85,7 +85,7 @@ static void utimer(void)
 void utimer_init(void)
 {
 	// Start the idler
-	utimer_tid_s = sos_thread_new(&utimer, &utimer_stack[1]);
+	utimer_tid_s = sos_thread_new(L4_nilthread, &utimer, &utimer_stack[1]);
 }
 
 // 10 millisecond ticks

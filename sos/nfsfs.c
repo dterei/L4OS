@@ -50,7 +50,8 @@ nfsfs_init(void) {
 	dprintf(1, "*** nfsfs_init\n");
 	// TODO: Move NFS init here instead of network.c
 	NfsRequests = NULL;
-	(void) sos_thread_new(&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
+	(void) sos_thread_new(L4_nilthread,
+			&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
 	return 0;
 }
 

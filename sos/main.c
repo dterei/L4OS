@@ -269,7 +269,7 @@ main (void)
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
-	(void) sos_thread_new(&init_thread, &init_stack_s[STACK_SIZE]);
+	sos_thread_new(L4_nilthread, &init_thread, &init_stack_s[STACK_SIZE]);
 
 	/* Test M1 */
 	if (RUN_FRAME_TEST) frame_test();

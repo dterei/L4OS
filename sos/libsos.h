@@ -127,9 +127,10 @@ sos_my_tid(void)
 // priority.  A new thread is created and started with the given priority,
 // initial instruction point(entry) and a pointer to the top of a new stack. 
 //
-extern L4_ThreadId_t sos_thread_new_priority(L4_Word_t prio,
-					   void *entry, void *stack);
-extern L4_ThreadId_t sos_thread_new(void *entrypoint, void *stack);
+extern L4_ThreadId_t sos_thread_new_priority(L4_ThreadId_t tid,
+		L4_Word_t prio, void *entry, void *stack);
+extern L4_ThreadId_t sos_thread_new(L4_ThreadId_t tid,
+		void *entrypoint, void *stack);
 
 //
 // sos_task_new(L4_Word_t task, L4_ThreadId_t pager, void *entry, void *stack)

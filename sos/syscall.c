@@ -11,7 +11,7 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
 
 void
 syscall_reply(L4_ThreadId_t tid)
@@ -47,17 +47,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(unsigned int) L4_MsgWord(msg, 1));
 			*(sender2kernel(L4_MsgWord(msg, 2))) = rval;
 			break;
-
-			// XXX must check that sender2kernel doesn't return null,
-			// or the user can crash the kernel!!!
-			// XXX check the rights of the page before doing anything
-			// in sender2kernel - CAN'T just map with the userspace
-			// access rights since then userspace could crash the kernel,
-			// and can't just map with all access rights because then
-			// user programs could access memory they're not allowed to.
-			// XXX what if contiguous virtual pages arent contiguous
-			// physically... then like addr[HUUUGE] will actually
-			// index in to a completely different physical frame.
 
 		case SOS_OPEN:
 			vfs_open(tid,

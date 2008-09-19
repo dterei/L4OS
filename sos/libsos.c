@@ -210,66 +210,67 @@ sos_peek_new_tid(void)
 
 // Create a new thread
 static inline L4_ThreadId_t
-create_thread(L4_ThreadId_t tid, L4_ThreadId_t scheduler)
-{
-    L4_Word_t utcb_location = utcb_base_s;
-    if (!L4_UtcbIsKernelManaged())
-        utcb_location += L4_GetUtcbSize() * L4_ThreadNo(tid);
+create_thread(L4_ThreadId_t tid, L4_ThreadId_t scheduler) {
+	L4_Word_t utcb_location = utcb_base_s;
+	if (!L4_UtcbIsKernelManaged())
+		utcb_location += L4_GetUtcbSize() * L4_ThreadNo(tid);
 
-    // Create active thread
-    int res = L4_ThreadControl(tid,
-			       L4_rootspace,	// address space
-			       scheduler,	// scheduler
-			       L4_rootserver,	// pager
-			       L4_rootserver,	// exception handler
-			       0,	// resources
-			       (void *) utcb_location);
-    if (!res) {
-	sos_logf("ERROR(%lu): ThreadControl(%lx) utcb %lx\n",
-		L4_ErrorCode(), tid.raw, utcb_location);
-	tid = L4_nilthread;
-    }
-    
-    // put its tid in its UTCB
-    L4_Set_UserDefinedHandleOf(tid, tid.raw);
-    
-    return tid;
-}
-
-// Create and start a sos thread in the rootserver
-L4_ThreadId_t
-sos_thread_new_priority(L4_Word_t prio, void *entry, void *stack)
-{
-    L4_ThreadId_t tid = sos_get_new_tid();
-    L4_ThreadId_t sched = (prio)? L4_rootserver : L4_anythread;
-
-    // This bit creates the thread, but it won't execute any code yet 
-    tid = create_thread(tid, sched);
-    if (!L4_IsNilThread(tid)) {
-	if (prio && !L4_Set_Priority(tid, prio)) {
-	    sos_logf("sos: failed to set priority for %lx\n", tid.raw);
-	    sos_print_error(L4_ErrorCode());
+	// Create active thread
+	int res = L4_ThreadControl(tid,
+			L4_rootspace,	// address space
+			scheduler,	// scheduler
+			L4_rootserver,	// pager
+			L4_rootserver,	// exception handler
+			0,	// resources
+			(void *) utcb_location);
+	if (!res) {
+		sos_logf("ERROR(%lu): ThreadControl(%lx) utcb %lx\n",
+				L4_ErrorCode(), tid.raw, utcb_location);
+		tid = L4_nilthread;
 	}
 
-	// Send an ipc to thread thread to start it up
-	L4_Start_SpIp(tid, (L4_Word_t) stack, (L4_Word_t) entry);
-    }
+	// put its tid in its UTCB
+	L4_Set_UserDefinedHandleOf(tid, tid.raw);
 
-    return tid;
+	return tid;
 }
 
 // Create and start a sos thread in the rootserver
 L4_ThreadId_t
-sos_thread_new(void *entrypoint, void *stack)
-{
-    return sos_thread_new_priority(/* prio */ 0, entrypoint, stack);
+sos_thread_new_priority(L4_ThreadId_t tid, L4_Word_t prio,
+		void *entry, void *stack) {
+	// SOS: we now assign thread id externally, same as task
+	if (L4_IsThreadEqual(tid, L4_nilthread)) {
+		tid = sos_get_new_tid();
+	}
+
+	L4_ThreadId_t sched = prio ? L4_rootserver : L4_anythread;
+
+	// This bit creates the thread, but it won't execute any code yet 
+	tid = create_thread(tid, sched);
+	if (!L4_IsNilThread(tid)) {
+		if (prio && !L4_Set_Priority(tid, prio)) {
+			sos_logf("sos: failed to set priority for %lx\n", tid.raw);
+			sos_print_error(L4_ErrorCode());
+		}
+
+		// Send an ipc to thread thread to start it up
+		L4_Start_SpIp(tid, (L4_Word_t) stack, (L4_Word_t) entry);
+	}
+
+	return tid;
+}
+
+// Create and start a sos thread in the rootserver
+L4_ThreadId_t
+sos_thread_new(L4_ThreadId_t tid, void *entrypoint, void *stack) {
+	return sos_thread_new_priority(tid, 0, entrypoint, stack);
 }
 
 // Create and start a new task
 L4_ThreadId_t
 sos_task_new(L4_Word_t task, L4_ThreadId_t pager, 
-	     void *entrypoint, void *stack)
-{
+		void *entrypoint, void *stack) {
 	// HACK: Workaround for compiler bug, volatile qualifier stops the internal
 	// compiler error.
 	L4_SpaceId_t spaceId = L4_SpaceId(task);
@@ -480,9 +481,9 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
-		dprintf(0, "Created thread: %d\n", (int) L4_ThreadNo(newtid));
+		dprintf(0, "Bootinfo created thread: %d\n", (int) L4_ThreadNo(newtid));
 	} else {
-		dprintf(0, "sos_task_new failed: %d\n", newtid.raw);
+		dprintf(0, "Bootinfo failed to create thread: %d\n", newtid.raw);
 		return BI_NAME_INVALID;
 	}
 

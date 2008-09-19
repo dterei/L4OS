@@ -25,7 +25,7 @@
 #include "thread.h"
 #include "syscall.h"
 
-#define verbose 0
+#define verbose 1
 
 // Page table structures
 typedef struct PageTable2_t {
@@ -108,7 +108,6 @@ PageTable *pagetable_init(void) {
 
 void
 pager_init(void) {
-#ifdef USE_VIRTUAL_PAGER
 	// Start the real pager process
 	Process *pager = process_init();
 
@@ -121,12 +120,6 @@ pager_init(void) {
 	dprintf(1, "*** pager_init: about to run pager\n");
 	process_run(pager, RUN_AS_THREAD);
 	virtual_pager = process_get_tid(pager);
-
-#else
-	(void) virtualPagerHandler;
-	(void) virtualPagerStack;
-
-#endif
 }
 
 int
@@ -340,7 +333,6 @@ static void virtualPagerHandler(void) {
 }
 
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
-#ifdef USE_VIRTUAL_PAGER
 	dprintf(1, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
 			addr, ip, L4_SpaceNo(L4_SenderSpace()));
 	addr &= PAGEALIGN;
@@ -353,10 +345,5 @@ void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 		sos_print_error(L4_ErrorCode());
 		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
 	}  
-
-#else
-	doPager(addr, ip);
-
-#endif
 }
 
