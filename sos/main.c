@@ -26,7 +26,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */

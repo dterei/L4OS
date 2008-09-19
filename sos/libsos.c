@@ -48,19 +48,6 @@ extern void *__okl4_bootinfo;
 // That odd (Iguana/bootinfo) way of identifying memory sections.
 static bi_name_t bootinfo_id = 1;
 
-// List of threads as identified by bootinfo.
-/*
-typedef struct ThreadListT *ThreadList;
-struct ThreadListT {
-	bi_name_t tid;       // thread id as assigned by bootinfo
-	bi_name_t pd;        // pd (i.e. as) as assigned by bootinfo
-	L4_ThreadId_t sosid; // the id we (as sos) will give it
-	uintptr_t ip;        // ip for when thread is started
-	void *sp;            // stack for when thread is started
-	ThreadList next;
-};
-*/
-
 typedef struct BootinfoRegion_t {
 	Region *region;
 	bi_name_t id;
@@ -303,18 +290,11 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 			L4_rootserver, clistId);
 	assert(res);
 
-	// And the pager?
+	// And the pager
 	if (L4_IsThreadEqual(pager, virtual_pager)) {
-		//res = L4_CreateIpcCap(pager, L4_rootclist,
-		//		pager, clistId);
-		/*
-		res = L4_CreateIpcCap(
-				virtual_pager,
-				L4_ClistId(L4_ThreadNo(virtual_pager)),
-				virtual_pager,
-				clistId);
+		res = L4_CreateIpcCap(pager, L4_rootclist,
+				pager, clistId);
 		assert(res);
-		*/
 	}
 
 	// Create the thread
@@ -370,26 +350,6 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	int dirmap = (virtpool == VIRTPOOL_MAP_DIRECTLY);
 	Region *new = region_init(REGION_OTHER, base, size, 0, dirmap);
 	addRegion(bip, new, bootinfo_id);
-
-	/*
-	Region *newreg = (Region *)malloc(sizeof(Region));
-	newreg->type = REGION_OTHER;
-	newreg->base = base;
-	newreg->size = size;
-	newreg->mapDirectly = (virtpool == VIRTPOOL_MAP_DIRECTLY);
-	newreg->rights = 0;
-	newreg->id = bootinfo_id;
-	*/
-
-	//dprintf(1, "*** bootinfo_new_ms: created new ms with id=%d\n", newreg->id);
-
-	// Add region to that address space.
-	/*
-	AddrSpace *as = &addrspace[L4_ThreadNo(thread->sosid)];
-
-	newreg->next = as->regions;
-	as->regions = newreg;
-	*/
 
 	return ++bootinfo_id;
 }
@@ -514,12 +474,9 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 		process_add_region(bip->process, region->region);
 	}
 
-	// Start a new task from the thread.
-	dprintf(1, "*** bootinfo_run_thread: trying to start thread %d\n",
-			L4_ThreadNo(process_get_tid(bip->process)));
-
+	// Prepare and run the process
 	process_prepare(bip->process);
-	L4_ThreadId_t newtid = process_run(bip->process);
+	L4_ThreadId_t newtid = process_run(bip->process, RUN_AS_PROCESS);
 	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {

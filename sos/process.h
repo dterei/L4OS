@@ -3,6 +3,9 @@
 
 #include "pager.h"
 
+#define RUN_AS_PROCESS 0
+#define RUN_AS_THREAD 1
+
 // The process data structure
 typedef struct Process_t Process;
 
@@ -25,7 +28,7 @@ void process_set_ip(Process *p, void *ip);
 void process_prepare(Process *p);
 
 // Run a process
-L4_ThreadId_t process_run(Process *p);
+L4_ThreadId_t process_run(Process *p, int asThread);
 
 // Get the threadid of a process
 L4_ThreadId_t process_get_tid(Process *p);

@@ -6,7 +6,7 @@
 #include <sos/sos.h>
 
 // Do we put the page table in it's own process?
-//#define USE_VIRTUAL_PAGER
+#define USE_VIRTUAL_PAGER
 
 // Should look this up in USER_HW_VALID_PGSIZES
 #define PAGESIZE 4096

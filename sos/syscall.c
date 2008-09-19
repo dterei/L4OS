@@ -48,10 +48,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			*(sender2kernel(L4_MsgWord(msg, 2))) = rval;
 			break;
 
-		case SOS_STARTME:
-			dprintf(0, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SOS_STARTME\n");
-			break;
-
 			// XXX must check that sender2kernel doesn't return null,
 			// or the user can crash the kernel!!!
 			// XXX check the rights of the page before doing anything

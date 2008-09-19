@@ -8,7 +8,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // The file names of our consoles
 Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };

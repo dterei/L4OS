@@ -24,13 +24,10 @@ Process *process_lookup(L4_Word_t key) {
 Process *process_init(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
-	p->tid = sos_get_new_tid();
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
 	p->sp = NULL;
 	p->ip = NULL;
-
-	dprintf(1, "*** %s: tid is %ld\n", __FUNCTION__, L4_ThreadNo(p->tid));
 
 	return p;
 }
@@ -104,8 +101,8 @@ static void process_dump(Process *p) {
 	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
 	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
-		dprintf(1, "*** %s: region %p -> %p\n", __FUNCTION__,
-				region_base(r), region_base(r) + region_size(r));
+		dprintf(1, "*** %s: region %p -> %p (%p)\n", __FUNCTION__,
+				region_base(r), region_base(r) + region_size(r), r);
 	}
 
 	dprintf(1, "*** %s: sp: %p\n", __FUNCTION__, p->sp);
@@ -125,18 +122,26 @@ void process_prepare(Process *p) {
 	vfs_open(p->tid, STDOUT_FN, FM_WRITE, &dummy);
 }
 
-L4_ThreadId_t process_run(Process *p) {
+L4_ThreadId_t process_run(Process *p, int asThread) {
 	L4_ThreadId_t tid;
 	process_dump(p);
 
-	if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		dprintf(1, "*** %s: using parent pager\n", __FUNCTION__);
-		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
+	if (asThread == RUN_AS_THREAD) {
+		tid = sos_thread_new(p->ip, p->sp);
+		p->tid = tid;
+		sos_procs[L4_ThreadNo(tid)] = p;
 	} else {
-		dprintf(1, "*** %s: using virtual pager\n", __FUNCTION__);
-		tid = sos_task_new(L4_ThreadNo(p->tid), virtual_pager, p->ip, p->sp);
-		//tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
+		tid = sos_get_new_tid();
+		sos_procs[L4_ThreadNo(tid)] = p;
+
+		if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
+			tid = sos_task_new(L4_ThreadNo(tid), L4_Pager(), p->ip, p->sp);
+		} else {
+			tid = sos_task_new(L4_ThreadNo(tid), virtual_pager, p->ip, p->sp);
+		}
 	}
+
+	dprintf(1, "*** %s: running thread %ld\n", __FUNCTION__, L4_ThreadNo(tid));
 
 	return tid;
 }

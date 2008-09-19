@@ -14,7 +14,7 @@
 		sos_print_error(L4_ErrorCode());\
 	}\
 
-#define verbose 0
+#define verbose 1
 #define TIMER_STACK_SIZE PAGESIZE
 
 // See the ipx42x dev manual, chapter 14

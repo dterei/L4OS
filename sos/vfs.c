@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // Global open vnodes list
 VNode GlobalVNodes;

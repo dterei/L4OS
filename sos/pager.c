@@ -25,7 +25,7 @@
 #include "thread.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // Page table structures
 typedef struct PageTable2_t {
@@ -53,7 +53,6 @@ struct Region_t {
 static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
 static void virtualPagerHandler(void);
-static int virtualPagerStarted = 0;
 
 // XXX
 //
@@ -120,15 +119,7 @@ pager_init(void) {
 	// Start pager, but wait until it has actually started before
 	// trying to assign virtual_pager to anything
 	dprintf(1, "*** pager_init: about to run pager\n");
-	process_run(pager);
-
-	dprintf(1, "*** pager_init: waiting until pager has started\n");
-	while (!virtualPagerStarted) {
-		dprintf(1, ".");
-	}
-	dprintf(1, "\n");
-
-	dprintf(1, "*** pager_init: pager started, setting it to virtual_pager\n");
+	process_run(pager, RUN_AS_THREAD);
 	virtual_pager = process_get_tid(pager);
 
 #else
@@ -225,42 +216,40 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 
 	dprintf(1, "*** doPager: fault on ss=%d, addr=%p (%p), ip=%p\n",
 			L4_SpaceNo(L4_SenderSpace()), addr, addr & PAGEALIGN, ip);
+	assert(!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace));
 
 	addr &= PAGEALIGN;
 
-	if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-		// Root task will page fault before page table is actually
-		// set up, so map 1:1.
-		frame = addr;
-		rights = L4_FullyAccessible;
-	} else {
-		// Find region it belongs in.
-		Region *r = findRegion(process_get_regions(p), addr);
+	// Find region it belongs in.
+	dprintf(1, "*** doPager: finding region\n");
+	Region *r = findRegion(process_get_regions(p), addr);
+	dprintf(1, "*** doPager: found region %p\n", r);
 
-		if (r == NULL) {
-			printf("Segmentation fault\n");
-			thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
-			return;
-		}
-
-		// Place in, or retrieve from, page table.
-		L4_Word_t *entry = findPageTableWord(process_get_pagetable(p), addr);
-
-		if (*entry != 0) {
-			// Already appears in page table, just got unmapped somehow.
-		} else if (r->mapDirectly) {
-			// Wants to be mapped directly (code/data probably).
-			// In this case the kernel doesn't know about it from the
-			// frame table, so map it 1:1 in the kernel too.
-			*entry = addr;
-			mapKernelToo = 1;
-		} else {
-			*entry = frame_alloc();
-		}
-
-		frame = *entry;
-		rights = r->rights;
+	if (r == NULL) {
+		printf("Segmentation fault\n");
+		thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
+		return;
 	}
+
+	// Place in, or retrieve from, page table.
+	dprintf(1, "*** doPager: finding entry\n");
+	L4_Word_t *entry = findPageTableWord(process_get_pagetable(p), addr);
+
+	if (*entry != 0) {
+		// Already appears in page table, just got unmapped somehow.
+	} else if (r->mapDirectly) {
+		// Wants to be mapped directly (code/data probably).
+		// In this case the kernel doesn't know about it from the
+		// frame table, so map it 1:1 in the kernel too.
+		*entry = addr;
+		mapKernelToo = 1;
+	} else {
+		dprintf(1, "*** doPager: allocating frame\n");
+		*entry = frame_alloc();
+	}
+
+	frame = *entry;
+	rights = r->rights;
 
 	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
@@ -279,6 +268,7 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		}
 	}
 
+	dprintf(1, "*** doPager: finished, waking faulter\n");
 	syscall_reply(sos_sid2tid(L4_SenderSpace()));
 }
 
@@ -301,6 +291,7 @@ sender2kernel(L4_Word_t addr) {
 
 	// Check that addr is in valid region
 	Region *r = findRegion(process_get_regions(p), addr);
+	dprintf(1, "*** sender2kernel: found region %p\n", r);
 	if (r == NULL) {
 		thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
 		return NULL;
@@ -316,6 +307,7 @@ sender2kernel(L4_Word_t addr) {
 	}
 
 	physAddr += (L4_Word_t) (addr & (PAGESIZE - 1));
+	dprintf(1, "*** sender2kernel: physAddr=%d\n", physAddr);
 	return (L4_Word_t*) physAddr;
 }
 
@@ -324,8 +316,6 @@ static void virtualPagerHandler(void) {
 
 	// Accept the pages and signal we've actually started
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
-	virtualPagerStarted = 1;
-	L4_CacheFlushAll();
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
@@ -351,13 +341,15 @@ static void virtualPagerHandler(void) {
 
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 #ifdef USE_VIRTUAL_PAGER
+	dprintf(1, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
+			addr, ip, L4_SpaceNo(L4_SenderSpace()));
 	addr &= PAGEALIGN;
 
 	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
 	L4_PhysDesc_t phys = L4_PhysDesc(addr, L4_DefaultMemory);
 
-	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys) ) { 
+	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys)) { 
 		sos_print_error(L4_ErrorCode());
 		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
 	}  
