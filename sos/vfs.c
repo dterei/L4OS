@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 0
 
 // Global open vnodes list
 VNode GlobalVNodes;
@@ -47,8 +47,8 @@ vfs_init(void) {
 
 void
 vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open: %d, %d, %p (%s) %d\n", L4_ThreadNo(tid),
-			L4_ThreadNo(tid), path, path, mode);
+	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
+			path, path, mode);
 	VNode vnode = NULL;
 
 	// check can open more files
@@ -76,20 +76,19 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 		}
 	}
 
-	// Not an open file so open nfs file
 	if (vnode == NULL) {
+		// Not an open file so open nfs file
 		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
-		return;
+	} else {
+		// Have vnode now so open
+		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
 	}
-	
-	// Have vnode now so open
-	vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
 }
 
 void
 vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open_done: %p (%s) %d\n", path, path, mode);
+	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, *rval);
 	//TODO: Move opening of already open vnode to the vfs layer, requires moving the
 	//max readers and writers variables into the vnode struct rather then console.
 
@@ -109,8 +108,8 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
-		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p\n", path,
-				self, self->next, self->previous);
+		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", path,
+				self, self->next, self->previous, fd);
 
 		self->next = NULL;
 		self->previous = NULL;
@@ -123,8 +122,8 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 		GlobalVNodes = self;
 	} else {
-		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p\n", path,
-				self, self->next, self->previous);
+		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", path,
+				self, self->next, self->previous, fd);
 	}
 
 	// update vnode refcount
@@ -235,7 +234,7 @@ vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char 
 
 void
 vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_write: %d %p %d\n", file, buf, nbyte);
+	dprintf(1, "*** vfs_write: %d, %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
 	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
@@ -245,15 +244,17 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_write: invalid file handler: %d\n", file);
 		*rval = (-1);
+		syscall_reply(tid);
 		return;
 	}
 
 	// check permissions
 	if (!(vf->fmode & FM_WRITE)) {
-		dprintf(1, "*** vfs_write: invalid read permissions for file: %d, %d\n",
-				file, vf->fmode);
-		*rval = (-1);
-		return;
+		dprintf(1, "*** vfs_write: invalid write permissions for file: %d, %s, %d\n",
+				file, vnode->path, vf->fmode);
+		//*rval = (-1);
+		//syscall_reply(tid);
+		//return;
 	}
 
 	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_write_done);

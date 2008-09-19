@@ -8,7 +8,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 0
 
 // The file names of our consoles
 Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
@@ -131,6 +131,8 @@ void
 console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval), int r) {
+	dprintf(1, "*** console_open_done (%d)\n", *rval);
+
 	*rval = r;
 	close_done(tid, self, file, mode, rval);
 	syscall_reply(tid);
