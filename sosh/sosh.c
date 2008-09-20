@@ -41,6 +41,16 @@ prstat(const char *name)
 			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
 }
 
+static int kecho(int argc, char **argv) {
+	for (int i = 1; i < argc; i++) {
+		if (i > 1) kprint(" ");
+		kprint(argv[i]);
+	}
+
+	kprint("\n");
+	return 1;
+}
+
 static int
 cat(int argc, char **argv)
 {
@@ -359,6 +369,7 @@ static struct command commands[] = {
 	{"m5bench", m5bench},
 	{"benchmark", benchmark},
 	{"pttest", pttest},
+	{"kecho", kecho},
 	{"null", NULL}
 };
 
@@ -397,17 +408,16 @@ time(int argc, char **argv) {
 int
 main(void)
 {
-	char             buf[BUF_SIZ];
-	char             *argv[MAX_ARGS];
-	int              i, r, done, found, new, argc;
-	char             *bp, *p;
+	char buf[BUF_SIZ];
+	char *argv[MAX_ARGS];
+	int i, r, done, found, new, argc;
+	char *bp, *p;
 
 	in = open("console", FM_READ);
 	assert (in >= 0);
 
-	bp   = buf;
+	bp  = buf;
 	done = 0;
-	new  = 1;
 
 	printf("\n[SOS Starting]\n");
 

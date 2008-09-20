@@ -171,6 +171,15 @@ static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
 }
 
 //
+// sos_tid2sid(L4_ThreadNo_t tid)
+// 	return L4_SpaceId_t
+//
+static inline L4_SpaceId_t sos_tid2sid(L4_ThreadId_t tid)
+{
+	return L4_SpaceId(L4_ThreadNo(tid));
+}
+
+//
 // getCurrentProcNum(void)
 // 	return L4_Word_t
 //

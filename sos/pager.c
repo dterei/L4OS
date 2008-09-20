@@ -14,6 +14,7 @@
 // Pager is called from the syscall loop whenever a page fault occurs.//
 //
 
+#include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,6 +48,21 @@ struct Region_t {
 	int id;           // what bootinfo uses to identify the region
 	struct Region_t *next;
 };
+
+// Asynchronous pager requests
+typedef struct PagerRequest_t PagerRequest;
+struct PagerRequest_t {
+	Process *p;
+	L4_Word_t addr;
+	void (*callback)(PagerRequest *pr);
+};
+
+static PagerRequest **requests = NULL;
+
+// For copyin/copyout
+//static L4_Word_t *copyInOutPointers;
+static L4_Word_t *copyInOutData;
+static char *copyInOutBuffer;
 
 // The pager process
 #define PAGER_STACK_SIZE PAGESIZE
@@ -99,8 +115,35 @@ PageTable *pagetable_init(void) {
 	return (PageTable*) pt;
 }
 
+static L4_Word_t *allocFrames(int n) {
+	assert(n > 0);
+	L4_Word_t frame, nextFrame;
+
+	frame = frame_alloc();
+	n--;
+
+	for (int i = 1; i < n; i++) {
+		nextFrame = frame_alloc();
+		assert((frame + i * PAGESIZE) == nextFrame);
+	}
+
+	return (L4_Word_t*) frame;
+}
+
 void
 pager_init(void) {
+	// The array of page table requests (per thread id)
+	requests = (PagerRequest**) allocFrames(sizeof(PagerRequest*));
+
+	// Grab a bunch of frames to use for copyin/copyout
+	assert((PAGESIZE % MAX_IO_BUF) == 0);
+	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
+
+	dprintf(1, "*** pager_init: grabbing %d frames\n", numFrames);
+
+	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
+	copyInOutBuffer = (char*) allocFrames(numFrames);
+
 	// Start the real pager process
 	Process *pager = process_init();
 
@@ -192,59 +235,87 @@ findRegion(Region *regions, L4_Word_t addr) {
 	return r;
 }
 
+static PagerRequest *newPagerRequest(
+		Process *p, L4_Word_t addr, void (*callback)(PagerRequest *pr)) {
+	PagerRequest *newPr = (PagerRequest*) malloc(sizeof(PagerRequest));
+
+	newPr->p = p;
+	newPr->addr = addr;
+	newPr->callback = callback;
+
+	return newPr;
+}
+
+static void pagerContinue(PagerRequest *pr) {
+	dprintf(1, "*** pagerContinue: replying to %ld\n",
+			L4_ThreadNo(process_get_tid(pr->p)));
+
+	L4_ThreadId_t replyTo = process_get_tid(pr->p);
+	free(pr);
+	syscall_reply(replyTo);
+}
+
 static void
-doPager(L4_Word_t addr, L4_Word_t ip) {
-	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
+pager(PagerRequest *pr) {
 	L4_Word_t frame;
 	int rights;
 	int mapKernelToo = 0;
+	L4_Word_t addr = pr->addr & PAGEALIGN;
 
-	dprintf(1, "*** doPager: fault on ss=%d, addr=%p (%p), ip=%p\n",
-			L4_SpaceNo(L4_SenderSpace()), addr, addr & PAGEALIGN, ip);
+	dprintf(1, "*** pager: fault on ss=%d, addr=%p (%p)\n",
+			L4_SpaceNo(L4_SenderSpace()), pr->addr, addr);
 	assert(!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace));
 
-	addr &= PAGEALIGN;
-
 	// Find region it belongs in.
-	dprintf(1, "*** doPager: finding region\n");
-	Region *r = findRegion(process_get_regions(p), addr);
-	dprintf(1, "*** doPager: found region %p\n", r);
+	dprintf(1, "*** pager: finding region\n");
+	Region *r = findRegion(process_get_regions(pr->p), addr);
+	dprintf(1, "*** pager: found region %p\n", r);
 
 	if (r == NULL) {
 		printf("Segmentation fault\n");
-		thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
+		thread_kill(process_get_tid(pr->p));
 		return;
 	}
 
 	// Place in, or retrieve from, page table.
-	dprintf(1, "*** doPager: finding entry\n");
-	L4_Word_t *entry = findPageTableWord(process_get_pagetable(p), addr);
+	dprintf(1, "*** pager: finding entry\n");
+	L4_Word_t *entry = findPageTableWord(process_get_pagetable(pr->p), addr);
+
+	dprintf(1, "*** pager: entry found to be %p at %p\n", (void*) *entry, entry);
 
 	if (*entry != 0) {
 		// Already appears in page table, just got unmapped somehow.
+		dprintf(1, "*** pager: already mapped to %p\n", (void*) *entry);
 	} else if (r->mapDirectly) {
 		// Wants to be mapped directly (code/data probably).
 		// In this case the kernel doesn't know about it from the
 		// frame table, so map it 1:1 in the kernel too.
+		dprintf(1, "*** pager: mapping directly\n");
 		*entry = addr;
 		mapKernelToo = 1;
 	} else {
-		dprintf(1, "*** doPager: allocating frame\n");
+		dprintf(1, "*** pager: allocating frame\n");
 		*entry = frame_alloc();
 	}
 
 	frame = *entry;
 	rights = r->rights;
 
+	L4_SpaceId_t sid = sos_tid2sid(process_get_tid(pr->p));
 	L4_Fpage_t fpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
 	L4_PhysDesc_t ppage = L4_PhysDesc(frame, L4_DefaultMemory);
 
-	if (!L4_MapFpage(L4_SenderSpace(), fpage, ppage)) {
+	dprintf(1, "*** pager: mapping %lx with sid=%lx frame=%ld rights=%d\n",
+			frame, sid.raw, frame, rights);
+
+	if (!L4_MapFpage(sid, fpage, ppage)) {
 		sos_print_error(L4_ErrorCode());
-		dprintf(0, "Can't map page at %lx to frame %lx for ip = %lx\n",
-				addr, frame, ip);
+		dprintf(0, "Can't map page at %lx to frame %lx\n",
+				addr, frame);
 	}
+
+	// XXX hopefully this will OVERRIDE any existing mappings
 
 	if (mapKernelToo) {
 		if (!L4_MapFpage(L4_rootspace, fpage, ppage)) {
@@ -253,13 +324,12 @@ doPager(L4_Word_t addr, L4_Word_t ip) {
 		}
 	}
 
-	dprintf(1, "*** doPager: finished, waking faulter\n");
-	syscall_reply(sos_sid2tid(L4_SenderSpace()));
+	dprintf(1, "*** pager: finished, waking faulter\n");
+	pr->callback(pr);
 }
 
 void
-pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP)
-{
+pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 	// There is actually a magic fpage that we can use to unmap
 	// the whole address space - and I assume we're meant to
 	// unmap it from the sender space.
@@ -288,7 +358,7 @@ sender2kernel(L4_Word_t addr) {
 	L4_Word_t physAddr;
 	while ((physAddr = *findPageTableWord(process_get_pagetable(p), addr & PAGEALIGN)) == 0) {
 		dprintf(1, "*** sender2kernel: %p wasn't mapped in, doing manually\n", addr);
-		doPager(addr, (L4_Word_t) -1);
+		pager(newPagerRequest(p, addr, pagerContinue));
 	}
 
 	physAddr += (L4_Word_t) (addr & (PAGESIZE - 1));
@@ -305,17 +375,21 @@ static void virtualPagerHandler(void) {
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
+	Process *p;
+	PagerRequest *pr;
 
 	for (;;) {
-		dprintf(1, "*** virtualPagerHandler: waiting for a message\n");
 		tag = L4_Wait(&tid);
-		dprintf(1, "*** virtualPagerHandler: got a message\n");
+		p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
 		L4_MsgStore(tag, &msg);
+
+		dprintf(1, "*** virtualPagerHandler: got request from %ld\n",
+				L4_ThreadNo(process_get_tid(p)));
 
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				doPager(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
-				// pager is asynchronous, don't reply
+				pr = newPagerRequest(p, L4_MsgWord(&msg, 0), pagerContinue);
+				pager(pr);
 				break;
 
 			default:
@@ -325,7 +399,7 @@ static void virtualPagerHandler(void) {
 }
 
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
-	dprintf(1, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
+	dprintf(2, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
 			addr, ip, L4_SpaceNo(L4_SenderSpace()));
 	addr &= PAGEALIGN;
 
@@ -337,5 +411,73 @@ void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 		sos_print_error(L4_ErrorCode());
 		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
 	}  
+}
+
+char *pager_buffer(L4_ThreadId_t tid) {
+	int threadOffset = (L4_ThreadNo(tid) * MAX_IO_BUF);
+	return &copyInOutBuffer[threadOffset];
+}
+
+static void copyInContinue(PagerRequest *pr) {
+	dprintf(1, "*** copyInContinue pr=%p process=%p tid=%ld addr=%p\n",
+			pr, pr->p, process_get_tid(pr->p), (void*) pr->addr);
+
+	// Data about the copyin operation.
+	int threadNum = L4_ThreadNo(process_get_tid(pr->p));
+
+	L4_Word_t size = copyInOutData[threadNum] & 0x0000ffff;
+	L4_Word_t offset = (copyInOutData[threadNum] >> 16) & 0x0000ffff;
+
+	// Continue copying in from where we left off
+	char *dest = pager_buffer(process_get_tid(pr->p)) + offset;
+	dprintf(1, "*** copyInContinue: size=%ld offset=%ld dest=%p\n",
+			size, offset, dest);
+
+	// Assume it's already there - this function should only get
+	// called as a continutation from the pager, so no problem
+	char *src = (char*) *findPageTableWord(
+			process_get_pagetable(pr->p), pr->addr);
+	src += pr->addr & (PAGESIZE - 1);
+	dprintf(1, "*** copyInContinue: src=%p\n", src);
+
+	// Start the copy - if we reach a page boundary then pause computation
+	// since we can assume that it goes out to disk and waits a long time
+	do {
+		*dest = *src;
+		dest++;
+		src++;
+		offset++;
+	} while ((offset < size) && ((((L4_Word_t) src) & (PAGESIZE - 1)) != 0));
+
+	// Reached end - either we finished the copy, or we reached a boundary
+	if (offset >= size) {
+		L4_ThreadId_t replyTo = process_get_tid(pr->p);
+		free(pr);
+		syscall_reply(replyTo);
+	} else {
+		copyInOutData[threadNum] = size | (offset << 16);
+		pr->addr = (L4_Word_t) src;
+		pager(pr);
+	}
+}
+
+void copyIn(L4_ThreadId_t tid, void *src, size_t size) {
+	dprintf(1, "*** copyIn: tid=%ld src=%p size=%d\n",
+			L4_ThreadNo(tid), src, size);
+
+	copyInOutData[L4_ThreadNo(tid)] = size;
+
+	pager(newPagerRequest(
+				process_lookup(L4_ThreadNo(tid)),
+				(L4_Word_t) src,
+				copyInContinue));
+}
+
+static void copyOutContinue(PagerRequest *pr) {
+	;
+}
+
+void copyOut(L4_ThreadId_t tid, void *dest, size_t size) {
+	(void) copyOutContinue;
 }
 

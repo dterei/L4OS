@@ -27,18 +27,16 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	L4_CacheFlushAll();
 	L4_Word_t rval;
-	int send = 1;
+	int send = 0; // TODO make this asynchronous
 
-	switch(TAG_SYSLAB(tag))
-	{
-		case SOS_NETPRINT:
-			network_sendstring_int(msg->tag.X.u, (int*) (msg->msg + 1));
-			send = 0;
+	switch(TAG_SYSLAB(tag)) {
+		case SOS_KERNEL_PRINT:
+			pager_buffer(tid)[MAX_IO_BUF - 1] = '\0';
+			printf("%s", pager_buffer(tid));
 			break;
 
 		case SOS_DEBUG_FLUSH:
 			pager_flush(tid, msg);	
-			send = 0;
 			break;
 
 		case SOS_MOREMEM:
@@ -46,6 +44,11 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(uintptr_t*) sender2kernel(L4_MsgWord(msg, 0)),
 					(unsigned int) L4_MsgWord(msg, 1));
 			*(sender2kernel(L4_MsgWord(msg, 2))) = rval;
+			send = 1;
+			break;
+
+		case SOS_COPYIN:
+			copyIn(tid, (void*) L4_MsgWord(msg, 0), (size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_OPEN:
@@ -53,14 +56,12 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(char*) sender2kernel(L4_MsgWord(msg, 0)),
 					(fmode_t) L4_MsgWord(msg, 1),
 					(int*) sender2kernel(L4_MsgWord(msg, 2)));
-			send = 0;
 			break;
 
 		case SOS_CLOSE:
 			vfs_close(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
 					(int*) sender2kernel(L4_MsgWord(msg, 1)));
-			send = 0;
 			break;
 
 		case SOS_READ:
@@ -69,7 +70,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(char*) sender2kernel(L4_MsgWord(msg, 1)),
 					(size_t) L4_MsgWord(msg, 2),
 					(int*) sender2kernel(L4_MsgWord(msg, 3)));
-			send = 0;
 			break;
 
 		case SOS_WRITE:
@@ -78,7 +78,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(char*) sender2kernel(L4_MsgWord(msg, 1)),
 					(size_t) L4_MsgWord(msg, 2),
 					(int*) sender2kernel(L4_MsgWord(msg, 3)));
-			send = 0;
 			break;
 
 		case SOS_GETDIRENT:
@@ -87,7 +86,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(char*) sender2kernel(L4_MsgWord(msg, 1)),
 					(size_t) L4_MsgWord(msg, 2),
 					(int*) sender2kernel(L4_MsgWord(msg, 3)));
-			send = 0;
 			break;
 
 		case SOS_STAT:
@@ -95,16 +93,15 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(char*) sender2kernel(L4_MsgWord(msg, 0)),
 					(stat_t*) L4_MsgWord(msg, 1),
 					(int*) sender2kernel(L4_MsgWord(msg, 2)));
-			send = 0;
 			break;
 
 		case SOS_TIME_STAMP:
 			*((long*) sender2kernel(L4_MsgWord(msg, 0))) = (long) time_stamp();
+			send = 1;
 			break;
 
 		case SOS_SLEEP:
 			register_timer((uint64_t) L4_MsgWord(msg, 0) * 1000, tid);
-			send = 0;
 			break;
 
 		case SOS_PROCESS_CREATE:

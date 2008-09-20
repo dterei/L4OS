@@ -11,7 +11,7 @@
 
 /* System calls for SOS */
 typedef enum {
-	SOS_NETPRINT,
+	SOS_KERNEL_PRINT,
 	SOS_DEBUG_FLUSH,
 	SOS_MOREMEM,
 	SOS_COPYIN,
@@ -79,6 +79,9 @@ typedef struct {
 
 /* Misc system calls */
 
+/* Print something in the kernel */
+void kprint(char *str);
+
 /* Flush L4's page table. */
 void debug_flush(void);
 
@@ -89,6 +92,12 @@ void thread_block(void);
 int moremem(uintptr_t *base, unsigned int nb);
 
 /* I/O system calls */
+
+/*
+ * Copy in a section of memory to the kernel's buffer in perparation for
+ * any system call that requres it.
+ */
+void copyin(void *data, size_t size);
 
 /*
  * Open file and return file descriptor, -1 if unsuccessful 

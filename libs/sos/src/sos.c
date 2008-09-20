@@ -12,11 +12,9 @@
 #define NO_REPLY 0
 #define MAGIC_THAT_MAKES_LABELS_WORK 4
 
-/* Standard file descriptors */
 fildes_t stdout_fd = 0;
 fildes_t stdin_fd = (-1); // never used, grr
 
-/* Standard syscall interface. */
 static void prepareSyscall(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
@@ -32,7 +30,13 @@ static void makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
 	}
 }
 
-/* Misc system calls */
+void kprint(char *str) {
+	copyin(str, strlen(str) + 1);
+
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+	makeSyscall(SOS_KERNEL_PRINT, NO_REPLY, &msg);
+}
 
 void debug_flush(void) {
 	L4_Msg_t msg;
@@ -65,17 +69,16 @@ int moremem(uintptr_t *base, unsigned int nb) {
 	return rval;
 }
 
-/* I/O system calls */
+void copyin(void *data, size_t size) {
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
 
-/* 
- * Open file and return file descriptor, -1 if unsuccessful 
- * (too many open files, console already open for reading).
- * A new file should be created if 'path' does not already exist.
- * A failed attempt to open the console for reading (because it is already
- * open) will result in a context switch to reduce the cost of busy waiting
- * for the console.
- * "path" is file name, "mode" is one of O_RDONLY, O_WRONLY, O_RDWR.
- */
+	L4_MsgAppendWord(&msg, (L4_Word_t) data);
+	L4_MsgAppendWord(&msg, (L4_Word_t) size);
+
+	makeSyscall(SOS_COPYIN, YES_REPLY, &msg);
+}
+
 fildes_t open(const char *path, fmode_t mode) {
 	fildes_t rval;
 
@@ -90,9 +93,6 @@ fildes_t open(const char *path, fmode_t mode) {
 	return rval;
 }
 
-/* 
- * Closes an open file. Returns 0 if successful, -1 if not (invalid "file").
- */
 int close(fildes_t file) {
 	int rval;
 
@@ -106,12 +106,6 @@ int close(fildes_t file) {
 	return rval;
 }
 
-/* 
- * Read from an open file, into "buf", max "nbyte" bytes.
- * Returns the number of bytes read.
- * Will block when reading from console and no input is presently
- * available. Returns -1 on error (invalid file).
- */
 int read(fildes_t file, char *buf, size_t nbyte) {
 	int rval;
 
@@ -127,11 +121,6 @@ int read(fildes_t file, char *buf, size_t nbyte) {
 	return rval;
 }
 
-/* 
- * Write to an open file, from "buf", max "nbyte" bytes.
- * Returns the number of bytes written. <nbyte disk is full.
- * Returns -1 on error (invalid file).
- */
 int write(fildes_t file, const char *buf, size_t nbyte) {
 	int rval;
 
