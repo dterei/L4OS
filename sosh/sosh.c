@@ -417,6 +417,7 @@ main(void)
 	assert (in >= 0);
 
 	bp  = buf;
+	new = 1;
 	done = 0;
 
 	printf("\n[SOS Starting]\n");

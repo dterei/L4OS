@@ -79,6 +79,16 @@ void copyin(void *data, size_t size) {
 	makeSyscall(SOS_COPYIN, YES_REPLY, &msg);
 }
 
+void copyout(void *data, size_t size) {
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) data);
+	L4_MsgAppendWord(&msg, (L4_Word_t) size);
+
+	makeSyscall(SOS_COPYOUT, YES_REPLY, &msg);
+}
+
 fildes_t open(const char *path, fmode_t mode) {
 	fildes_t rval;
 
@@ -223,9 +233,9 @@ long uptime(void) {
 	L4_Msg_t msg;
 
 	prepareSyscall(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 	makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
 
+	copyout(&rval, sizeof(long));
 	return rval;
 }
 

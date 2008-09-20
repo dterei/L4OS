@@ -100,6 +100,12 @@ int moremem(uintptr_t *base, unsigned int nb);
 void copyin(void *data, size_t size);
 
 /*
+ * Copy out a section of memory to the kernel's buffer in perparation for
+ * any system call that requres it.
+ */
+void copyout(void *data, size_t size);
+
+/*
  * Open file and return file descriptor, -1 if unsuccessful 
  * (too many open files, console already open for reading).
  * A new file should be created if 'path' does not already exist.

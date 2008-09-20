@@ -474,10 +474,52 @@ void copyIn(L4_ThreadId_t tid, void *src, size_t size) {
 }
 
 static void copyOutContinue(PagerRequest *pr) {
-	;
+	dprintf(1, "*** copyOutContinue pr=%p process=%p tid=%ld addr=%p\n",
+			pr, pr->p, process_get_tid(pr->p), (void*) pr->addr);
+
+	// Data about the copyout operation.
+	int threadNum = L4_ThreadNo(process_get_tid(pr->p));
+
+	L4_Word_t size = copyInOutData[threadNum] & 0x0000ffff;
+	L4_Word_t offset = (copyInOutData[threadNum] >> 16) & 0x0000ffff;
+
+	// Continue copying out from where we left off
+	char *src = pager_buffer(process_get_tid(pr->p)) + offset;
+	dprintf(1, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
+			size, offset, src);
+
+	char *dest = (char*) *findPageTableWord(
+			process_get_pagetable(pr->p), pr->addr);
+	dest += pr->addr & (PAGESIZE - 1);
+	dprintf(1, "*** copyOutContinue: dest=%p\n", dest);
+
+	do {
+		*dest = *src;
+		dest++;
+		src++;
+		offset++;
+	} while ((offset < size) && ((((L4_Word_t) dest) & (PAGESIZE - 1)) != 0));
+
+	if (offset >= size) {
+		L4_ThreadId_t replyTo = process_get_tid(pr->p);
+		free(pr);
+		syscall_reply(replyTo);
+	} else {
+		copyInOutData[threadNum] = size | (offset << 16);
+		pr->addr = (L4_Word_t) dest;
+		pager(pr);
+	}
 }
 
 void copyOut(L4_ThreadId_t tid, void *dest, size_t size) {
-	(void) copyOutContinue;
+	dprintf(1, "*** copyOut: tid=%ld dest=%p size=%d\n",
+			L4_ThreadNo(tid), dest, size);
+
+	copyInOutData[L4_ThreadNo(tid)] = size;
+
+	pager(newPagerRequest(
+				process_lookup(L4_ThreadNo(tid)),
+				(L4_Word_t) dest,
+				copyOutContinue));
 }
 

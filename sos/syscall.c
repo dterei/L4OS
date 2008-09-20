@@ -51,6 +51,10 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			copyIn(tid, (void*) L4_MsgWord(msg, 0), (size_t) L4_MsgWord(msg, 1));
 			break;
 
+		case SOS_COPYOUT:
+			copyOut(tid, (void*) L4_MsgWord(msg, 0), (size_t) L4_MsgWord(msg, 1));
+			break;
+
 		case SOS_OPEN:
 			vfs_open(tid,
 					(char*) sender2kernel(L4_MsgWord(msg, 0)),
@@ -96,7 +100,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_TIME_STAMP:
-			*((long*) sender2kernel(L4_MsgWord(msg, 0))) = (long) time_stamp();
+			((long*) pager_buffer(tid))[0] = (long) time_stamp();
 			send = 1;
 			break;
 
