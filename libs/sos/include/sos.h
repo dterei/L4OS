@@ -88,9 +88,6 @@ void thread_block(void);
 /* Request more memory for the heap section. */
 int moremem(uintptr_t *base, unsigned int nb);
 
-/* Start a thread - can only be called once per thread. */
-void thread_init(void);
-
 /* I/O system calls */
 
 /*

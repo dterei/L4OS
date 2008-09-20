@@ -14,6 +14,7 @@
 #include <sos/sos.h>
 
 #include "m5bench.h"
+#include "pt_test.h"
 
 #define verbose 0
 
@@ -21,6 +22,8 @@
 #define MAX_ARGS 32
 #define MAX_PROCESSES 10
 
+static int help(int argc, char *argv[]);
+static int time(int argc, char *argv[]);
 
 static fildes_t in;
 static stat_t   sbuf;
@@ -274,33 +277,6 @@ howlong(int argc, char **argv) {
 	return 0;
 }
 
-struct command {
-	char *name;
-	int (*command)(int argc, char **argv);
-};
-
-static int help(int argc, char *argv[]);
-static int time(int argc, char *argv[]);
-static int benchmark(int argc, char *argv[]);
-
-static
-struct command commands[] = {
-	{"dir", dir},
-	{"ls", dir},
-	{"cat", cat},
-	{"cp", cp},
-	{"ps", ps},
-	{"exec", exec},
-	{"segfault", segfault},
-	{"sleep", nap},
-	{"uptime", howlong},
-	{"help", help},
-	{"time", time},
-	{"m5bench", m5bench},
-	{"benchmark", benchmark},
-	{"null", NULL}
-};
-
 static int benchmark(int argc, char *argv[]) {
 	char *timeArgs[4];
 	printf("*** TESTING READ PERFORMANCE\n");
@@ -358,6 +334,33 @@ static int benchmark(int argc, char *argv[]) {
 
 	return 0;
 }
+
+static int pttest(int argc, char *argv[]) {
+	return pt_test();
+}
+
+struct command {
+	char *name;
+	int (*command)(int argc, char **argv);
+};
+
+static struct command commands[] = {
+	{"dir", dir},
+	{"ls", dir},
+	{"cat", cat},
+	{"cp", cp},
+	{"ps", ps},
+	{"exec", exec},
+	{"segfault", segfault},
+	{"sleep", nap},
+	{"uptime", howlong},
+	{"help", help},
+	{"time", time},
+	{"m5bench", m5bench},
+	{"benchmark", benchmark},
+	{"pttest", pttest},
+	{"null", NULL}
+};
 
 static int
 help(int argc, char *argv[]) {

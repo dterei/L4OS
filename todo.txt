@@ -29,10 +29,6 @@ etc.
 - Put /all/ process/thread specific stuff in to the PCB (Process struct, in
 process.[ch]).  I'm looking at the file tables right now.
 
-- When allocating the 2nd level of the page tables use frame_alloc rather than
-malloc.  Each level is pagesize which is nice.  Maybe should get rid of those
-constants PAGETABLE_SIZE1 and PAGETABLE_SIZE2 and just use PAGESIZE.
-
 - Get rid of sender2kernel completely.  Instead, have a proper copyin-copyout
 method, where SOS will assume on each system call than any buffers are in a
 kernel-allocated space for each thread.  This means that user threads will have

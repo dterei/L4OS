@@ -65,17 +65,6 @@ int moremem(uintptr_t *base, unsigned int nb) {
 	return rval;
 }
 
-void thread_init(void) {
-	// This funtion is a lost cause, see comment in libsos.c.
-
-	// Return to SOS via a syscall (will NOT work).
-	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	makeSyscall(SOS_STARTME, NO_REPLY, &msg);
-
-	// SOS will move the IP so this function should never return.
-}
-
 /* I/O system calls */
 
 /* 

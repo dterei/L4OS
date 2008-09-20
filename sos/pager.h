@@ -7,10 +7,8 @@
 
 // Should look this up in USER_HW_VALID_PGSIZES
 #define PAGESIZE 4096
+#define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
 #define PAGEALIGN (~((PAGESIZE) - 1))
-
-#define PAGETABLE_SIZE1 1024
-#define PAGETABLE_SIZE2 1024
 
 // Access rights
 #define REGION_READ 0x4

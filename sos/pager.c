@@ -28,12 +28,13 @@
 #define verbose 1
 
 // Page table structures
+// Each level of the page table is assumed to be of size PAGESIZE
 typedef struct PageTable2_t {
-	L4_Word_t pages[PAGETABLE_SIZE2];
+	L4_Word_t pages[PAGEWORDS];
 } PageTable2;
 
 typedef struct PageTable1_t {
-	PageTable2 *pages2[PAGETABLE_SIZE1];
+	PageTable2 *pages2[PAGEWORDS];
 } PageTable1;
 
 // Region structure
@@ -48,18 +49,11 @@ struct Region_t {
 };
 
 // The pager process
-#define PAGER_STACK_SIZE (4 * (PAGESIZE))
+#define PAGER_STACK_SIZE PAGESIZE
 
 static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
 static void virtualPagerHandler(void);
-
-// XXX
-//
-// typedef struct {
-// 	void *ptr;
-// 	rights r;
-// } userptr_t;
 
 Region *region_init(region_type type, uintptr_t base,
 		uintptr_t size, int rights, int dirmap) {
@@ -95,11 +89,10 @@ void region_append(Region *r, Region *toAppend) {
 }
 
 PageTable *pagetable_init(void) {
-	// XXX think about malloc inside pager now!
-	// This is actually the size of a frame, use frame_alloc.
-	PageTable1 *pt = (PageTable1*) malloc(sizeof(PageTable1));
+	assert(sizeof(PageTable1) == PAGESIZE);
+	PageTable1 *pt = (PageTable1*) frame_alloc();
 
-	for (int i = 0; i < PAGETABLE_SIZE1; i++) {
+	for (int i = 0; i < PAGEWORDS; i++) {
 		pt->pages2[i] = NULL;
 	}
 
@@ -160,8 +153,8 @@ findPageTableWord(PageTable *pt, L4_Word_t addr) {
 	PageTable1 *level1 = (PageTable1*) pt;
 
 	addr /= PAGESIZE;
-	int offset1 = addr / PAGETABLE_SIZE2;
-	int offset2 = addr - (offset1 * PAGETABLE_SIZE2);
+	int offset1 = addr / PAGEWORDS;
+	int offset2 = addr - (offset1 * PAGEWORDS);
 
 	if (level1 == NULL) {
 		dprintf(0, "!!! findPageTableWord: level1 is NULL!\n");
@@ -172,11 +165,10 @@ findPageTableWord(PageTable *pt, L4_Word_t addr) {
 	}
 
 	if (level1->pages2[offset1] == NULL) {
-		// XXX think about malloc inside pager now!
-		// This is actually the size of a frame, use frame_alloc.
-		level1->pages2[offset1] = (PageTable2*) malloc(sizeof(PageTable2));
+		assert(sizeof(PageTable2) == PAGESIZE);
+		level1->pages2[offset1] = (PageTable2*) frame_alloc();
 
-		for (int i = 0; i < PAGETABLE_SIZE2; i++) {
+		for (int i = 0; i < PAGEWORDS; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
 		}
 	}
