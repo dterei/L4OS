@@ -252,7 +252,7 @@ static void pagerContinue(PagerRequest *pr) {
 
 	L4_ThreadId_t replyTo = process_get_tid(pr->p);
 	free(pr);
-	syscall_reply(replyTo);
+	syscall_reply(replyTo, 0);
 }
 
 static void
@@ -453,7 +453,7 @@ static void copyInContinue(PagerRequest *pr) {
 	if (offset >= size) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
-		syscall_reply(replyTo);
+		syscall_reply(replyTo, 0);
 	} else {
 		copyInOutData[threadNum] = size | (offset << 16);
 		pr->addr = (L4_Word_t) src;
@@ -503,7 +503,7 @@ static void copyOutContinue(PagerRequest *pr) {
 	if (offset >= size) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
-		syscall_reply(replyTo);
+		syscall_reply(replyTo, 0);
 	} else {
 		copyInOutData[threadNum] = size | (offset << 16);
 		pr->addr = (L4_Word_t) dest;

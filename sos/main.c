@@ -119,7 +119,7 @@ syscall_loop(void)
 					L4_AcknowledgeInterrupt(0, 0);
 				}
 
-				msgClear();
+				msgClearWith(0);
 			}
 
 			send = 0;

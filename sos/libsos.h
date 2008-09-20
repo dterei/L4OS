@@ -38,7 +38,7 @@ int bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data);
 int bootinfo_cleanup(const bi_user_data_t *data);
 
 // Clear the message registers.  Useful to use before an L4_Reply()
-void msgClear(void);
+void msgClearWith(L4_Word_t x);
 
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)

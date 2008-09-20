@@ -19,15 +19,21 @@ static void prepareSyscall(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-static void makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
+static L4_Word_t makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
+	L4_MsgTag_t tag;
+	L4_Msg_t rMsg;
+
 	L4_Set_MsgLabel(msg, s << MAGIC_THAT_MAKES_LABELS_WORK);
 	L4_MsgLoad(msg);
 
 	if (reply == YES_REPLY) {
-		L4_Call(L4_rootserver);
+		tag = L4_Call(L4_rootserver);
 	} else {
-		L4_Send(L4_rootserver);
+		tag = L4_Send(L4_rootserver);
 	}
+
+	L4_MsgStore(tag, &rMsg);
+	return L4_MsgWord(&rMsg, 0);
 }
 
 void kprint(char *str) {
@@ -229,14 +235,9 @@ pid_t process_wait(pid_t pid) {
 
 /* Returns time in microseconds since booting. */
 long uptime(void) {
-	long rval;
 	L4_Msg_t msg;
-
 	prepareSyscall(&msg);
-	makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
-
-	copyout(&rval, sizeof(long));
-	return rval;
+	return makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
 }
 
 /* Sleeps for the specified number of milliseconds. */

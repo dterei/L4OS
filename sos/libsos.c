@@ -575,10 +575,11 @@ getCurrentProcNum(void)
 }
 
 void
-msgClear(void)
+msgClearWith(L4_Word_t x)
 {
 	L4_Msg_t clear;
 	L4_MsgClear(&clear);
+	L4_MsgAppendWord(&clear, x);
 	L4_MsgLoad(&clear);
 }
 

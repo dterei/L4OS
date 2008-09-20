@@ -135,7 +135,7 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 	for (BlockedThreads bt = blocked_threads; bt != NULL; bt = bt->next) {
 		if (bt->unblock <= ts) {
 			// Unblock thread
-			syscall_reply(bt->tid);
+			syscall_reply(bt->tid, 0); // XXX can give rval now
 
 			// Delete it from list
 			if (bt->next != NULL) {

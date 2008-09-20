@@ -41,5 +41,3 @@ user pointer.
 getting negative.
 
 - Need to pin pages when preparing the callback to read them in over NFS.
-
-- Put return values in to the message registers, not using pointer dereferencing.

@@ -55,7 +55,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	if (findNextFd(L4_ThreadNo(tid)) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		*rval = (-1);
-		syscall_reply(tid);
+		syscall_reply(tid, 0); // XXX can give rval now
 		return;
 	}
 
@@ -63,7 +63,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	if (strlen(path) >= N_NAME) {
 		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
 		*rval = (-1);
-		syscall_reply(tid);
+		syscall_reply(tid, 0); // XXX can give rval now
 		return;
 	}
 
@@ -201,7 +201,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
 		*rval = (-1);
-		syscall_reply(tid);
+		syscall_reply(tid, 0); // XXX can give rval now
 		return;
 	}
 
@@ -210,7 +210,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 		dprintf(1, "*** vfs_read: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
 		*rval = (-1);
-		syscall_reply(tid);
+		syscall_reply(tid, 0); // XXX can give rval now
 		return;
 	}
 
@@ -244,7 +244,7 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_write: invalid file handler: %d\n", file);
 		*rval = (-1);
-		syscall_reply(tid);
+		syscall_reply(tid, 0); // XXX can give rval now
 		return;
 	}
 

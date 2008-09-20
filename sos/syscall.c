@@ -14,11 +14,11 @@
 #define verbose 1
 
 void
-syscall_reply(L4_ThreadId_t tid)
+syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 {
 	L4_CacheFlushAll();
 
-	msgClear();
+	msgClearWith(rval);
 	L4_Reply(tid);
 }
 
@@ -27,7 +27,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	L4_CacheFlushAll();
 	L4_Word_t rval;
-	int send = 0; // TODO make this asynchronous
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
@@ -36,15 +35,14 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_DEBUG_FLUSH:
-			pager_flush(tid, msg);	
+			pager_flush(tid, msg);
 			break;
 
 		case SOS_MOREMEM:
 			rval = (L4_Word_t) sos_moremem(
 					(uintptr_t*) sender2kernel(L4_MsgWord(msg, 0)),
 					(unsigned int) L4_MsgWord(msg, 1));
-			*(sender2kernel(L4_MsgWord(msg, 2))) = rval;
-			send = 1;
+			syscall_reply(tid, rval);
 			break;
 
 		case SOS_COPYIN:
@@ -100,8 +98,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_TIME_STAMP:
-			((long*) pager_buffer(tid))[0] = (long) time_stamp();
-			send = 1;
+			syscall_reply(tid, (L4_Word_t) time_stamp());
 			break;
 
 		case SOS_SLEEP:
@@ -118,10 +115,9 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			// Unknown system call, so we don't want to reply to this thread
 			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
 			sos_print_l4memory(msg, L4_UntypedWords(tag) * sizeof(uint32_t));
-			send = 0;
 			break;
 	}
 
-	return send;
+	return 0;
 }
 
