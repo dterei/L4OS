@@ -14,7 +14,8 @@ typedef enum {
 	SOS_NETPRINT,
 	SOS_DEBUG_FLUSH,
 	SOS_MOREMEM,
-	SOS_STARTME,
+	SOS_COPYIN,
+	SOS_COPYOUT,
 	SOS_OPEN,
 	SOS_CLOSE,
 	SOS_READ,
@@ -33,8 +34,9 @@ typedef enum {
 
 /* Limits */
 #define MAX_ADDRSPACES 256
+#define MAX_THREADS 4096
 #define PROCESS_MAX_FILES 16
-#define MAX_IO_BUF 0x1000
+#define MAX_IO_BUF 1024
 #define N_NAME 32
 
 /* file modes */

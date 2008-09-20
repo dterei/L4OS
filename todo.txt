@@ -1,64 +1,17 @@
-- Use sender2kernel for EVERY userspace pointer dereference.  It would be nice
-to get the *complier* to actually enforce some kind of safety with that, but
-given this is C we'll probably just have to enforce it ourselves.  Perhaps wrap
-in some kind of struct e.g.
-	typedef struct {
-		void *ptr;
-	} userptr;
-then sender2kernel would be something like:
-	void *sender2kernel(userptr p);
-could get slightly messy syntactially (e.g. would need a way to get pointer
-offsets, easy through wrapper function) but I think it's a good idea given how
-"unsafe" it is.  Well, it's probably not unsafe in practice, just in theory.
-
-- As part of the above point, any time sender2kernel is used we should check
-it doesn't return NULL.  And fail nicely (from the kernel's perspective) if
-it does.  Should kill thread though.
-
-- As part of the two above points, need a simpler/nicer way to do this that
-handles demand paging.  Think...
-
-- Also as part of the sender2kernel point, there needs to be some way to check
-the access rights of the regions.  This is because the kernel has write access
-to everything (see frames.c) so if the user process is devious it could trick
-the kernel in to writing over a read-only region (eg. the code/data).  Strictly
-speaking this isn't actually a problem right now, because the code/data regions
-aren't mapped by the frame table, only on a page fault (see doPager in pager.c)
-and at that point they are mapped even for the kernel with the correct rights.
-However, it would be nice to fix this as long as it's not too messy.  I can see
-two ways to fix: either remap anything from the frame table with the correct
-access rights, or add a flag to sender2kernel that checks the access rights of
-the region before doing anything.  A clean way to do this would be to include
-that flag in the userptr struct.  However - I think the former option is
-probably nicer.
-L4_UncachedMemory.
-
-- Milestone 4 - the NFS stuff seems pretty straightforward, maybe 1 or 2 days
-of work (once some of the above issues have been fixed).
-
-- Pager can call pager via malloc!  We haven't noticed this bug because we havent
-tested for it.  But basically, since it's a 2 level page table, if the malloc used
-to create the 2nd level causes morecore to be called, the region will be extended,
-the pager will try to access that region, then it will page fault.  Kaboom.
-
-- There are a lot of potential bugs when we have demand paging.  Be vigilant :-)
-
-- Milestone 6 - we have until week 8, hooray.
+- Milestone 6 - also, think ahead with ELF loading and as such, a generalised
+swap file (rather than assumings it's always .swap or whatever).  
 
 - Testing.  Jesus we need to do more testing.
-
-- Timer driver seems to be a bit slow for some reason, compared to the Linux
-sleep at least.  Could be hardware/software on either side, or could be bug.
 
 - VFS needs a lot of commenting! none at moment and complicated interfaces and
 calling conventions.
 
 - VFS could use a general beauty clean
 
-- VFS could return better errors then just -1, actually indicate the error
+- VFS could return better errors than just -1, actually indicate the error
 reason to user space.
 
-- Investigate moving the sync request code into the vfs layer rather then fs.
+- Investigate moving the sync request code into the vfs layer rather than fs.
 
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
@@ -69,4 +22,20 @@ we really just overwrite data, so 'cp' for example doesn't work as
 expected but I think this might be a libc and also a syscall api
 problem.
 
-- loop bug with NFS request list struct
+- Put extra data in the page table struct - we always have the lower 12 bits
+free, can use this as a permissions bitmask and for demand paging status bits,
+etc.
+
+- Put /all/ process/thread specific stuff in to the PCB (Process struct, in
+process.[ch]).  I'm looking at the file tables right now.
+
+- When allocating the 2nd level of the page tables use frame_alloc rather than
+malloc.  Each level is pagesize which is nice.  Maybe should get rid of those
+constants PAGETABLE_SIZE1 and PAGETABLE_SIZE2 and just use PAGESIZE.
+
+- Get rid of sender2kernel completely.  Instead, have a proper copyin-copyout
+method, where SOS will assume on each system call than any buffers are in a
+kernel-allocated space for each thread.  This means that user threads will have
+to use copyin for any writing, and copyout for any reading.  We should also
+then be sending the return value in the IPC reply rather than dereferencing a
+user pointer.
