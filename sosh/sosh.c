@@ -17,7 +17,7 @@
 
 #define verbose 0
 
-#define BUF_SIZ 128
+#define BUF_SIZ 256
 #define MAX_ARGS 32
 #define MAX_PROCESSES 10
 
@@ -60,7 +60,7 @@ cat(int argc, char **argv)
 
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
 		buf[num_read] = '\0';
-		printf("%s", buf);
+		//printf("%s", buf);
 		//num_written = write(stdout_fd, buf, num_read);
 	}
 
@@ -281,6 +281,7 @@ struct command {
 
 static int help(int argc, char *argv[]);
 static int time(int argc, char *argv[]);
+static int benchmark(int argc, char *argv[]);
 
 static
 struct command commands[] = {
@@ -296,8 +297,67 @@ struct command commands[] = {
 	{"help", help},
 	{"time", time},
 	{"m5bench", m5bench},
+	{"benchmark", benchmark},
 	{"null", NULL}
 };
+
+static int benchmark(int argc, char *argv[]) {
+	char *timeArgs[4];
+	printf("*** TESTING READ PERFORMANCE\n");
+
+	timeArgs[0] = "time";
+	timeArgs[1] = "cat";
+
+	printf("\n");
+	timeArgs[2] = "1kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "2kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "4kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "8kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "16kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "32kb";
+	time(3, timeArgs);
+
+	printf("*** TESTING READ/WRITE PERFORMANCE\n");
+
+	timeArgs[1] = "cp";
+
+	printf("\n");
+	timeArgs[2] = "1kb";
+	timeArgs[3] = "1kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "2kb";
+	timeArgs[3] = "2kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "4kb";
+	timeArgs[3] = "4kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "8kb";
+	timeArgs[3] = "8kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "16kb";
+	timeArgs[3] = "16kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "32kb";
+	timeArgs[3] = "32kb.cp";
+	time(4, timeArgs);
+
+	return 0;
+}
 
 static int
 help(int argc, char *argv[]) {
