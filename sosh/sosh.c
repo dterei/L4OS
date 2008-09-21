@@ -41,8 +41,10 @@ prstat(const char *name)
 			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
 }
 
-static int kecho(int argc, char **argv) {
-	for (int i = 1; i < argc; i++) {
+static int kecho(int argc, char **argv)
+{
+	for (int i = 1; i < argc; i++)
+	{
 		if (i > 1) kprint(" ");
 		kprint(argv[i]);
 	}
@@ -275,8 +277,10 @@ segfault(int argc, char **argv)
 }
 
 static int 
-nap(int argc, char **argv) {
-	if (argc < 2) {
+nap(int argc, char **argv)
+{
+	if ( argc < 2 )
+	{
 		printf("usage: %s msec\n", argv[0]);
 		return 1;
 	}
@@ -287,7 +291,8 @@ nap(int argc, char **argv) {
 }
 
 static int 
-howlong(int argc, char **argv) {
+howlong(int argc, char **argv)
+{
 	long us = uptime();
 	long us2 = us;
 	long secs = us / 1000000;
@@ -300,7 +305,8 @@ howlong(int argc, char **argv) {
 	return 0;
 }
 
-static int benchmark(int argc, char *argv[]) {
+static int benchmark(int argc, char *argv[])
+{
 	char *timeArgs[4];
 	printf("*** TESTING READ PERFORMANCE\n");
 
@@ -358,7 +364,8 @@ static int benchmark(int argc, char *argv[]) {
 	return 0;
 }
 
-static int pttest(int argc, char *argv[]) {
+static int pttest(int argc, char *argv[])
+{
 	return pt_test();
 }
 
@@ -388,7 +395,8 @@ static struct command commands[] = {
 };
 
 static int
-help(int argc, char *argv[]) {
+help(int argc, char *argv[])
+{
 	printf("Available commands:\n");
 	for (int i = 0; commands[i].command != NULL; i++) {
 		printf("\t%s\n", commands[i].name);
@@ -397,7 +405,8 @@ help(int argc, char *argv[]) {
 }
 
 static int
-time(int argc, char **argv) {
+time(int argc, char **argv)
+{
 	long int start = 0, finish = 0;
 
 	if (argc < 2) {
