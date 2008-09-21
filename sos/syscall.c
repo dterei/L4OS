@@ -11,10 +11,12 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
+
+static int rval;
 
 void
-syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
+syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
 	dprintf(1, "*** syscall_reply: replying to %d\n",
 			L4_ThreadNo(tid));
@@ -25,16 +27,23 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 	L4_Reply(tid);
 }
 
-// To reduce the amount of typing
 static L4_Word_t *buffer(L4_ThreadId_t tid) {
 	return (L4_Word_t*) pager_buffer(tid);
+}
+
+static char *word_align(char *s) {
+	unsigned int x = (unsigned int) s;
+	x--;
+	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
+	return (char*) x;
 }
 
 int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
+	char *buf; (void) buf;
+
 	L4_CacheFlushAll();
-	int rval;
 
 	dprintf(1, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
@@ -100,10 +109,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_STAT:
-			vfs_stat(tid,
-					pager_buffer(tid),
-					(stat_t*) (pager_buffer(tid) + strlen(pager_buffer(tid)) + 1),
-					&rval);
+			buf = pager_buffer(tid);
+			vfs_stat(tid, buf, (stat_t*) word_align(buf + strlen(buf) + 1), &rval);
 			break;
 
 		case SOS_TIME_STAMP:

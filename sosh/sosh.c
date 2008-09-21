@@ -429,15 +429,11 @@ main(void)
 		found = 0;
 
 		while (!found && !done) {
-			printf("about2read\n");
 			r = read(in, bp, BUF_SIZ-1+buf-bp);
-			printf("read\n");
 			if (r<0) {
 				printf("Console read failed!\n");
 				done=1;
 				break;
-			} else {
-				printf("got %d\n", r);
 			}
 			bp[r] = 0;		/* terminate */
 			if (verbose > 1) {

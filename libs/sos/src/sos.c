@@ -150,14 +150,11 @@ int read(fildes_t file, char *buf, size_t nbyte) {
 	int rval;
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
-	printf("prepaing message\n");
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	printf("making read syscall\n");
 	rval = makeSyscall(SOS_READ, YES_REPLY, &msg);
 
-	printf("making copyout syscall\n");
 	copyout(buf, nbyte, 0);
 
 	return rval;
@@ -200,13 +197,23 @@ int getdirent(int pos, char *name, size_t nbyte) {
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 int stat(const char *path, stat_t *buf) {
-	copyin((void*) path, strlen(path) + 1, 0);
+	int len = strlen(path);
+	copyin((void*) path, len + 1, 0);
 
 	int rval;
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	rval = makeSyscall(SOS_STAT, YES_REPLY, &msg);
+
+	// The copyin could have left the position not word
+	// aligned however SOS will copy the stat info into
+	// the next word aligned position - so must compensate.
+	int offset = (len + 1) % sizeof(L4_Word_t);
+
+	if (offset > 0) {
+		copyout(buf, sizeof(L4_Word_t) - offset, 1);
+	}
 
 	copyout(buf, sizeof(stat_t), 1);
 

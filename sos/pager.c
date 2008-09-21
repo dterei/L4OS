@@ -26,7 +26,7 @@
 #include "thread.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 1
 
 // Page table structures
 // Each level of the page table is assumed to be of size PAGESIZE
