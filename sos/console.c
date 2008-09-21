@@ -1,26 +1,59 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "console.h"
-#include "l4.h"
+
 #include "libsos.h"
 #include "network.h"
 #include "syscall.h"
 
 #define verbose 1
 
+// How many consoles we have
+#define NUM_CONSOLES 1
+
+// Unlimited Console readers or writers value
+#define CONSOLE_RW_UNLIMITED ((unsigned int) (-1))
+
+// struct for storing console read requests (continuation struct)
+typedef struct {
+	L4_ThreadId_t tid;
+	fildes_t file;
+	char *buf;
+	size_t nbyte;
+	size_t rbyte;
+	int *rval;
+	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
+		char *buf, size_t nbyte, int *rval);
+} Console_ReadRequest;
+
+// struct for storing info about a console file
+typedef struct {
+	// store console device info
+	VNode vnode;
+	char *path;
+	const unsigned int Max_Readers;
+	const unsigned int Max_Writers;
+	unsigned int readers;
+	unsigned int writers;
+
+	// store info about a thread waiting on a read
+	// change to a list to support more then one reader
+	Console_ReadRequest reader;	
+} Console_File;
+
 // The file names of our consoles
 Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
 
+// callback for read
+static void serial_read_callback(struct serial *serial, char c);
+
 VNode
 console_init(VNode sflist) {
-	int i;
-
 	dprintf(1, "*** console_init: creating special console files ***\n");
 
+	int i;
 	for (i = 0; i < NUM_CONSOLES; i++) {
-		dprintf(1, "*** console_init: setting up special file; %s\n", Console_Files[i].path);
+		dprintf(2, "*** console_init: setting up special file; %s\n", Console_Files[i].path);
 
 		// create new vnode;
 		VNode console = (VNode) malloc(sizeof(struct VNode_t));
@@ -74,6 +107,7 @@ open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	syscall_reply(tid, *rval);
 }
 
+/* Open a console file */
 void
 console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
@@ -82,19 +116,19 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 
 	// make sure console exists
 	if (self == NULL) {
-		open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	// make sure they passed in the right vnode
 	if (strcmp(self->path, path) != 0) {
-		open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		open_finish(tid, self, path, mode, rval, open_done, -1);
+		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_CORVNODE);
 		return;
 	}
 
@@ -102,7 +136,7 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	if (mode & FM_READ) {
 		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
-			open_finish(tid, self, path, mode, rval, open_done, -1);
+			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
 			return;
 		} else {
 			cf->readers++;
@@ -116,14 +150,14 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			if (mode & FM_READ) {
 				cf->readers--;
 			}
-			open_finish(tid, self, path, mode, rval, open_done, -1);
+			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
 			return;
 		} else {
 			cf->writers++;
 		}
 	}
 
-	open_finish(tid, self, path, mode, rval, open_done, 0);
+	open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_OK);
 }
 
 static
@@ -146,13 +180,13 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 	// make sure console exists
 	if (self == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, -1);
+		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, -1);
+		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_CORVNODE);
 		return;
 	}
 
@@ -181,7 +215,7 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		self = NULL;
 	}
 
-	console_close_finish(tid, self, file, mode, rval, close_done, 0);
+	console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_OK);
 }
 
 void
@@ -192,19 +226,19 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 
 	// make sure console exists
 	if (self == NULL) {
-		*rval = (-1);
+		*rval = SOS_VFS_NOVNODE;
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		*rval = (-1);
+		*rval = SOS_VFS_CORVNODE;
 		return;
 	}
 
 	// XXX for some reason this causes a page fault
 	//if (L4_IsNilThread(cf->reader.tid)) {
-		//*rval = (-1);
+		//*rval = SOS_VFS_ERROR;
 		//return;
 	//}
 
@@ -216,7 +250,7 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	cf->reader.rbyte = 0;
 	cf->reader.rval = rval;
 	cf->reader.read_done = read_done;
-	*rval = 0;
+	*rval = SOS_VFS_OK;
 }
 
 void
@@ -229,8 +263,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	// because it doesn't like a const
 	// XXX Need to make sure we don't block up sos too long.
 	// either use a thread just for writes or continuations.
-	char *buf2 = (char *)buf;
-	*rval = network_sendstring_char(nbyte, buf2);
+	*rval = network_sendstring_char(nbyte, (char *) buf);
 	write_done(tid, self, file, offset, buf, 0, rval);
 	syscall_reply(tid, *rval);
 }
@@ -242,7 +275,7 @@ console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nby
 
 	dprintf(0, "***console_getdirent: Not implemented for console fs\n");
 
-   *rval = (-1);
+   *rval = SOS_VFS_NOTIMP;
 	syscall_reply(tid, *rval);
 }
 
@@ -253,10 +286,11 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *
 
 	dprintf(0, "***console_stat: Not implemented for console fs\n");
 
-   *rval = (-1);
+   *rval = SOS_VFS_NOTIMP;
 	syscall_reply(tid, *rval);
 }
 
+static
 void
 serial_read_callback(struct serial *serial, char c) {
 	dprintf(1, "*** serial_read_callback: %c\n", c);

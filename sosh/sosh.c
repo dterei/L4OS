@@ -74,7 +74,6 @@ cat(int argc, char **argv)
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
 		buf[num_read] = '\0';
 		printf("%s", buf);
-		//num_written = write(stdout_fd, buf, num_read);
 	}
 
 	close(fd);
@@ -536,6 +535,8 @@ main(void)
 			}
 		}
 	}
+
+	close(in);
 	printf("[SOS Exiting]\n");
 }
 

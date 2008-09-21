@@ -9,6 +9,21 @@
 
 #include <l4/types.h>
 
+/* VFS Return Codes */
+typedef enum {
+	SOS_VFS_OK = 0,
+	SOS_VFS_EOF = 0,
+	SOS_VFS_ERROR = -1,
+	SOS_VFS_PERM = -2,
+	SOS_VFS_NOFILE = -3,
+	SOS_VFS_NOVNODE = -4,
+	SOS_VFS_NOMEM = -5,
+	SOS_VFS_NOMORE = -6,
+	SOS_VFS_PATHINV = -7,
+	SOS_VFS_CORVNODE = -8,
+	SOS_VFS_NOTIMP = -9
+} vfs_return_t;
+
 /* System calls for SOS */
 typedef enum {
 	SOS_KERNEL_PRINT,

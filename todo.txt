@@ -3,24 +3,11 @@ swap file (rather than assumings it's always .swap or whatever).
 
 - Testing.  Jesus we need to do more testing.
 
-- VFS needs a lot of commenting! none at moment and complicated interfaces and
-calling conventions.
-
-- VFS could use a general beauty clean
-
-- VFS could return better errors than just -1, actually indicate the error
-reason to user space.
-
 - Investigate moving the sync request code into the vfs layer rather than fs.
 
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
 instead of having each fs handle it
-
-- NFS, when writing to a new file, do we need to truncate it first? If not
-we really just overwrite data, so 'cp' for example doesn't work as
-expected but I think this might be a libc and also a syscall api
-problem.
 
 - Put extra data in the page table struct - we always have the lower 12 bits
 free, can use this as a permissions bitmask and for demand paging status bits,
