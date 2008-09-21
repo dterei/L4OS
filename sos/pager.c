@@ -422,13 +422,14 @@ static void copyInContinue(PagerRequest *pr) {
 		offset++;
 	} while ((offset < size) && ((((L4_Word_t) src) & (PAGESIZE - 1)) != 0));
 
+	copyInOutData[threadNum] = size | (offset << 16);
+
 	// Reached end - either we finished the copy, or we reached a boundary
 	if (offset >= size) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		syscall_reply(replyTo, 0);
 	} else {
-		copyInOutData[threadNum] = size | (offset << 16);
 		pr->addr = (L4_Word_t) src;
 		pager(pr);
 	}
@@ -439,11 +440,12 @@ void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 			L4_ThreadNo(tid), src, size);
 
 	if (append) {
-		copyInOutData[L4_ThreadNo(tid)] &= 0x0000ffff;
-		copyInOutData[L4_ThreadNo(tid)] |= size;
+		copyInOutData[L4_ThreadNo(tid)] &= 0xffff0000;
 	} else {
-		copyInOutData[L4_ThreadNo(tid)] = size;
+		copyInOutData[L4_ThreadNo(tid)] &= 0x00000000;
 	}
+
+	copyInOutData[L4_ThreadNo(tid)] |= size;
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),
@@ -478,12 +480,13 @@ static void copyOutContinue(PagerRequest *pr) {
 		offset++;
 	} while ((offset < size) && ((((L4_Word_t) dest) & (PAGESIZE - 1)) != 0));
 
+	copyInOutData[threadNum] = size | (offset << 16);
+
 	if (offset >= size) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		syscall_reply(replyTo, 0);
 	} else {
-		copyInOutData[threadNum] = size | (offset << 16);
 		pr->addr = (L4_Word_t) dest;
 		pager(pr);
 	}
@@ -494,11 +497,12 @@ void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 			L4_ThreadNo(tid), dest, size);
 
 	if (append) {
-		copyInOutData[L4_ThreadNo(tid)] &= 0x0000ffff;
-		copyInOutData[L4_ThreadNo(tid)] |= size;
+		copyInOutData[L4_ThreadNo(tid)] &= 0xffff0000;
 	} else {
-		copyInOutData[L4_ThreadNo(tid)] = size;
+		copyInOutData[L4_ThreadNo(tid)] &= 0x00000000;
 	}
+
+	copyInOutData[L4_ThreadNo(tid)] |= size;
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),

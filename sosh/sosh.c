@@ -69,11 +69,11 @@ cat(int argc, char **argv)
 		return 1;
 	}
 
-	printf("<%s>\n", argv[1]);
+	//printf("<%s>\n", argv[1]);
 
 	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
 		buf[num_read] = '\0';
-		//printf("%s", buf);
+		printf("%s", buf);
 		//num_written = write(stdout_fd, buf, num_read);
 	}
 

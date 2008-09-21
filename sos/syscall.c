@@ -114,7 +114,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_TIME_STAMP:
-			syscall_reply(tid, (L4_Word_t) time_stamp());
+			rval = (L4_Word_t) time_stamp();
+			syscall_reply(tid, rval);
 			break;
 
 		case SOS_SLEEP:
