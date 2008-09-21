@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 1
 
 // Global open vnodes list
 VNode GlobalVNodes;
@@ -45,7 +45,48 @@ vfs_init(void) {
 	nfsfs_init();
 }
 
-static void
+void
+vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
+	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
+			path, path, mode);
+	VNode vnode = NULL;
+
+	// check can open more files
+	if (findNextFd(L4_ThreadNo(tid)) < 0) {
+		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	// check filename is valid
+	if (strlen(path) >= N_NAME) {
+		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
+		*rval = (-1);
+		syscall_reply(tid);
+		return;
+	}
+
+	// Check open vnodes (special files are stored here)
+	for (vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
+		dprintf(1, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
+		if (strcmp(vnode->path, path) == 0) {
+			dprintf(1, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
+			break;
+		}
+	}
+
+	if (vnode == NULL) {
+		// Not an open file so open nfs file
+		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
+		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
+	} else {
+		// Have vnode now so open
+		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+	}
+}
+
+void
 vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
 	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, *rval);
 	//TODO: Move opening of already open vnode to the vfs layer, requires moving the
@@ -90,47 +131,27 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 }
 
 void
-vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
-			path, path, mode);
-	VNode vnode = NULL;
+vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
+	dprintf(1, "*** vfs_close: %d\n", file);
 
-	// check can open more files
-	if (findNextFd(L4_ThreadNo(tid)) < 0) {
-		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
-		*rval = (-1);
-		syscall_reply(tid, *rval);
-		return;
-	}
+	// get file
+	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
 
-	// check filename is valid
-	if (strlen(path) >= N_NAME) {
-		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
-		*rval = (-1);
-		syscall_reply(tid, *rval);
-		return;
-	}
-
-	// Check open vnodes (special files are stored here)
-	for (vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
-		dprintf(1, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n", vnode->path, vnode, vnode->next, vnode->previous);
-		if (strcmp(vnode->path, path) == 0) {
-			dprintf(1, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
-			break;
-		}
-	}
-
+	// get vnode
+	VNode vnode =vf->vnode;
 	if (vnode == NULL) {
-		// Not an open file so open nfs file
-		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
-		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
-	} else {
-		// Have vnode now so open
-		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+		dprintf(1, "*** vfs_close: invalid file handler: %d\n", file);
+		*rval = (-1);
+		return;
 	}
+
+	// vnode close function is responsible for freeing the node if appropriate
+	// so don't access after a close without checking its not null
+	// try closing vnode;
+	vnode->close(tid, vnode, file, vf->fmode, rval, vfs_close_done);
 }
 
-static void
+void
 vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *rval) {
 	dprintf(1, "*** vfs_close_done: %d\n", file);
 
@@ -168,42 +189,6 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 }
 
 void
-vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
-	dprintf(1, "*** vfs_close: %d\n", file);
-
-	// get file
-	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
-
-	// get vnode
-	VNode vnode =vf->vnode;
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_close: invalid file handler: %d\n", file);
-		*rval = (-1);
-		return;
-	}
-
-	// vnode close function is responsible for freeing the node if appropriate
-	// so don't access after a close without checking its not null
-	// try closing vnode;
-	vnode->close(tid, vnode, file, vf->fmode, rval, vfs_close_done);
-}
-
-static void
-vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
-		size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_read_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
-			L4_ThreadNo(tid), file, buf, nbyte, *rval);
-
-	if (*rval < 0) {
-		return;
-	}
-	
-	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
-	// to appear from the space which called them
-	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
-}
-
-void
 vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read: %d %d %d %p %d\n", L4_ThreadNo(tid),
 			L4_ThreadNo(tid), file, buf, nbyte);
@@ -216,7 +201,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
 		*rval = (-1);
-		syscall_reply(tid, *rval);
+		syscall_reply(tid);
 		return;
 	}
 
@@ -225,18 +210,17 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 		dprintf(1, "*** vfs_read: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
 		*rval = (-1);
-		syscall_reply(tid, *rval);
+		syscall_reply(tid);
 		return;
 	}
 
 	vnode->read(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_read_done);
-	dprintf(1, "*** vfs_read: completed\n");
 }
 
-static void
-vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_write_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
+void
+vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
+		size_t nbyte, int *rval) {
+	dprintf(1, "*** vfs_read_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
 			L4_ThreadNo(tid), file, buf, nbyte, *rval);
 
 	if (*rval < 0) {
@@ -260,7 +244,7 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_write: invalid file handler: %d\n", file);
 		*rval = (-1);
-		syscall_reply(tid, *rval);
+		syscall_reply(tid);
 		return;
 	}
 
@@ -274,6 +258,21 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	}
 
 	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_write_done);
+}
+
+void
+vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
+		const char *buf, size_t nbyte, int *rval) {
+	dprintf(1, "*** vfs_write_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
+			L4_ThreadNo(tid), file, buf, nbyte, *rval);
+
+	if (*rval < 0) {
+		return;
+	}
+	
+	// XXX This seems to work but check since seems strange, I guess perhaps callback use some magic
+	// to appear from the space which called them
+	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
 }
 
 void
