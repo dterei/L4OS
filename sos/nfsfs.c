@@ -56,7 +56,8 @@ enum NfsRequestType {
 	RT_READ,
 	RT_WRITE,
 	RT_STAT,
-	RT_DIR
+	RT_DIR,
+	RT_REMOVE
 };
 
 typedef struct NFS_BaseRequest_t NFS_BaseRequest;
@@ -114,6 +115,11 @@ typedef struct {
 	int cpos;
 } NFS_DirRequest;
 
+typedef struct {
+	NFS_BaseRequest p;
+	const char *path;
+} NFS_RemoveRequest;
+
 /* Queue of request for callbacks */
 NFS_BaseRequest *NfsRequests;
 
@@ -148,6 +154,7 @@ newtoken(void) {
 static
 NFS_BaseRequest *
 create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid, int *rval) {
+	//XXX: Check for malloc fail!
 	NFS_BaseRequest *rq;
 	switch (rt) {
 		case RT_LOOKUP:
@@ -169,6 +176,10 @@ create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid, int *rval) {
 		case RT_DIR:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_DirRequest));
 			rq->rt = RT_DIR;
+			break;
+		case RT_REMOVE:
+			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_RemoveRequest));
+			rq->rt = RT_REMOVE;
 			break;
 		default:
 			dprintf(0, "!!! nfsfs_create_request: invalid request type %d\n", rt);
@@ -237,6 +248,9 @@ remove_request(NFS_BaseRequest *rq) {
 			break;
 		case RT_DIR:
 			free((NFS_DirRequest *) rq);
+			break;
+		case RT_REMOVE:
+			free((NFS_RemoveRequest *) rq);
 			break;
 		default:
 			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
@@ -333,6 +347,7 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->write = nfsfs_write;
 	self->getdirent = nfsfs_getdirent;
 	self->stat = nfsfs_stat;
+	self->remove = nfsfs_remove;
 
 	NFS_LookupRequest *rq = (NFS_LookupRequest *)
 		create_request(RT_LOOKUP, self, tid, rval);
@@ -617,7 +632,8 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 	if (self != NULL) {
 		NFS_File *nf = (NFS_File *) self->extra;
 		if (nf == NULL) {
-			dprintf(0, "!!! nfsfs_stat: Broken NFS file! No nfs struct! (file %s)\n", path);
+			dprintf(0, "!!! nfsfs_stat: Broken NFS file! No nfs struct! (file %s)\n",
+					path);
 			*rval = SOS_VFS_ERROR;
 			syscall_reply(tid, *rval);
 			return;
@@ -632,10 +648,51 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 	else {
 		dprintf(1, "*** nfsfs_stat: trying to stat non open file! (file %s)\n", path);
 
-		NFS_StatRequest *rq = (NFS_StatRequest *) create_request(RT_STAT, self, tid, rval);
+		NFS_StatRequest *rq = (NFS_StatRequest *)
+			create_request(RT_STAT, self, tid, rval);
 		rq->stat = buf;
 
 		nfs_lookup(&nfs_mnt, (char *) path, stat_cb, rq->p.token);
+	}
+}
+
+/* NFS Callback for NFS_Remove */
+static
+void
+remove_cb(uintptr_t token, int status) {
+	dprintf(1, "*** nfsfs: remove_cb %u %d *** \n", token, status);
+
+	NFS_RemoveRequest *rq = (NFS_RemoveRequest *) get_request(token);
+	if (rq == NULL) {
+		dprintf(0, "!!!nfsfs: Corrupt remove callback, no matching token: %d\n", token);
+		return;
+	}
+
+	if (status == NFS_OK) {
+		*(rq->p.rval) = SOS_VFS_OK;
+	} else {
+		*(rq->p.rval) = SOS_VFS_ERROR;
+	}
+
+	syscall_reply(rq->p.tid, *(rq->p.rval));
+	remove_request((NFS_BaseRequest *) rq);
+}
+
+/* Remove a file */
+void
+nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval) {
+	dprintf(1, "*** nfsfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
+
+	if (self != NULL) {
+		// cant remove open files
+		*rval = SOS_VFS_ERROR;
+		syscall_reply(tid, *rval);
+	} else {
+		// remove file
+		NFS_RemoveRequest *rq = (NFS_RemoveRequest *)
+			create_request(RT_REMOVE, self, tid, rval);
+		rq->path = path;
+		nfs_remove(&nfs_mnt, (char *) path, remove_cb, rq->p.token);
 	}
 }
 

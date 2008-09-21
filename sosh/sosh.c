@@ -254,7 +254,22 @@ dir(int argc, char **argv)
 }
 
 static int
-segfault(int argc, char **argv) {
+rm(int argc, char **argv)
+{
+	if ( argc != 2 )
+	{
+		printf("usage %s [file]\n", argv[0]);
+		return 1;
+	}
+
+	int r;
+	r = fremove(argv[1]);
+	return r;
+}
+
+static int
+segfault(int argc, char **argv)
+{
 	int *null = NULL;
 	return *null;
 }
@@ -357,6 +372,7 @@ static struct command commands[] = {
 	{"ls", dir},
 	{"cat", cat},
 	{"cp", cp},
+	{"rm", rm},
 	{"ps", ps},
 	{"exec", exec},
 	{"segfault", segfault},

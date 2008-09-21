@@ -399,3 +399,20 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
 	}
 }
 
+/* Remove a file */
+void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval) {
+	dprintf(1, "*** vfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
+	
+	// Check open vnodes
+	VNode vnode = find_vnode(path);
+	if (vnode != NULL) {
+		dprintf(1, "*** vfs_remove: found already open vnode: %s ***\n", vnode->path);
+		// this will fail for nfs and console fs, can only remove non open files.
+		vnode->remove(tid, vnode, path, rval);
+	}
+	// not open so assume nfs
+	else {
+		nfsfs_remove(tid, NULL, path, rval);
+	}
+}
+

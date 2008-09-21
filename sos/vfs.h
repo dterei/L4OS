@@ -42,6 +42,8 @@ struct VNode_t {
 			int *rval);
 
 	void (*stat)(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
+
+	void (*remove)(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
 };
 
 /* System call implementations */
@@ -70,6 +72,9 @@ void vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rv
 
 /* Stat a file */
 void vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval);
+
+/* Remove a file */
+void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval);
 
 #endif
 

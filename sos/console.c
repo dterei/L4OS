@@ -47,6 +47,7 @@ Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0
 // callback for read
 static void serial_read_callback(struct serial *serial, char c);
 
+/* Initialise all console devices adding them to the special file list. */
 VNode
 console_init(VNode sflist) {
 	dprintf(1, "*** console_init: creating special console files ***\n");
@@ -73,6 +74,7 @@ console_init(VNode sflist) {
 		console->write = console_write;
 		console->getdirent = console_getdirent;
 		console->stat = console_stat;
+		console->remove = console_remove;
 
 		// setup the console struct
 		Console_Files[i].reader.tid = L4_nilthread;
@@ -172,6 +174,7 @@ console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	syscall_reply(tid, *rval);
 }
 
+/* Close a console file */
 void
 console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
@@ -218,6 +221,7 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_OK);
 }
 
+/* Read from a console file */
 void
 console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
@@ -253,6 +257,7 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	*rval = SOS_VFS_OK;
 }
 
+/* Write to a console file */
 void
 console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
@@ -268,6 +273,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	syscall_reply(tid, *rval);
 }
 
+/* Get a directory listing */
 void
 console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
 		int *rval) {
@@ -279,6 +285,7 @@ console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nby
 	syscall_reply(tid, *rval);
 }
 
+/* Stat a file */
 void
 console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
 	dprintf(1, "*** console_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
@@ -290,6 +297,18 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *
 	syscall_reply(tid, *rval);
 }
 
+/* Remove a file */
+void
+console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval) {
+	dprintf(1, "*** console_remove: %d %s ***\n", L4_ThreadNo(tid), path);
+
+	dprintf(0, "***console_remove: Not implemented for console fs\n");
+
+	*rval = SOS_VFS_NOTIMP;
+	syscall_reply(tid, *rval);
+}
+
+/* Callback from Serial Library for Reads */
 static
 void
 serial_read_callback(struct serial *serial, char c) {

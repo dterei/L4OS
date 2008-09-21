@@ -28,6 +28,7 @@ char *syscall_show(int syscall) {
 		case SOS_WRITE: return "SOS_WRITE";
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
+		case SOS_REMOVE: return "SOS_REMOVE";
 		case SOS_PROCESS_CREATE: return "SOS_PROCESS_CREATE";
 		case SOS_PROCESS_DELETE: return "SOS_PROCESS_DELETE";
 		case SOS_MY_ID: return "SOS_MY_ID";
@@ -216,6 +217,22 @@ int stat(const char *path, stat_t *buf) {
 	}
 
 	copyout(buf, sizeof(stat_t), 1);
+
+	return rval;
+}
+
+/* Removees the specified file "path".
+ * Returns - if successful, -1 otherwise (invalid name).
+ */
+int fremove(const char *path) {
+	int len = strlen(path);
+	copyin((void*) path, len + 1, 0);
+
+	int rval;
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	rval = makeSyscall(SOS_REMOVE, YES_REPLY, &msg);
 
 	return rval;
 }

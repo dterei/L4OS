@@ -220,7 +220,6 @@ nfs_getattr(struct cookie *fh,
     return rpc_send(pbuf, nfs_port, nfs_getattr_cb, func, token);
 }
 
-
 void
 nfs_lookup_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
@@ -433,6 +432,46 @@ nfs_create(struct cookie *fh, char *name, sattr_t *sat,
     addtobuf(pbuf, (char*) sat, sizeof(sattr_t));
 
     return rpc_send(pbuf, nfs_port, nfs_create_cb, func, token);
+}
+
+void
+nfs_remove_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
+{
+	int err = 0, status = -1;
+	void (*cb) (uintptr_t, int) = callback;
+
+	assert(callback != NULL);
+
+	err = check_errors(pbuf);
+
+	if (err == 0) {
+		/* get the status out */
+		getfrombuf(pbuf, (char*) &status, sizeof(status));
+	}
+
+	cb(token, status);
+
+	return;
+}
+
+/* remove a file named 'name' in directory 'cwd' */
+int
+nfs_remove(struct cookie *cwd, char *name, 
+       void (*func) (uintptr_t, int), uintptr_t token)
+{
+    struct pbuf *pbuf;
+
+    /* now the user data struct is setup, do some call stuff! */
+    pbuf = initbuf(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE);
+    
+    /* put in the fhandle */
+    addtobuf(pbuf, (char*) cwd, sizeof(struct cookie));
+    
+    /* put in the name */
+    addstring(pbuf, name);
+    
+    /* send it! */
+    return rpc_send(pbuf, nfs_port, nfs_remove_cb, func, token);
 }
 
 

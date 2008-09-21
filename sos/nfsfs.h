@@ -41,5 +41,8 @@ void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t 
 /* Get file details for a specified NFS File */
 void nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
 
+/* Remove a file */
+void nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
+
 #endif
 

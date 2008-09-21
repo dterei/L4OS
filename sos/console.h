@@ -46,5 +46,8 @@ void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_
 /* Get file information of a console file (so does nothing) (UNSUPPORTED) */
 void console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
 
+/* Remove a file (so does nothing) (UNSUPPORTED) */
+void console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
+
 #endif /* console.h */
 

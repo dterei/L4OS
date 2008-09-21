@@ -37,6 +37,7 @@ typedef enum {
 	SOS_WRITE,
 	SOS_GETDIRENT,
 	SOS_STAT,
+	SOS_REMOVE,
 	SOS_PROCESS_CREATE,
 	SOS_PROCESS_DELETE,
 	SOS_MY_ID,
@@ -161,6 +162,11 @@ int getdirent(int pos, char *name, size_t nbyte);
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 int stat(const char *path, stat_t *buf);
+
+/* Removees the specified file "path".
+ * Returns - if successful, -1 otherwise (invalid name).
+ */
+int fremove(const char *path);
 
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting

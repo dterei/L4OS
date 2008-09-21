@@ -28,6 +28,9 @@ int nfs_create(struct cookie *fh, char *name, sattr_t *sat,
 	       void (*func) (uintptr_t, int, struct cookie *, fattr_t *),
 	       uintptr_t token);
 
+int nfs_remove(struct cookie *cwd, char *name, 
+       void (*func) (uintptr_t, int), uintptr_t token);
+
 int nfs_read(struct cookie *fh, int pos, int count,
 	     void (*func) (uintptr_t, int, fattr_t *attr, int, char *),
 	     uintptr_t token);
@@ -51,6 +54,8 @@ extern void
 nfs_write_cb(void * callback, uintptr_t token, struct pbuf *pbuf);
 extern void
 nfs_create_cb(void * callback, uintptr_t token, struct pbuf *pbuf);
+extern void
+nfs_remove_cb(void * callback, uintptr_t token, struct pbuf *pbuf);
 extern int
 getentries_readdir(struct pbuf *pbuf, int *cookie);
 extern void

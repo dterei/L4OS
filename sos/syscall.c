@@ -113,6 +113,10 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			vfs_stat(tid, buf, (stat_t*) word_align(buf + strlen(buf) + 1), &rval);
 			break;
 
+		case SOS_REMOVE:
+			vfs_remove(tid, pager_buffer(tid), &rval);
+			break;
+
 		case SOS_TIME_STAMP:
 			rval = (L4_Word_t) time_stamp();
 			syscall_reply(tid, rval);
