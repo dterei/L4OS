@@ -15,6 +15,32 @@
 fildes_t stdout_fd = 0;
 fildes_t stdin_fd = (-1); // never used, grr
 
+char *syscall_show(int syscall) {
+	switch (syscall) {
+		case SOS_KERNEL_PRINT: return "SOS_KERNEL_PRINT";
+		case SOS_DEBUG_FLUSH: return "SOS_DEBUG_FLUSH";
+		case SOS_MOREMEM: return "SOS_MOREMEM";
+		case SOS_COPYIN: return "SOS_COPYIN";
+		case SOS_COPYOUT: return "SOS_COPYOUT";
+		case SOS_OPEN: return "SOS_OPEN";
+		case SOS_CLOSE: return "SOS_CLOSE";
+		case SOS_READ: return "SOS_READ";
+		case SOS_WRITE: return "SOS_WRITE";
+		case SOS_GETDIRENT: return "SOS_GETDIRENT";
+		case SOS_STAT: return "SOS_STAT";
+		case SOS_PROCESS_CREATE: return "SOS_PROCESS_CREATE";
+		case SOS_PROCESS_DELETE: return "SOS_PROCESS_DELETE";
+		case SOS_MY_ID: return "SOS_MY_ID";
+		case SOS_PROCESS_STATUS: return "SOS_PROCESS_STATUS";
+		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
+		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
+		case SOS_SLEEP: return "SOS_SLEEP";
+		case SOS_SHARE_VM: return "SOS_SHARE_VM";
+	}
+
+	return "UNRECOGNISED";
+}
+
 static void prepareSyscall(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
@@ -37,7 +63,7 @@ static L4_Word_t makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
 }
 
 void kprint(char *str) {
-	copyin(str, strlen(str) + 1);
+	copyin(str, strlen(str) + 1, 0);
 
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
@@ -62,94 +88,91 @@ void thread_block(void) {
 }
 
 int moremem(uintptr_t *base, unsigned int nb) {
-	int rval;
-
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) base);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_MOREMEM, YES_REPLY, &msg);
-	return rval;
+	int rval = makeSyscall(SOS_MOREMEM, YES_REPLY, &msg);
+
+	if (rval == 0) {
+		return 0; // no memory
+	} else {
+		copyout(base, sizeof(uintptr_t), 0);
+		return rval;
+	}
 }
 
-void copyin(void *data, size_t size) {
+void copyin(void *data, size_t size, int append) {
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) data);
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
+	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
 	makeSyscall(SOS_COPYIN, YES_REPLY, &msg);
 }
 
-void copyout(void *data, size_t size) {
+void copyout(void *data, size_t size, int append) {
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) data);
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
+	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
 	makeSyscall(SOS_COPYOUT, YES_REPLY, &msg);
 }
 
 fildes_t open(const char *path, fmode_t mode) {
-	fildes_t rval;
+	copyin((void*) path, strlen(path) + 1, 0);
 
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
-	L4_MsgAppendWord(&msg, (L4_Word_t) path);
 	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_OPEN, YES_REPLY, &msg);
-	return rval;
+	return makeSyscall(SOS_OPEN, YES_REPLY, &msg);
 }
 
 int close(fildes_t file) {
-	int rval;
-
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_CLOSE, YES_REPLY, &msg);
-	return rval;
+	return makeSyscall(SOS_CLOSE, YES_REPLY, &msg);
 }
 
 int read(fildes_t file, char *buf, size_t nbyte) {
 	int rval;
-
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
-
+	printf("prepaing message\n");
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_READ, YES_REPLY, &msg);
+	printf("making read syscall\n");
+	rval = makeSyscall(SOS_READ, YES_REPLY, &msg);
+
+	printf("making copyout syscall\n");
+	copyout(buf, nbyte, 0);
+
 	return rval;
 }
 
 int write(fildes_t file, const char *buf, size_t nbyte) {
-	int rval;
+	copyin((void*) buf, nbyte, 0);
 
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_WRITE, YES_REPLY, &msg);
-	return rval;
+	return makeSyscall(SOS_WRITE, YES_REPLY, &msg);
 }
 
 /* 
@@ -159,16 +182,16 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
  */
 int getdirent(int pos, char *name, size_t nbyte) {
 	int rval;
-
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
-	L4_MsgAppendWord(&msg, (L4_Word_t) name);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
 
-	makeSyscall(SOS_GETDIRENT, YES_REPLY, &msg);
+	rval = makeSyscall(SOS_GETDIRENT, YES_REPLY, &msg);
+
+	copyout((void*) name, nbyte, 0);
+
 	return rval;
 }
 
@@ -177,16 +200,16 @@ int getdirent(int pos, char *name, size_t nbyte) {
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 int stat(const char *path, stat_t *buf) {
-	int rval;
+	copyin((void*) path, strlen(path) + 1, 0);
 
+	int rval;
 	L4_Msg_t msg;
 	prepareSyscall(&msg);
 
-	L4_MsgAppendWord(&msg, (L4_Word_t) path);
-	L4_MsgAppendWord(&msg, (L4_Word_t) buf);
-	L4_MsgAppendWord(&msg, (L4_Word_t) &rval);
+	rval = makeSyscall(SOS_STAT, YES_REPLY, &msg);
 
-	makeSyscall(SOS_STAT, YES_REPLY, &msg);
+	copyout(buf, sizeof(stat_t), 1);
+
 	return rval;
 }
 

@@ -30,14 +30,11 @@ findPageTableWord function will break.  Will need to fix them!
 - Put /all/ process/thread specific stuff in to the PCB (Process struct, in
 process.[ch]).  I'm looking at the file tables right now.
 
-- Get rid of sender2kernel completely.  Instead, have a proper copyin-copyout
-method, where SOS will assume on each system call than any buffers are in a
-kernel-allocated space for each thread.  This means that user threads will have
-to use copyin for any writing, and copyout for any reading.  We should also
-then be sending the return value in the IPC reply rather than dereferencing a
-user pointer.
-
 - There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
 getting negative.
 
 - Need to pin pages when preparing the callback to read them in over NFS.
+
+- Get rid of rval as an argument to every single fs-related function.
+
+- Check that copyin/out calls don't override the size of the buffer.

@@ -26,7 +26,7 @@
 #include "thread.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // Page table structures
 // Each level of the page table is assumed to be of size PAGESIZE
@@ -339,33 +339,6 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 	}
 }
 
-L4_Word_t*
-sender2kernel(L4_Word_t addr) {
-	dprintf(1, "*** sender2kernel: addr=%p\n", addr);
-	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
-
-	// Check that addr is in valid region
-	Region *r = findRegion(process_get_regions(p), addr);
-	dprintf(1, "*** sender2kernel: found region %p\n", r);
-	if (r == NULL) {
-		thread_kill(sos_sid2tid(L4_SenderSpace())); // XXX kill thread not addrspace
-		return NULL;
-	}
-
-	// Find equivalent physical address - the address might
-	// not actually be in the page table yet, so may need to
-	// invoke pager manually.
-	L4_Word_t physAddr;
-	while ((physAddr = *findPageTableWord(process_get_pagetable(p), addr & PAGEALIGN)) == 0) {
-		dprintf(1, "*** sender2kernel: %p wasn't mapped in, doing manually\n", addr);
-		pager(newPagerRequest(p, addr, pagerContinue));
-	}
-
-	physAddr += (L4_Word_t) (addr & (PAGESIZE - 1));
-	dprintf(1, "*** sender2kernel: physAddr=%d\n", physAddr);
-	return (L4_Word_t*) physAddr;
-}
-
 static void virtualPagerHandler(void) {
 	dprintf(1, "*** virtualPagerHandler: started\n");
 
@@ -461,11 +434,16 @@ static void copyInContinue(PagerRequest *pr) {
 	}
 }
 
-void copyIn(L4_ThreadId_t tid, void *src, size_t size) {
+void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(1, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
 
-	copyInOutData[L4_ThreadNo(tid)] = size;
+	if (append) {
+		copyInOutData[L4_ThreadNo(tid)] &= 0x0000ffff;
+		copyInOutData[L4_ThreadNo(tid)] |= size;
+	} else {
+		copyInOutData[L4_ThreadNo(tid)] = size;
+	}
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),
@@ -511,11 +489,16 @@ static void copyOutContinue(PagerRequest *pr) {
 	}
 }
 
-void copyOut(L4_ThreadId_t tid, void *dest, size_t size) {
+void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	dprintf(1, "*** copyOut: tid=%ld dest=%p size=%d\n",
 			L4_ThreadNo(tid), dest, size);
 
-	copyInOutData[L4_ThreadNo(tid)] = size;
+	if (append) {
+		copyInOutData[L4_ThreadNo(tid)] &= 0x0000ffff;
+		copyInOutData[L4_ThreadNo(tid)] |= size;
+	} else {
+		copyInOutData[L4_ThreadNo(tid)] = size;
+	}
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),

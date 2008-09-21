@@ -11,22 +11,32 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 {
+	dprintf(1, "*** syscall_reply: replying to %d\n",
+			L4_ThreadNo(tid));
+
 	L4_CacheFlushAll();
 
 	msgClearWith(rval);
 	L4_Reply(tid);
 }
 
+// To reduce the amount of typing
+static L4_Word_t *buffer(L4_ThreadId_t tid) {
+	return (L4_Word_t*) pager_buffer(tid);
+}
+
 int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	L4_CacheFlushAll();
-	L4_Word_t rval;
+	int rval;
+
+	dprintf(1, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
@@ -39,62 +49,61 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_MOREMEM:
-			rval = (L4_Word_t) sos_moremem(
-					(uintptr_t*) sender2kernel(L4_MsgWord(msg, 0)),
-					(unsigned int) L4_MsgWord(msg, 1));
-			syscall_reply(tid, rval);
+			syscall_reply(tid,
+					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
 			break;
 
 		case SOS_COPYIN:
-			copyIn(tid, (void*) L4_MsgWord(msg, 0), (size_t) L4_MsgWord(msg, 1));
+			copyIn(tid,
+					(void*) L4_MsgWord(msg, 0),
+					(size_t) L4_MsgWord(msg, 1),
+					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_COPYOUT:
-			copyOut(tid, (void*) L4_MsgWord(msg, 0), (size_t) L4_MsgWord(msg, 1));
+			copyOut(tid,
+					(void*) L4_MsgWord(msg, 0),
+					(size_t) L4_MsgWord(msg, 1),
+					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_OPEN:
-			vfs_open(tid,
-					(char*) sender2kernel(L4_MsgWord(msg, 0)),
-					(fmode_t) L4_MsgWord(msg, 1),
-					(int*) sender2kernel(L4_MsgWord(msg, 2)));
+			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0), &rval);
 			break;
 
 		case SOS_CLOSE:
-			vfs_close(tid,
-					(fildes_t) L4_MsgWord(msg, 0),
-					(int*) sender2kernel(L4_MsgWord(msg, 1)));
+			vfs_close(tid, (fildes_t) L4_MsgWord(msg, 0), &rval);
 			break;
 
 		case SOS_READ:
 			vfs_read(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
-					(char*) sender2kernel(L4_MsgWord(msg, 1)),
-					(size_t) L4_MsgWord(msg, 2),
-					(int*) sender2kernel(L4_MsgWord(msg, 3)));
+					pager_buffer(tid),
+					(size_t) L4_MsgWord(msg, 1),
+					&rval);
 			break;
 
 		case SOS_WRITE:
 			vfs_write(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
-					(char*) sender2kernel(L4_MsgWord(msg, 1)),
-					(size_t) L4_MsgWord(msg, 2),
-					(int*) sender2kernel(L4_MsgWord(msg, 3)));
+					pager_buffer(tid),
+					(size_t) L4_MsgWord(msg, 1),
+					&rval);
 			break;
 
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
 					(int) L4_MsgWord(msg, 0),
-					(char*) sender2kernel(L4_MsgWord(msg, 1)),
-					(size_t) L4_MsgWord(msg, 2),
-					(int*) sender2kernel(L4_MsgWord(msg, 3)));
+					pager_buffer(tid),
+					(size_t) L4_MsgWord(msg, 1),
+					&rval);
 			break;
 
 		case SOS_STAT:
 			vfs_stat(tid,
-					(char*) sender2kernel(L4_MsgWord(msg, 0)),
-					(stat_t*) L4_MsgWord(msg, 1),
-					(int*) sender2kernel(L4_MsgWord(msg, 2)));
+					pager_buffer(tid),
+					(stat_t*) (pager_buffer(tid) + strlen(pager_buffer(tid)) + 1),
+					&rval);
 			break;
 
 		case SOS_TIME_STAMP:

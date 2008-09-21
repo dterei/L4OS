@@ -56,11 +56,11 @@ typedef enum {
 } st_type_t;
 
 typedef struct {
-  st_type_t st_type;	/* file type */
-  fmode_t   st_fmode;	/* access mode */
-  size_t    st_size;	/* file size in bytes */
-  long	    st_ctime;	/* file creation time (ms since booting) */
-  long	    st_atime;	/* file last access (open) time (ms since booting) */
+	st_type_t st_type;  // file type
+	fmode_t   st_fmode; // access mode
+	size_t    st_size;  // file size in bytes
+	long	   st_ctime; // file creation time (ms since booting)
+	long	   st_atime; // file last access (open) time (ms since booting)
 } stat_t;
 
 typedef int fildes_t;
@@ -70,12 +70,15 @@ extern fildes_t stdout_fd;
 extern fildes_t stdin_fd;
 
 typedef struct {
-  pid_t     pid;
-  unsigned  size;		/* in pages */
-  unsigned  stime;		/* start time in msec since booting */
-  unsigned  ctime;		/* CPU time accumulated in msec */
-  char	    command[N_NAME];	/* Name of exectuable */
+	pid_t     pid;
+	unsigned  size;  // in pages
+	unsigned  stime; // start time in msec since booting
+	unsigned  ctime; // CPU time accumulated in msec
+	char	    command[N_NAME]; // Name of exectuable
 } process_t;
+
+/* Get the string representation of a syscall */
+char *syscall_show(int syscall);
 
 /* Misc system calls */
 
@@ -97,13 +100,13 @@ int moremem(uintptr_t *base, unsigned int nb);
  * Copy in a section of memory to the kernel's buffer in perparation for
  * any system call that requres it.
  */
-void copyin(void *data, size_t size);
+void copyin(void *data, size_t size, int append);
 
 /*
  * Copy out a section of memory to the kernel's buffer in perparation for
  * any system call that requres it.
  */
-void copyout(void *data, size_t size);
+void copyout(void *data, size_t size, int append);
 
 /*
  * Open file and return file descriptor, -1 if unsuccessful 

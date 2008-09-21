@@ -8,7 +8,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 0
+#define verbose 2
 
 // The file names of our consoles
 Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
@@ -71,7 +71,7 @@ open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			const char *path, fmode_t mode, int *rval), int r) {
 	*rval = r;
 	open_done(tid, self, path, mode, rval);
-	syscall_reply(tid, 0); // XXX can give rval now
+	syscall_reply(tid, *rval);
 }
 
 void
@@ -135,7 +135,7 @@ console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 	*rval = r;
 	close_done(tid, self, file, mode, rval);
-	syscall_reply(tid, 0); // XXX can give rval now
+	syscall_reply(tid, *rval);
 }
 
 void
@@ -217,6 +217,7 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	cf->reader.rval = rval;
 	cf->reader.read_done = read_done;
 	*rval = 0;
+	dprintf(1, "*** console_read: completed\n");
 }
 
 void
@@ -232,7 +233,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	char *buf2 = (char *)buf;
 	*rval = network_sendstring_char(nbyte, buf2);
 	write_done(tid, self, file, offset, buf, 0, rval);
-	syscall_reply(tid, 0); // XXX can give rval now
+	syscall_reply(tid, *rval);
 }
 
 void
@@ -243,7 +244,7 @@ console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nby
 	dprintf(0, "***console_getdirent: Not implemented for console fs\n");
 
    *rval = (-1);
-	syscall_reply(tid, 0); // XXX can give rval now
+	syscall_reply(tid, *rval);
 }
 
 void
@@ -254,7 +255,7 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *
 	dprintf(0, "***console_stat: Not implemented for console fs\n");
 
    *rval = (-1);
-	syscall_reply(tid, 0); // XXX can give rval now
+	syscall_reply(tid, *rval);
 }
 
 void
@@ -287,7 +288,7 @@ serial_read_callback(struct serial *serial, char c) {
 				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
 
 		rq->read_done(rq->tid, NULL, rq->file, 0, rq->buf, 0, rq->rval);
-		syscall_reply(rq->tid, 0); // XXX can give rval now
+		syscall_reply(rq->tid, *(rq->rval));
 
 		// remove request now its done
 		rq->tid = L4_nilthread;

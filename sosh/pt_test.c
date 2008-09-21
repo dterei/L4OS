@@ -6,8 +6,8 @@
 
 #include "pt_test.h"
 
-#define NUM_SLOTS 128
-#define SLOTSIZE 16
+#define NUM_SLOTS 4096
+#define SLOTSIZE 196
 #define STACKSIZE 512
 
 typedef int test_t;

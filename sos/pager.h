@@ -5,7 +5,6 @@
 
 #include "l4.h"
 
-// Should look this up in USER_HW_VALID_PGSIZES
 #define PAGESIZE 4096
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
 #define PAGEALIGN (~((PAGESIZE) - 1))
@@ -39,13 +38,15 @@ void region_set_rights(Region *r, int rights);
 void region_append(Region *r, Region *toAppend);
 
 PageTable *pagetable_init(void);
+
 void pager_init(void);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
-int sos_moremem(uintptr_t *base, unsigned int nb);
-L4_Word_t *sender2kernel(L4_Word_t addr);
-void copyIn(L4_ThreadId_t tid, void *src, size_t size);
-void copyOut(L4_ThreadId_t tid, void *dest, size_t size);
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip);
+
+int sos_moremem(uintptr_t *base, unsigned int nb);
+
+void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
+void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);
 char *pager_buffer(L4_ThreadId_t tid);
 
 #endif // _PAGER_H
