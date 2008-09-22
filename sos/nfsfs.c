@@ -586,12 +586,21 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ, getdirent_cb, rq->p.token);
 }
 
+/* Convert the NFS mode (xwr) to unix mode (rwx) */
+static fmode_t
+mode_nfs2unix(fmode_t mode) {
+	return
+		(((mode & 0x1) >> 0) << 2) |
+		(((mode & 0x4) >> 2) << 1) |
+		(((mode & 0x2) >> 1) << 0);
+}
+
 /* Copy the relavent entriees from attr to buf */
 static
 void
 cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_type  = attr->type;
-	stat->st_fmode = attr->mode;
+	stat->st_fmode = mode_nfs2unix(attr->mode);
 	stat->st_size  = attr->size;
 	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
 	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);

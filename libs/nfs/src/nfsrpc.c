@@ -462,7 +462,8 @@ nfs_remove(struct cookie *cwd, char *name,
     struct pbuf *pbuf;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = initbuf(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE);
+    //pbuf = initbuf(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE);
+    pbuf = initbuf(NFS_NUMBER, NFS_VERSION, 10);
     
     /* put in the fhandle */
     addtobuf(pbuf, (char*) cwd, sizeof(struct cookie));

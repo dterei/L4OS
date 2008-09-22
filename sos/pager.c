@@ -28,6 +28,12 @@
 
 #define verbose 1
 
+#define LO_HALF_MASK 0x0000ffff
+#define HI_HALF_MASK 0xffff0000
+
+#define LO_HALF(word) ((word) & 0x0000ffff)
+#define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
+
 // Page table structures
 // Each level of the page table is assumed to be of size PAGESIZE
 typedef struct PageTable2_t {
@@ -439,13 +445,19 @@ void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(1, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
 
+	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
+	int newSize = LO_HALF(data);
+	int base = HI_HALF(data);
+
 	if (append) {
-		copyInOutData[L4_ThreadNo(tid)] &= 0xffff0000;
+		newSize += size;
 	} else {
-		copyInOutData[L4_ThreadNo(tid)] &= 0x00000000;
+		newSize = size;
+		base = 0;
 	}
 
-	copyInOutData[L4_ThreadNo(tid)] |= size;
+	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
+	copyInOutData[L4_ThreadNo(tid)] = data;
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),
@@ -460,16 +472,15 @@ static void copyOutContinue(PagerRequest *pr) {
 	// Data about the copyout operation.
 	int threadNum = L4_ThreadNo(process_get_tid(pr->p));
 
-	L4_Word_t size = copyInOutData[threadNum] & 0x0000ffff;
-	L4_Word_t offset = (copyInOutData[threadNum] >> 16) & 0x0000ffff;
+	L4_Word_t size = LO_HALF(copyInOutData[threadNum]);
+	L4_Word_t offset = HI_HALF(copyInOutData[threadNum]);
 
 	// Continue copying out from where we left off
 	char *src = pager_buffer(process_get_tid(pr->p)) + offset;
 	dprintf(1, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
 			size, offset, src);
 
-	char *dest = (char*) *findPageTableWord(
-			process_get_pagetable(pr->p), pr->addr);
+	char *dest = (char*) *findPageTableWord(process_get_pagetable(pr->p), pr->addr);
 	dest += pr->addr & (PAGESIZE - 1);
 	dprintf(1, "*** copyOutContinue: dest=%p\n", dest);
 
@@ -496,13 +507,19 @@ void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	dprintf(1, "*** copyOut: tid=%ld dest=%p size=%d\n",
 			L4_ThreadNo(tid), dest, size);
 
+	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
+	int newSize = LO_HALF(data);
+	int base = HI_HALF(data);
+
 	if (append) {
-		copyInOutData[L4_ThreadNo(tid)] &= 0xffff0000;
+		newSize += size;
 	} else {
-		copyInOutData[L4_ThreadNo(tid)] &= 0x00000000;
+		newSize = size;
+		base = 0;
 	}
 
-	copyInOutData[L4_ThreadNo(tid)] |= size;
+	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
+	copyInOutData[L4_ThreadNo(tid)] = data;
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),
