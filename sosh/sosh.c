@@ -41,7 +41,8 @@ prstat(const char *name)
 			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
 }
 
-static int kecho(int argc, char **argv)
+static int
+kecho(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++)
 	{
@@ -264,9 +265,22 @@ rm(int argc, char **argv)
 		return 1;
 	}
 
-	int r;
-	r = fremove(argv[1]);
-	return r;
+	int r = fremove(argv[1]);
+	if (r < 0)
+	{
+		printf("rm(%s) failed: %d\n", argv[1], r);
+		if (r == SOS_VFS_NOFILE || r == SOS_VFS_PATHINV || r == SOS_VFS_NOVNODE) {
+			printf("file doesn't exist!\n");
+		} else if (r == SOS_VFS_PERM) {
+			printf("Invalid permissions\n");
+		} else if (r == SOS_VFS_NOTIMP) {
+			printf("Can't remove this type of file\n");
+		} else if (r == SOS_VFS_ERROR) {
+			printf("General failure\n");
+		}
+	}
+
+	return 0;
 }
 
 static int
@@ -305,7 +319,8 @@ howlong(int argc, char **argv)
 	return 0;
 }
 
-static int benchmark(int argc, char *argv[])
+static int
+benchmark(int argc, char *argv[])
 {
 	char *timeArgs[4];
 	printf("*** TESTING READ PERFORMANCE\n");
@@ -364,7 +379,8 @@ static int benchmark(int argc, char *argv[])
 	return 0;
 }
 
-static int pttest(int argc, char *argv[])
+static int
+pttest(int argc, char *argv[])
 {
 	return pt_test();
 }
