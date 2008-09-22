@@ -26,6 +26,7 @@ typedef enum {
 
 /* System calls for SOS */
 typedef enum {
+	SOS_REPLY,
 	SOS_KERNEL_PRINT,
 	SOS_DEBUG_FLUSH,
 	SOS_MOREMEM,
@@ -94,7 +95,7 @@ typedef struct {
 } process_t;
 
 /* Get the string representation of a syscall */
-char *syscall_show(int syscall);
+char *syscall_show(syscall_t syscall);
 
 /* Misc system calls */
 

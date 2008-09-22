@@ -15,20 +15,37 @@
 #include "pager.h"
 #include "frames.h"
 
-#define NULLFRAME ((L4_Word_t) (0))
 #define verbose 1
+
+#define FRAME_ALLOC_LIMIT 16
+#define NULLFRAME ((L4_Word_t) (0))
+// XXX add to a global collection of frame/pagetable flags,
+// so they don't overlap.
+#define REFBIT_MASK 0x00000001
 
 static L4_Word_t firstFree;
 
-/**
- * Intialise frame table as a linked stack.
- */
+typedef struct FrameList_t FrameList;
+struct FrameList_t {
+	L4_Word_t frame; // also contains refbit
+	FrameList *next;
+};
+
+static int allocLimit;
+static FrameList *allocHead;
+static FrameList *allocLast;
+
 void
 frame_init(L4_Word_t low, L4_Word_t frame)
 {
 	L4_Word_t page, high;
 	L4_Fpage_t fpage;
 	L4_PhysDesc_t ppage;
+
+	// Set up alloc frame list
+	allocLimit = FRAME_ALLOC_LIMIT;
+	allocHead = NULL;
+	allocLast = NULL;
 
 	// Make the high address page aligned (grr).
 	high = frame + 1;
@@ -53,11 +70,8 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	*((L4_Word_t*) (high - PAGESIZE)) = NULLFRAME;
 }
 
-/**
- * Allocate a currently unused frame.
- */
-L4_Word_t
-frame_alloc(void)
+static L4_Word_t
+doFrameAlloc(void)
 {
 	static L4_Word_t alloc;
 
@@ -72,9 +86,83 @@ frame_alloc(void)
 	return alloc;
 }
 
-/**
- * Add a frame to the free frame stack.
- */
+static void
+addFrameList(L4_Word_t frame) {
+	FrameList *new = (FrameList*) malloc(sizeof(FrameList));
+	new->frame = frame;
+
+	// The frame should definitely not have been referenced
+	assert((new->frame & REFBIT_MASK) == 0);
+
+	if (allocLast == NULL) {
+		allocLast = new->next;
+		assert(allocHead == NULL);
+		allocHead = new->next;
+	} else {
+		new->next = NULL;
+		allocLast->next = new;
+	}
+}
+
+L4_Word_t
+frame_alloc(void) {
+	L4_Word_t frame;
+
+	if (allocLimit < 0) {
+		dprintf(0, "!!! allocLimit somehow negative!?\n");
+		frame = NULLFRAME;
+	} else if (allocLimit == 0) {
+		dprintf(0, "*** allocLimit reached\n");
+		frame = NULLFRAME;
+	} else {
+		frame = doFrameAlloc();
+		allocLimit--;
+		addFrameList(frame);
+		dprintf(0, "*** allocated %p, limit now %d\n", frame, allocLimit);
+	}
+
+	return frame;
+}
+
+L4_Word_t
+kframe_alloc(void) {
+	return doFrameAlloc();
+}
+
+static L4_Word_t
+deleteFrameList(void) {
+	assert(allocHead != NULL);
+	assert(allocLast != NULL);
+
+	FrameList *oldAllocHead = allocHead;
+	L4_Word_t frame;
+
+	if ((allocHead->frame & REFBIT_MASK) == 0) {
+		// Not been referenced, this is the frame to swap
+		frame = allocHead->frame;
+		allocHead = allocHead->next;
+		free(oldAllocHead);
+	} else {
+		// Been referenced, clear and move to back
+		frame = 0;
+		allocHead = allocHead->next;
+		allocLast->next = oldAllocHead;
+		oldAllocHead->next = NULL;
+	}
+
+	return frame;
+}
+
+L4_Word_t
+frame_nextswap(void) {
+	L4_Word_t frame;
+
+	// Eventually it will find something
+	while ((frame = deleteFrameList()) == 0);
+
+	return frame;
+}
+
 void
 frame_free(L4_Word_t frame)
 {
