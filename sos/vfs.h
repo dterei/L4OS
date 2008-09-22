@@ -12,6 +12,12 @@ struct VNode_t {
 	char path[N_NAME];
 	stat_t vstat;
 	int refcount;
+
+	// Open counters
+	unsigned int Max_Readers;
+	unsigned int Max_Writers;
+	unsigned int readers;
+	unsigned int writers;
 	
 	// store a pointer to any extra needed data
 	void *extra; 

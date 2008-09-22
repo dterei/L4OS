@@ -33,8 +33,6 @@ typedef struct {
 	char *path;
 	const unsigned int Max_Readers;
 	const unsigned int Max_Writers;
-	unsigned int readers;
-	unsigned int writers;
 
 	// store info about a thread waiting on a read
 	// change to a list to support more then one reader
@@ -42,7 +40,7 @@ typedef struct {
 } Console_File;
 
 // The file names of our consoles
-Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED, 0, 0} };
+Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED } };
 
 // callback for read
 static void serial_read_callback(struct serial *serial, char c);
@@ -66,6 +64,10 @@ console_init(VNode sflist) {
 		console->vstat.st_size = 0;
 		console->vstat.st_ctime = 0;
 		console->vstat.st_atime = 0;
+		console->readers = 0;
+		console->writers = 0;
+		console->Max_Readers = Console_Files[i].Max_Readers;
+		console->Max_Writers = Console_Files[i].Max_Writers;
 
 		// setup system calls
 		console->open = console_open;
@@ -134,31 +136,6 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		return;
 	}
 
-	// open file for reading
-	if (mode & FM_READ) {
-		// check if reader slots full
-		if (cf->readers > cf->Max_Readers) {
-			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
-			return;
-		} else {
-			cf->readers++;
-		}
-	}
-
-	// open file for writing
-	if (mode & FM_WRITE) {
-		// check if writers slots full
-		if (cf->writers > cf->Max_Writers) {
-			if (mode & FM_READ) {
-				cf->readers--;
-			}
-			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
-			return;
-		} else {
-			cf->writers++;
-		}
-	}
-
 	open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_OK);
 }
 
@@ -195,10 +172,10 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 	// decrease counts
 	if (mode & FM_WRITE) {
-		cf->writers--;
+		self->writers--;
 	}
 	if (mode & FM_READ) {
-		cf->readers--;
+		self->readers--;
 	}
 
 	// remove it if waiting on read (although shouldnt be able to occur)
@@ -211,10 +188,10 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	}
 
 	// 'close' vnode if no one has it open
-	if (cf->writers <= 0 && cf->readers <= 0 && self->refcount == 1) {
+	if (self->writers <= 0 && self->readers <= 0 && self->refcount == 1) {
 		self->refcount = 0;
-		cf->writers = 0;
-		cf->readers = 0;
+		self->writers = 0;
+		self->readers = 0;
 		self = NULL;
 	}
 
