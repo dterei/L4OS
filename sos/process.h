@@ -39,4 +39,10 @@ PageTable *process_get_pagetable(Process *p);
 // Get the regions of a process
 Region *process_get_regions(Process *p);
 
+// Set the pager request associated with a process
+void process_set_prequest(Process *p, PagerRequest *pr);
+
+// Get the pager request associated with a process
+PagerRequest *process_get_prequest(Process *p);
+
 #endif // process.h

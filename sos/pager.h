@@ -26,6 +26,8 @@ typedef enum {
 
 typedef struct Region_t Region;
 
+typedef struct PagerRequest_t PagerRequest;
+
 // The thread id of the main pager process
 extern L4_ThreadId_t virtual_pager;
 

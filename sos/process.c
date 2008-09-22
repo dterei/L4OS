@@ -1,5 +1,6 @@
 #include "l4.h"
 #include "libsos.h"
+#include "pager.h"
 #include "process.h"
 #include "vfs.h"
 
@@ -11,6 +12,7 @@ struct Process_t {
 	L4_ThreadId_t tid;
 	PageTable *pagetable;
 	Region *regions;
+	PagerRequest *prequest;
 	void *sp;
 	void *ip;
 };
@@ -26,6 +28,7 @@ Process *process_init(void) {
 
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
+	p->prequest = NULL;
 	p->sp = NULL;
 	p->ip = NULL;
 
@@ -150,5 +153,13 @@ PageTable *process_get_pagetable(Process *p) {
 
 Region *process_get_regions(Process *p) {
 	return p->regions;
+}
+
+void process_set_prequest(Process *p, PagerRequest *pr) {
+	p->prequest = pr;
+}
+
+PagerRequest *process_get_prequest(Process *p) {
+	return p->prequest;
 }
 

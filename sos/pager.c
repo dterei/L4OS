@@ -56,17 +56,13 @@ struct Region_t {
 };
 
 // Asynchronous pager requests
-typedef struct PagerRequest_t PagerRequest;
 struct PagerRequest_t {
 	Process *p;
 	L4_Word_t addr;
 	void (*callback)(PagerRequest *pr);
 };
 
-static PagerRequest **requests = NULL;
-
 // For copyin/copyout
-//static L4_Word_t *copyInOutPointers;
 static L4_Word_t *copyInOutData;
 static char *copyInOutBuffer;
 
@@ -138,9 +134,6 @@ static L4_Word_t *allocFrames(int n) {
 
 void
 pager_init(void) {
-	// The array of page table requests (per thread id)
-	requests = (PagerRequest**) allocFrames(sizeof(PagerRequest*));
-
 	// Grab a bunch of frames to use for copyin/copyout
 	assert((PAGESIZE % MAX_IO_BUF) == 0);
 	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
