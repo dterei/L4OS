@@ -28,10 +28,12 @@
 
 #define verbose 1
 
-#define LO_HALF_MASK 0x0000ffff
-#define HI_HALF_MASK 0xffff0000
+#define ONDISK_MASK 0x00000001
+#define PINNED_MASK 0x00000002
 
+#define LO_HALF_MASK 0x0000ffff
 #define LO_HALF(word) ((word) & 0x0000ffff)
+#define HI_HALF_MASK 0xffff0000
 #define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
 
 // Page table structures
@@ -108,7 +110,7 @@ void region_append(Region *r, Region *toAppend) {
 
 PageTable *pagetable_init(void) {
 	assert(sizeof(PageTable1) == PAGESIZE);
-	PageTable1 *pt = (PageTable1*) frame_alloc();
+	PageTable1 *pt = (PageTable1*) kframe_alloc();
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		pt->pages2[i] = NULL;
@@ -117,15 +119,15 @@ PageTable *pagetable_init(void) {
 	return (PageTable*) pt;
 }
 
-static L4_Word_t *allocFrames(int n) {
+static L4_Word_t *kallocFrames(int n) {
 	assert(n > 0);
 	L4_Word_t frame, nextFrame;
 
-	frame = frame_alloc();
+	frame = kframe_alloc();
 	n--;
 
 	for (int i = 1; i < n; i++) {
-		nextFrame = frame_alloc();
+		nextFrame = kframe_alloc();
 		assert((frame + i * PAGESIZE) == nextFrame);
 	}
 
@@ -140,8 +142,8 @@ pager_init(void) {
 
 	dprintf(1, "*** pager_init: grabbing %d frames\n", numFrames);
 
-	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
-	copyInOutBuffer = (char*) allocFrames(numFrames);
+	copyInOutData = (L4_Word_t*) kallocFrames(sizeof(L4_Word_t));
+	copyInOutBuffer = (char*) kallocFrames(numFrames);
 
 	// Start the real pager process
 	Process *pager = process_init();
@@ -208,7 +210,7 @@ findPageTableWord(PageTable *pt, L4_Word_t addr) {
 
 	if (level1->pages2[offset1] == NULL) {
 		assert(sizeof(PageTable2) == PAGESIZE);
-		level1->pages2[offset1] = (PageTable2*) frame_alloc();
+		level1->pages2[offset1] = (PageTable2*) kframe_alloc();
 
 		for (int i = 0; i < PAGEWORDS; i++) {
 			level1->pages2[offset1]->pages[i] = 0;

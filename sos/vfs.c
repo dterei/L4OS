@@ -91,23 +91,25 @@ findNextFd(int spaceId) {
 /* Add vnode to global list */
 static
 void
-add_vnode(VNode vn) {
-	vn->next = NULL;
-	vn->previous = NULL;
+add_vnode(VNode vnode) {
+	vnode->next = NULL;
+	vnode->previous = NULL;
 
 	// add to list if list not empty
 	if (GlobalVNodes != NULL) {
-		vn->next = GlobalVNodes;
-		GlobalVNodes->previous = vn;
+		vnode->next = GlobalVNodes;
+		GlobalVNodes->previous = vnode;
 	}
 
-	GlobalVNodes = vn;
+	GlobalVNodes = vnode;
 }
 
 /* Remove vnode from global list */
 static
 void
 remove_vnode(VNode vnode) {
+	dprintf(2, "*** remove_vnode: %p\n", vnode);
+
 	VNode vp = vnode->previous;
 	VNode vn = vnode->next;
 
@@ -122,6 +124,11 @@ remove_vnode(VNode vnode) {
 		vp->next = vn;
 		vn->previous = vp;
 	}
+
+	vnode->next = NULL;
+	vnode->previous = NULL;
+	
+	dprintf(2, "vnode removed\n", vnode);
 }
 
 /* Find vnode on global list */
@@ -249,7 +256,7 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 static
 void
 vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_close_done: %d\n", file);
+	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, *rval);
 
 	if (*rval != 0) return;
 
@@ -263,8 +270,12 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 	vf->fp = 0;
 
 	// close global vnode entry if returned vnode is null
-	if (vnode == NULL) {
+	if (self == NULL && vnode != NULL) {
 		remove_vnode(vnode);
+		free(vnode);
+	} else if (vnode == NULL) {
+		dprintf(0, "!!! vfs_close_done: Error closing vnode, already NULL (%d %d, %p, %p, %d)!!!\n",
+				L4_ThreadNo(tid), file, self, vnode, *rval);
 	} else {
 		vnode->refcount--;
 	}
@@ -273,8 +284,7 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 /* Read from a file */
 void
 vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_read: %d %d %d %p %d\n", L4_ThreadNo(tid),
-			L4_ThreadNo(tid), file, buf, nbyte);
+	dprintf(1, "*** vfs_read: %d %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
 	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
@@ -341,10 +351,9 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	if (!(vf->fmode & FM_WRITE)) {
 		dprintf(1, "*** vfs_write: invalid write permissions for file: %d, %s, %d\n",
 				file, vnode->path, vf->fmode);
-		// XXX: This should be working!
-		//*rval = SOS_VFS_PERM;
-		//syscall_reply(tid);
-		//return;
+		*rval = SOS_VFS_PERM;
+		syscall_reply(tid, *rval);
+		return;
 	}
 
 	vnode->write(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_write_done);
@@ -407,6 +416,16 @@ void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval) {
 	VNode vnode = find_vnode(path);
 	if (vnode != NULL) {
 		dprintf(1, "*** vfs_remove: found already open vnode: %s ***\n", vnode->path);
+
+		// check permissions
+		if (!(vnode->vstat.st_fmode & FM_WRITE)) {
+			dprintf(1, "vnfs_remove: no write permission for file, can't remove (%d)\n",
+					vnode->vstat.st_fmode);
+			*rval = SOS_VFS_PERM;
+			syscall_reply(tid, *rval);
+			return;
+		}
+
 		// this will fail for nfs and console fs, can only remove non open files.
 		vnode->remove(tid, vnode, path, rval);
 	}

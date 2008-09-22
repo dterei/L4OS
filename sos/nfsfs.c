@@ -25,7 +25,7 @@ nfsfs_timeout_thread(void) {
 	while (1) {
 		sos_usleep(NFSFS_TIMEOUT_MS);
 		nfs_timeout();
-		dprintf(3, "*** nfs_timeout_thread: timout event!\n");
+		dprintf(4, "*** nfs_timeout_thread: timout event!\n");
 	}
 }
 
@@ -334,8 +334,10 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	}
 
 	strncpy(self->path, path, N_NAME);
-	self->refcount = 1;
+	self->refcount = 0;
 	self->vstat.st_type = ST_FILE;
+	self->next = NULL;
+	self->previous = NULL;
 
 	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
 	nf->vnode = self;
@@ -370,14 +372,15 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		getvnode(tid, self, path, mode, rval, open_done);
 	} else {
 		dprintf(2, "nfs_open: already open vnode, increase refcount\n\n");
-		self->refcount++;
 		*rval = SOS_VFS_OK;
 		open_done(tid, self, path, mode, rval);
 		syscall_reply(tid, *rval);
 	}
 };
 
-/* Close a specified file previously opened with nfsfs_open */
+/* Close a specified file previously opened with nfsfs_open, don't free the vnode
+ * just free nfs specific file structs as vfs will free the vnode
+ */
 void
 nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
@@ -394,9 +397,9 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 	// reduce ref count and free if no longer needed
 	self->refcount--;
+	dprintf(2, "refcount: %d\n", self->refcount);
 	if (self->refcount <= 0) {
 		free((NFS_File *) self->extra);
-		free(self);
 		self = NULL;
 	}
 
