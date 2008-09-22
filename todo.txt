@@ -27,6 +27,6 @@ the hack that is the global rval value in syscall.
 
 - Check that copyin/out calls don't override the size of the buffer.
 
-- stat is broken due to either a miscalculation of the offset when doing the
-syscall (on either side) OR copyout (and probably in as well) is broken when
-it comes to appending data rather than simply writing over.
+- Put all of the commands in sosh in to different files (i.e. one for cp, one
+for rm, etc).  It's so very ugly at the moment.
+
