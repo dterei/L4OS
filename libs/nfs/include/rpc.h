@@ -399,5 +399,7 @@ typedef struct writeargs
 /* attrstat NFSPROC_WRITE(writeargs) = 8; */
 #define NFSPROC_WRITE 8
 
+/* stat NFSPROC_REMOVE(diropargs) = 10; */
+#define NFSPROC_REMOVE 10
 
 #endif /* __RPC_H */
