@@ -15,8 +15,9 @@
 fildes_t stdout_fd = 0;
 fildes_t stdin_fd = (-1); // never used, grr
 
-char *syscall_show(int syscall) {
+char *syscall_show(syscall_t syscall) {
 	switch (syscall) {
+		case SOS_REPLY: return "SOS_REPLY";
 		case SOS_KERNEL_PRINT: return "SOS_KERNEL_PRINT";
 		case SOS_DEBUG_FLUSH: return "SOS_DEBUG_FLUSH";
 		case SOS_MOREMEM: return "SOS_MOREMEM";
