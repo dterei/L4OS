@@ -390,6 +390,10 @@ char *pager_buffer(L4_ThreadId_t tid) {
 	return &copyInOutBuffer[threadOffset];
 }
 
+static int isPageAligned(void *ptr) {
+	return (((L4_Word_t) ptr) & (PAGESIZE - 1)) == 0;
+}
+
 static void copyInContinue(PagerRequest *pr) {
 	dprintf(1, "*** copyInContinue pr=%p process=%p tid=%ld addr=%p\n",
 			pr, pr->p, process_get_tid(pr->p), (void*) pr->addr);
@@ -414,12 +418,14 @@ static void copyInContinue(PagerRequest *pr) {
 
 	// Start the copy - if we reach a page boundary then pause computation
 	// since we can assume that it goes out to disk and waits a long time
-	do {
+	while ((offset < size) && (offset < MAX_IO_BUF)) {
 		*dest = *src;
 		dest++;
 		src++;
 		offset++;
-	} while ((offset < size) && ((((L4_Word_t) src) & (PAGESIZE - 1)) != 0));
+
+		if (isPageAligned(src)) break; // continue from next page boundary
+	}
 
 	copyInOutData[threadNum] = size | (offset << 16);
 
@@ -477,16 +483,18 @@ static void copyOutContinue(PagerRequest *pr) {
 	dest += pr->addr & (PAGESIZE - 1);
 	dprintf(1, "*** copyOutContinue: dest=%p\n", dest);
 
-	do {
+	while ((offset < size) && (offset < MAX_IO_BUF)) {
 		*dest = *src;
 		dest++;
 		src++;
 		offset++;
-	} while ((offset < size) && ((((L4_Word_t) dest) & (PAGESIZE - 1)) != 0));
+
+		if (isPageAligned(dest)) break; // continue from next page boundary
+	}
 
 	copyInOutData[threadNum] = size | (offset << 16);
 
-	if (offset >= size) {
+	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		syscall_reply(replyTo, 0);
