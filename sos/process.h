@@ -57,4 +57,7 @@ void process_kill(pid_t pid);
 // Write the status of the first n processes to dest
 int process_write_status(process_t *dest, int n);
 
+// Get a pointer to a process_t struct from the process
+process_t *process_get_info(Process *p);
+
 #endif // process.h

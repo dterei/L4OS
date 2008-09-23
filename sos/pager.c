@@ -296,6 +296,7 @@ pager(PagerRequest *pr) {
 		mapKernelToo = 1;
 	} else {
 		dprintf(1, "*** pager: allocating frame\n");
+		process_get_info(pr->p)->size++;
 		*entry = frame_alloc();
 	}
 

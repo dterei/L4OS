@@ -1,3 +1,4 @@
+#include <clock/clock.h>
 #include <string.h>
 
 #include "l4.h"
@@ -17,6 +18,7 @@ struct Process_t {
 	PagerRequest *prequest;
 	void *sp;
 	void *ip;
+	timestamp_t startedAt;
 };
 
 static Process *sos_procs[MAX_ADDRSPACES];
@@ -28,11 +30,11 @@ Process *process_lookup(L4_Word_t key) {
 Process *process_init(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
-	p->info.pid = 0; // decide later
-	p->info.size = 0;
+	p->info.pid = 0;   // decide later
+	p->info.size = 0;  // fill in as we go
 	p->info.stime = 0; // decide later
-	p->info.ctime = 0;
-	p->info.command[0] = '\0'; // decide later
+	p->info.ctime = 0; // don't ever need
+	p->info.command[0] = '\0';
 
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
@@ -142,6 +144,8 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	L4_ThreadId_t tid;
 	process_dump(p);
 
+	p->startedAt = time_stamp();
+
 	if (asThread == RUN_AS_THREAD) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
@@ -193,6 +197,7 @@ int process_write_status(process_t *dest, int n) {
 
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
 		if (sos_procs[i] != NULL) {
+			sos_procs[i]->info.stime = (time_stamp() - sos_procs[i]->startedAt);
 			*dest = sos_procs[i]->info;
 			dest++;
 			count++;
@@ -200,5 +205,10 @@ int process_write_status(process_t *dest, int n) {
 	}
 
 	return count;
+}
+
+process_t *process_get_info(Process *p) {
+	// If necessary, uptime stime here too
+	return &p->info;
 }
 
