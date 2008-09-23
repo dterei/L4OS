@@ -16,9 +16,11 @@ typedef int test_t;
 int pt_test(int argc, char **argv) {
 	int i, j, passed;
 	test_t **buf;
-	test_t stack [STACKSIZE];
+	test_t stack[STACKSIZE];
 
 	// Test heap
+
+	printf("testing heap\n");
 
 	buf = (test_t**) malloc(NUM_SLOTS * sizeof(test_t*));
 
@@ -29,6 +31,8 @@ int pt_test(int argc, char **argv) {
 			buf[i][j] = i*i + j;
 		}
 	}
+
+	printf("done test\n");
 
 	// Do in two rounds in case memory is going crazy
 
@@ -48,6 +52,8 @@ int pt_test(int argc, char **argv) {
 
 	// Test stack
 
+	printf("testing stack\n");
+
 	for (i = 0; i < STACKSIZE; i++) {
 		stack[i] = i*i - i;
 	}
@@ -57,6 +63,8 @@ int pt_test(int argc, char **argv) {
 			printf("pt_test: failed for i=%d\n", i);
 		}
 	}
+
+	printf("done test\n");
 
 	return 0;
 }

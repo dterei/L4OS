@@ -449,6 +449,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 
 	// Fill in some more info.
 	bip->tid = bootinfo_id;
+	process_set_name(bip->process, name);
 	process_set_ip(bip->process, (void*) ip);
 
 	return ++bootinfo_id;

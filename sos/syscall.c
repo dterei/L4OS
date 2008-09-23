@@ -133,14 +133,21 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
 			break;
 
+		case SOS_PROCESS_DELETE:
+			process_kill(L4_MsgWord(msg, 0));
+			break;
+
 		case SOS_MY_ID:
 			rval = process_get_pid(process_lookup(L4_ThreadNo(tid)));
 			syscall_reply(tid, rval);
 			break;
 
-		case SOS_PROCESS_CREATE:
-		case SOS_PROCESS_DELETE:
 		case SOS_PROCESS_STATUS:
+			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
+			syscall_reply(tid, rval);
+			break;
+
+		case SOS_PROCESS_CREATE:
 		case SOS_PROCESS_WAIT:
 		case SOS_SHARE_VM:
 		default:

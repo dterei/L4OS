@@ -17,7 +17,7 @@
 
 #define verbose 1
 
-#define FRAME_ALLOC_LIMIT 16
+#define FRAME_ALLOC_LIMIT 4242
 #define NULLFRAME ((L4_Word_t) (0))
 // XXX add to a global collection of frame/pagetable flags,
 // so they don't overlap.
@@ -116,9 +116,11 @@ frame_alloc(void) {
 		frame = NULLFRAME;
 	} else {
 		frame = doFrameAlloc();
+		dprintf(1, "*** allocated frame %p\n", frame);
 		allocLimit--;
-		addFrameList(frame);
-		dprintf(0, "*** allocated %p, limit now %d\n", frame, allocLimit);
+		//addFrameList(frame);
+		(void) addFrameList;
+		//dprintf(0, "*** allocated %p, limit now %d\n", frame, allocLimit);
 	}
 
 	return frame;

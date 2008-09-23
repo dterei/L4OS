@@ -12,11 +12,14 @@ typedef struct Process_t Process;
 // Find a process
 Process *process_lookup(L4_Word_t key);
 
-// Create a new process (but don't start it yet)
+// Create a new process with a given name
 Process *process_init(void);
 
 // Add a region to a process
 void process_add_region(Process *p, Region *r);
+
+// Set the name of the process
+void process_set_name(Process *p, char *name);
 
 // Set an initial stack pointer for the process
 void process_set_sp(Process *p, void *sp);
@@ -47,5 +50,11 @@ void process_set_prequest(Process *p, PagerRequest *pr);
 
 // Get the pager request associated with a process
 PagerRequest *process_get_prequest(Process *p);
+
+// Kill a process and free its resources
+void process_kill(pid_t pid);
+
+// Write the status of the first n processes to dest
+int process_write_status(process_t *dest, int n);
 
 #endif // process.h

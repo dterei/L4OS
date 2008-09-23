@@ -8,9 +8,7 @@ int ps(int argc, char **argv) {
 	process_t *process;
 	int i, processes;
 
-	printf("ps: calling malloc\n");
-	process = malloc( MAX_PROCESSES * sizeof(*process) );
-	printf("ps: malloc done\n");
+	process = malloc(MAX_PROCESSES * sizeof(*process));
 
 	if (process == NULL) {
 		printf("%s: out of memory\n", argv[0]);

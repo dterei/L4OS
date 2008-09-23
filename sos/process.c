@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
@@ -9,7 +11,7 @@
 #define verbose 1
 
 struct Process_t {
-	pid_t pid;
+	process_t info;
 	PageTable *pagetable;
 	Region *regions;
 	PagerRequest *prequest;
@@ -25,6 +27,12 @@ Process *process_lookup(L4_Word_t key) {
 
 Process *process_init(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
+
+	p->info.pid = 0; // decide later
+	p->info.size = 0;
+	p->info.stime = 0; // decide later
+	p->info.ctime = 0;
+	p->info.command[0] = '\0'; // decide later
 
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
@@ -53,6 +61,10 @@ void process_set_sp(Process *p, void *sp) {
 	// will then need to manage its memory
 	// manually.  
 	p->sp = sp;
+}
+
+void process_set_name(Process *p, char *name) {
+	strncpy(p->info.command, name, N_NAME);
 }
 
 static void addRegion(Process *p, region_type type,
@@ -99,7 +111,7 @@ static void addBuiltinRegions(Process *p) {
 static void process_dump(Process *p) {
 	(void) process_dump;
 
-	dprintf(1, "*** %s on %ld\n", __FUNCTION__, p->pid);
+	dprintf(1, "*** %s on %ld\n", __FUNCTION__, p->info.pid);
 	dprintf(1, "*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
 	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
@@ -118,8 +130,8 @@ void process_prepare(Process *p) {
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
-	p->pid = L4_ThreadNo(sos_get_new_tid());
-	sos_procs[p->pid] = p;
+	p->info.pid = L4_ThreadNo(sos_get_new_tid());
+	sos_procs[p->info.pid] = p;
 
 	// Open stdout
 	int dummy;
@@ -133,23 +145,23 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	if (asThread == RUN_AS_THREAD) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		tid = sos_task_new(p->pid, L4_Pager(), p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(p->pid, virtual_pager, p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
-	assert(L4_ThreadNo(tid) == p->pid);
+	assert(L4_ThreadNo(tid) == p->info.pid);
 
 	return tid;
 }
 
 pid_t process_get_pid(Process *p) {
-	return p->pid;
+	return p->info.pid;
 }
 
 L4_ThreadId_t process_get_tid(Process *p) {
-	return L4_GlobalId(p->pid, 1);
+	return L4_GlobalId(p->info.pid, 1);
 }
 
 PageTable *process_get_pagetable(Process *p) {
@@ -166,5 +178,27 @@ void process_set_prequest(Process *p, PagerRequest *pr) {
 
 PagerRequest *process_get_prequest(Process *p) {
 	return p->prequest;
+}
+
+void process_kill(pid_t pid) {
+	printf("process_kill(%u) not implemented\n", pid);
+
+	// Free the process struct,
+	// Close all the files (easier if in the struct),
+	// Free up the pid
+}
+
+int process_write_status(process_t *dest, int n) {
+	int count = 0;
+
+	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
+		if (sos_procs[i] != NULL) {
+			*dest = sos_procs[i]->info;
+			dest++;
+			count++;
+		}
+	}
+
+	return count;
 }
 

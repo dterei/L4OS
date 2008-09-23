@@ -44,21 +44,22 @@ static fildes_t in;
 static stat_t sbuf;
 
 struct command sosh_commands[] = {
-	{"dir", ls},
-	{"ls", ls},
 	{"cat", cat},
 	{"cp", cp},
-	{"rm", rm},
-	{"ps", ps},
+	{"dir", ls},
 	{"exec", exec},
+	{"help", help},
+	{"ls", ls},
+	{"kecho", kecho},
+	{"m5bench", m5bench},
+	{"pid", pid},
+	{"ps", ps},
+	{"pt_test", pt_test},
+	{"rm", rm},
 	{"segfault", segfault},
 	{"sleep", sleep},
-	{"up", up},
-	{"help", help},
 	{"time", time},
-	{"m5bench", m5bench},
-	{"pt_test", pt_test},
-	{"kecho", kecho},
+	{"up", up},
 	{"null", NULL}
 };
 

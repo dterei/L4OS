@@ -253,7 +253,12 @@ pid_t process_create(const char *path) {
  * Returns 0 if successful, -1 otherwise (invalid process).
  */
 int process_delete(pid_t pid) {
-	printf("process_delete: system call not implemented.\n");
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) pid);
+
+	makeSyscall(SOS_PROCESS_DELETE, NO_REPLY, &msg);
 	return 0;
 }
 
@@ -269,8 +274,16 @@ pid_t my_id(void) {
  * returns number of process descriptors actually returned.
  */
 int process_status(process_t *processes, unsigned max) {
-	printf("process_status: system call not implemented.\n");
-	return 0;
+	L4_Msg_t msg;
+	int rval;
+
+	prepareSyscall(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) max);
+	rval = makeSyscall(SOS_PROCESS_STATUS, YES_REPLY, &msg);
+
+	copyout(processes, rval * sizeof(process_t), 0);
+
+	return rval;
 }
 
 /* 
