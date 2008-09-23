@@ -11,7 +11,7 @@
 #include "time.h"
 
 #define CREATE_LIMIT 10
-#define TIMER_SLEEP 1000
+#define TIMER_SLEEP 1000000
 #define IO_KBYTES 4
 #define DIR_LOOPS 4
 
@@ -144,13 +144,13 @@ void
 m5test_timer(void)
 {
 	printf("M5 Test: timer started\n");
-	printf("sleeping for %d milliseconds\n", TIMER_SLEEP);
+	printf("sleeping for %d microseconds\n", TIMER_SLEEP);
 	long time = uptime();
 
 	usleep(TIMER_SLEEP);
 
 	time = uptime() - time;
-	printf("Slept for %ld milliseconds\n", time/1000);
+	printf("Slept for %ld microseconds\n", time);
 	printf("M5 Test: timer Finished (took %ld microseconds)\n", time);
 }
 
