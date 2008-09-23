@@ -1,4 +1,5 @@
 #include <clock/clock.h>
+#include <sos/sos.h>
 #include <string.h>
 
 #include "l4.h"
@@ -12,13 +13,14 @@
 #define verbose 1
 
 struct Process_t {
-	process_t info;
-	PageTable *pagetable;
-	Region *regions;
+	process_t     info;
+	PageTable    *pagetable;
+	Region       *regions;
 	PagerRequest *prequest;
-	void *sp;
-	void *ip;
-	timestamp_t startedAt;
+	void         *sp;
+	void         *ip;
+	timestamp_t   startedAt;
+	VFile         files[PROCESS_MAX_FILES];
 };
 
 static Process *sos_procs[MAX_ADDRSPACES];
@@ -41,6 +43,7 @@ Process *process_init(void) {
 	p->prequest = NULL;
 	p->sp = NULL;
 	p->ip = NULL;
+	vfiles_init(p->files);
 
 	return p;
 }
@@ -210,5 +213,9 @@ int process_write_status(process_t *dest, int n) {
 process_t *process_get_info(Process *p) {
 	// If necessary, uptime stime here too
 	return &p->info;
+}
+
+VFile *process_get_files(Process *p) {
+	return p->files;
 }
 

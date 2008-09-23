@@ -1,11 +1,11 @@
 #include <string.h>
 
-#include "vfs.h"
-
-#include "libsos.h"
-#include "syscall.h"
 #include "console.h"
+#include "libsos.h"
 #include "nfsfs.h"
+#include "process.h"
+#include "syscall.h"
+#include "vfs.h"
 
 #define verbose 1
 
@@ -36,52 +36,36 @@ static void vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_
 static void vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		const char *buf, size_t nbyte, int *rval);
 
-/*
- * TODO have a PCB rather than this.  Not all that challenging and
- * probably cleaner when there is more complex stuff to store
- * with each address space.
- */
-typedef struct {
-	VNode vnode;
-	/* This stores the permissions the file was opened with while the fmode_t in
-	   the vnode stores the permission stored with the file on disk */
-	fmode_t fmode;
-	L4_Word_t fp;
-} VFile_t;
-
-
 // Global open vnodes list
-VNode GlobalVNodes;
-
-// Per process open file table
-VFile_t openfiles[MAX_ADDRSPACES][PROCESS_MAX_FILES];
+static VNode GlobalVNodes;
 
 /* Initialise the VFS Layer */
 void
 vfs_init(void) {
-	GlobalVNodes = NULL;
-
-	// All vnodes are unallocated
-	for (int i = 0; i < MAX_ADDRSPACES; i++) {
-		for (int j = 0; j < PROCESS_MAX_FILES; j++) {
-			openfiles[i][j].vnode = NULL;
-			openfiles[i][j].fmode = 0;
-			openfiles[i][j].fp = 0;
-		}
-	}
-
 	// Init file systems
 	dprintf(1, "*** vfs_init\n");
 	GlobalVNodes = console_init(GlobalVNodes);
 	nfsfs_init();
 }
 
+/* Initialise an array of VFiles */
+void
+vfiles_init(VFile *files) {
+	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
+		files[i].vnode = NULL;
+		files[i].fmode = 0;
+		files[i].fp = 0;
+	}
+}
+
 /* Get the next file descriptor number for an address space */
 static
 fildes_t
-findNextFd(int spaceId) {
-	for (int i = 0; i < MAX_ADDRSPACES; i++) {
-		if (openfiles[spaceId][i].vnode == NULL) return i;
+findNextFd(Process *p) {
+	VFile *files = process_get_files(p);
+
+	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
+		if (files[i].vnode == NULL) return i;
 	}
 
 	// Too many open files.
@@ -161,7 +145,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	VNode vnode = NULL;
 
 	// check can open more files
-	if (findNextFd(L4_ThreadNo(tid)) < 0) {
+	if (findNextFd(process_lookup(L4_ThreadNo(tid))) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		*rval = SOS_VFS_NOMORE;
 		syscall_reply(tid, *rval);
@@ -203,13 +187,15 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 		return;
 	}
 
-	fildes_t fd = findNextFd(L4_ThreadNo(tid));
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	fildes_t fd = findNextFd(p);
 	*rval = fd;
 
 	// store file in per process table
-	openfiles[L4_ThreadNo(tid)][fd].vnode = self;
-	openfiles[L4_ThreadNo(tid)][fd].fmode = mode;
-	openfiles[L4_ThreadNo(tid)][fd].fp = 0;
+	VFile *files = process_get_files(p);
+	files[fd].vnode = self;
+	files[fd].fmode = mode;
+	files[fd].fp = 0;
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
@@ -234,7 +220,8 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 	//TODO: Move closing a vnode to the vfs layer (for refcount stuff anyway).
 
 	// get file
-	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = &process_get_files(p)[file];
 
 	// get vnode
 	VNode vnode =vf->vnode;
@@ -261,7 +248,8 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 	if (*rval != 0) return;
 
 	// get file & vnode
-	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = &process_get_files(p)[file];
 	VNode vnode = vf->vnode;
 
 	// close file table entry
@@ -287,7 +275,8 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	dprintf(1, "*** vfs_read: %d %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
-	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = &process_get_files(p)[file];
 
 	// get vnode
 	VNode vnode = vf->vnode;
@@ -326,8 +315,9 @@ vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char 
 	if (*rval < 0) {
 		return;
 	}
-	
-	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
+
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	process_get_files(p)[file].fp += nbyte;
 }
 
 /* Write to a file */
@@ -336,7 +326,8 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 	dprintf(1, "*** vfs_write: %d, %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
-	VFile_t *vf = &openfiles[L4_ThreadNo(tid)][file];
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = &process_get_files(p)[file];
 
 	// get vnode
 	VNode vnode = vf->vnode;
@@ -376,7 +367,8 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		return;
 	}
 	
-	openfiles[L4_ThreadNo(tid)][file].fp += nbyte;
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	process_get_files(p)[file].fp += nbyte;
 }
 
 /* Get a directory listing */

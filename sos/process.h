@@ -2,6 +2,7 @@
 #define _PROCESS_H_
 
 #include "pager.h"
+#include "vfs.h"
 
 #define RUN_AS_PROCESS 0
 #define RUN_AS_THREAD 1
@@ -59,5 +60,8 @@ int process_write_status(process_t *dest, int n);
 
 // Get a pointer to a process_t struct from the process
 process_t *process_get_info(Process *p);
+
+// Get the list of files used by a process
+VFile *process_get_files(Process *p);
 
 #endif // process.h

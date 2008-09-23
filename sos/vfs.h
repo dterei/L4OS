@@ -46,9 +46,21 @@ struct VNode_t {
 	void (*remove)(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
 };
 
+/* For the PCB */
+typedef struct VFile_t VFile;
+
+struct VFile_t {
+	VNode vnode;
+	fmode_t fmode;
+	L4_Word_t fp;
+};
+
 /* System call implementations */
 /* See sos.h for more detail */
 void vfs_init(void);
+
+/* Initialise an array of vfiles, must be size PROCESS_MAX_FILES */
+void vfiles_init(VFile *files);
 
 /* Open a file, in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call.
