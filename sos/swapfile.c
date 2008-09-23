@@ -1,4 +1,6 @@
-/*
+/* 
+ * sos/swapfile.c
+ *
  * Simple swap file implementation.
  *
  * Hands out free PAGESIZE slots to write out to in the swap file in O(1) time.
@@ -7,12 +9,17 @@
  * Arm5 processor this is 4MB.
  */
 
+#include "swapfile.h"
+
+#include "frames.h"
 #include "l4.h"
+#include "libsos.h"
 #include "pager.h"
 
-#define SWAPFRAMES 1
-#define SWAPSIZE SWAPFRAMES * (PAGESIZE / sizeof(L4_Word_t));
-#define NULL_SLOT (-1)
+#define verbose 2
+
+#define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
+#define NULL_SLOT ((L4_Word_t) (-1))
 
 static L4_Word_t *FileSlots;
 static L4_Word_t NextSlot;
@@ -22,12 +29,13 @@ static L4_Word_t SlotsFree;
 void
 swapfile_init(void)
 {
-	FileSlots = kallocFrames(1);
+	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
+	FileSlots = (L4_Word_t *) kframe_alloc();
 	NextSlot = 0;
 	LastSlot = 0;
 	SlotsFree = SWAPSIZE;
 
-	for (L4_Word_t i = 0, j = 0 ; i < SWAPSIZE; i++, j+= PAGESIZE)
+	for (L4_Word_t i = 0, j = 0; i < SWAPSIZE; i++, j+= PAGESIZE)
 	{
 		FileSlots[i] = j;
 	}
@@ -41,7 +49,7 @@ get_swapslot(void)
 		return NULL_SLOT;
 	}
 
-	unsigned int r = FileSlots[NextSlot];
+	L4_Word_t r = FileSlots[NextSlot];
 	NextSlot = ((NextSlot + 1) % SWAPSIZE);
 	SlotsFree--;
 
@@ -51,7 +59,7 @@ get_swapslot(void)
 int
 free_swapslot(L4_Word_t slot)
 {
-	if (SlotsFree == SWAPFILE_SIZE || slot > PAGESIZE * (SWAPSIZE - 1))
+	if (SlotsFree == SWAPSIZE || slot > PAGESIZE * (SWAPSIZE - 1))
 	{
 		return -1;
 	}
