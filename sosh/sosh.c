@@ -20,6 +20,7 @@
 #include "kecho.h"
 #include "ls.h"
 #include "m5bench.h"
+#include "pid.h"
 #include "ps.h"
 #include "pt_test.h"
 #include "rm.h"

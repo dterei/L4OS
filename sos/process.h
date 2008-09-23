@@ -30,6 +30,9 @@ void process_prepare(Process *p);
 // Run a process
 L4_ThreadId_t process_run(Process *p, int asThread);
 
+// Get the process id of a process
+pid_t process_get_pid(Process *p);
+
 // Get the threadid of a process
 L4_ThreadId_t process_get_tid(Process *p);
 

@@ -9,7 +9,7 @@
 #define verbose 1
 
 struct Process_t {
-	L4_ThreadId_t tid;
+	pid_t pid;
 	PageTable *pagetable;
 	Region *regions;
 	PagerRequest *prequest;
@@ -99,7 +99,7 @@ static void addBuiltinRegions(Process *p) {
 static void process_dump(Process *p) {
 	(void) process_dump;
 
-	dprintf(1, "*** %s on %ld\n", __FUNCTION__, L4_ThreadNo(p->tid));
+	dprintf(1, "*** %s on %ld\n", __FUNCTION__, p->pid);
 	dprintf(1, "*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
 	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
@@ -118,12 +118,12 @@ void process_prepare(Process *p) {
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
-	p->tid = sos_get_new_tid();
-	sos_procs[L4_ThreadNo(p->tid)] = p;
+	p->pid = L4_ThreadNo(sos_get_new_tid());
+	sos_procs[p->pid] = p;
 
 	// Open stdout
 	int dummy;
-	vfs_open(p->tid, STDOUT_FN, FM_WRITE, &dummy);
+	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE, &dummy);
 }
 
 L4_ThreadId_t process_run(Process *p, int asThread) {
@@ -131,20 +131,25 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	process_dump(p);
 
 	if (asThread == RUN_AS_THREAD) {
-		tid = sos_thread_new(p->tid, p->ip, p->sp);
+		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
+		tid = sos_task_new(p->pid, L4_Pager(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(L4_ThreadNo(p->tid), virtual_pager, p->ip, p->sp);
+		tid = sos_task_new(p->pid, virtual_pager, p->ip, p->sp);
 	}
 
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
+	assert(L4_ThreadNo(tid) == p->pid);
 
 	return tid;
 }
 
+pid_t process_get_pid(Process *p) {
+	return p->pid;
+}
+
 L4_ThreadId_t process_get_tid(Process *p) {
-	return p->tid;
+	return L4_GlobalId(p->pid, 1);
 }
 
 PageTable *process_get_pagetable(Process *p) {

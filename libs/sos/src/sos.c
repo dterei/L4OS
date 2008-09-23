@@ -259,8 +259,9 @@ int process_delete(pid_t pid) {
 
 /* Returns ID of caller's process. */
 pid_t my_id(void) {
-	printf("my_id: system call not implemented.\n");
-	return 0;
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+	return makeSyscall(SOS_MY_ID, YES_REPLY, &msg);
 }
 
 /* 
