@@ -5,6 +5,7 @@
 #include <sos/sos.h>
 
 #include "pt_test.h"
+#include "sosh.h"
 
 #define NUM_SLOTS 4096
 #define SLOTSIZE 196
@@ -12,7 +13,7 @@
 
 typedef int test_t;
 
-int pt_test(void) {
+int pt_test(int argc, char **argv) {
 	int i, j, passed;
 	test_t **buf;
 	test_t stack [STACKSIZE];

@@ -7,6 +7,8 @@
 #include <sos/sos.h>
 
 #include "m5bench.h"
+#include "sosh.h"
+#include "time.h"
 
 #define CREATE_LIMIT 10
 #define TIMER_SLEEP 1000
@@ -21,7 +23,6 @@ static void m5test_iocopy(void);
 static void m5test_writeread(void);
 static void m5test_getdirent(void);
 static void m5test_stat(void);
-
 
 struct command {
 	char *name;
@@ -39,6 +40,64 @@ struct command commands[] = {
 	{"stat", m5test_stat},
 	{"help", m5test_help}
 };
+
+static int benchmark(int argc, char *argv[]) {
+	char *timeArgs[4];
+	printf("*** TESTING READ PERFORMANCE\n");
+
+	timeArgs[0] = "time";
+	timeArgs[1] = "cat";
+
+	printf("\n");
+	timeArgs[2] = "1kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "2kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "4kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "8kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "16kb";
+	time(3, timeArgs);
+	printf("\n");
+	timeArgs[2] = "32kb";
+	time(3, timeArgs);
+
+	printf("*** TESTING READ/WRITE PERFORMANCE\n");
+
+	timeArgs[1] = "cp";
+
+	printf("\n");
+	timeArgs[2] = "1kb";
+	timeArgs[3] = "1kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "2kb";
+	timeArgs[3] = "2kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "4kb";
+	timeArgs[3] = "4kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "8kb";
+	timeArgs[3] = "8kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "16kb";
+	timeArgs[3] = "16kb.cp";
+	time(4, timeArgs);
+	printf("\n");
+	timeArgs[2] = "32kb";
+	timeArgs[3] = "32kb.cp";
+	time(4, timeArgs);
+
+	return 0;
+}
 
 int
 m5bench(int argc, char **argv)
@@ -63,6 +122,8 @@ m5bench(int argc, char **argv)
 		m5test_help();
 	}
 
+	(void) benchmark;
+
 	return 0;
 }
 
@@ -86,7 +147,7 @@ m5test_timer(void)
 	printf("sleeping for %d milliseconds\n", TIMER_SLEEP);
 	long time = uptime();
 
-	sleep(TIMER_SLEEP);
+	usleep(TIMER_SLEEP);
 
 	time = uptime() - time;
 	printf("Slept for %ld milliseconds\n", time/1000);

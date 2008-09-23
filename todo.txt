@@ -23,6 +23,3 @@ getting negative.
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
 
-- Put all of the commands in sosh in to different files (i.e. one for cp, one
-for rm, etc).  It's so very ugly at the moment.
-

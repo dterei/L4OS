@@ -45,7 +45,7 @@ typedef enum {
 	SOS_PROCESS_STATUS,
 	SOS_PROCESS_WAIT,
 	SOS_TIME_STAMP,
-	SOS_SLEEP,
+	SOS_USLEEP,
 	SOS_SHARE_VM
 } syscall_t;
 
@@ -197,9 +197,9 @@ pid_t process_wait(pid_t pid);
  */
 long uptime(void);
 
-/* Sleeps for the specified number of milliseconds.
+/* Sleeps for the specified number of microseconds.
  */
-void sleep(int msec);
+void usleep(int msec);
 
 
 /*************************************************************************/

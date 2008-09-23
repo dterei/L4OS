@@ -36,7 +36,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_PROCESS_STATUS: return "SOS_PROCESS_STATUS";
 		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
-		case SOS_SLEEP: return "SOS_SLEEP";
+		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 	}
 
@@ -288,13 +288,13 @@ long uptime(void) {
 	return makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
 }
 
-/* Sleeps for the specified number of milliseconds. */
-void sleep(int msec) {
+/* Sleeps for the specified number of microseconds. */
+void usleep(int msec) {
 	L4_Msg_t msg;
 
 	prepareSyscall(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) msec);
-	makeSyscall(SOS_SLEEP, YES_REPLY, &msg);
+	makeSyscall(SOS_USLEEP, YES_REPLY, &msg);
 }
 
 /* 

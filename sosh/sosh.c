@@ -13,436 +13,53 @@
 
 #include <sos/sos.h>
 
+#include "cat.h"
+#include "commands.h"
+#include "cp.h"
+#include "exec.h"
+#include "kecho.h"
+#include "ls.h"
 #include "m5bench.h"
+#include "ps.h"
 #include "pt_test.h"
+#include "rm.h"
+#include "segfault.h"
+#include "sleep.h"
+#include "sosh.h"
+#include "time.h"
+#include "up.h"
 
-#define verbose 0
-
-#define BUF_SIZ 256
-#define MAX_ARGS 32
-#define MAX_PROCESSES 10
-
-static int help(int argc, char *argv[]);
-static int time(int argc, char *argv[]);
+static int
+help(int argc, char *argv[])
+{
+	printf("Available commands:\n");
+	for (int i = 0; sosh_commands[i].command != NULL; i++) {
+		printf("\t%s\n", sosh_commands[i].name);
+	}
+	return 0;
+}
 
 static fildes_t in;
-static stat_t   sbuf;
+static stat_t sbuf;
 
-static void 
-prstat(const char *name)
-{
-	/* print out stat buf */
-
-	printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
-			sbuf.st_type ==ST_SPECIAL ? 's' : '-',
-			sbuf.st_fmode&FM_READ     ? 'r' : '-',
-			sbuf.st_fmode&FM_WRITE    ? 'w' : '-',
-			sbuf.st_fmode&FM_EXEC     ? 'x' : '-',
-			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
-}
-
-static int
-kecho(int argc, char **argv)
-{
-	for (int i = 1; i < argc; i++)
-	{
-		if (i > 1) kprint(" ");
-		kprint(argv[i]);
-	}
-
-	kprint("\n");
-	return 1;
-}
-
-static int
-cat(int argc, char **argv)
-{
-	fildes_t fd;
-	char buf[BUF_SIZ];
-	int num_read, num_written = 0;
-
-	if (argc != 2) {
-		printf("Usage: cat filename\n");
-		return 1;
-	}
-
-	fd = open(argv[1], FM_READ);
-	if (fd < 0) {
-		printf("%s cannot be opened\n", argv[1]);
-		return 1;
-	}
-
-	//printf("<%s>\n", argv[1]);
-
-	while( (num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
-		buf[num_read] = '\0';
-		printf("%s", buf);
-	}
-
-	close(fd);
-
-	if( num_read == -1)
-	{
-		printf( "error on read\n" );
-		return 1;
-	}
-
-	if( num_written == -1)
-	{
-		printf( "error on write\n" );
-		return 1;
-	}
-
-	return 0;
-}
-
-static int
-cp(int argc, char **argv)
-{
-	fildes_t fd, fd_out;
-	char *file1, *file2;
-	char buf[BUF_SIZ];
-	int num_read, num_written = 0;
-
-	if (argc != 3) {
-		printf("Usage: cp from to %d\n", argc);
-		return 1;
-	}
-
-	file1 = argv[1];
-	file2 = argv[2];
-
-	fd = open(file1, FM_READ);
-	fd_out = open(file2, FM_WRITE);
-
-	if (fd < 0) {
-		printf("%s cannot be opened\n", file1);
-		return 1;
-	}
-
-	if (fd_out < 0) {
-		printf("%s cannot be opened\n", file2);
-		close(fd);
-		return 1;
-	}
-
-	while( (num_read = read( fd, buf, BUF_SIZ) ) > 0 )
-		num_written = write(fd_out, buf, num_read);
-
-	if( num_read == -1 || num_written == -1 )
-	{
-		close(fd);
-		close(fd_out);
-		printf( "error on cp\n" );
-		return 1;
-	}
-
-	close(fd);
-	close(fd_out);
-	return 0;
-}
-
-static int 
-ps(int argc, char **argv)
-{
-
-	process_t *process;
-	int i, processes;
-
-	printf("ps: calling malloc\n");
-	process = malloc( MAX_PROCESSES * sizeof(*process) );
-	printf("ps: malloc done\n");
-
-	if( process == NULL )
-	{
-		printf( "%s: out of memory\n", argv[0] );
-		return 1;
-	}
-
-	processes = process_status(process, MAX_PROCESSES);
-
-	printf ("TID SIZE   STIME   CTIME COMMAND\n");
-
-	for (i=0; i<processes; i++) {
-		printf ("%3x %4x %7d %7d %s\n", process[i].pid, process[i].size,
-				process[i].stime, process[i].ctime, process[i].command);
-	}
-
-	free( process );
-
-	return 0;
-}
-
-static int
-exec(int argc, char **argv)
-{
-	pid_t pid;
-	int r;
-	int bg = 0;
-
-	if (argc < 2 || (argc > 2 && argv[2][0] != '&')) {
-		printf("Usage: exec filename [&]\n");
-		return 1;
-	}
-
-	if ( (argc > 2) && (argv[2][0] == '&') ) {
-		bg = 1;
-	}
-
-	if (bg == 0) {
-		r = close(in);
-		assert(r == 0);
-	}
-
-	pid = process_create(argv[1]);
-	if (pid>=0) {
-		printf("Child pid=%d\n", pid);
-		if (bg == 0) {
-			process_wait(pid);
-		}
-	} else {
-		printf("Failed!\n");
-	}
-	if (bg == 0) {
-		in = open("console", FM_READ);
-		assert(in>=0);
-	}
-	return 0;
-}
-
-static int
-dir(int argc, char **argv)
-{
-	int  i=0, r;
-	char buf[BUF_SIZ];
-
-	if( argc > 2 )
-	{
-		printf( "usage: %s [file]\n", argv[0] );
-		return 1;
-	}
-
-	if (argc == 2)
-	{
-		r = stat(argv[1], &sbuf);
-		if( r < 0 )
-		{
-			printf("stat(%s) failed: %d\n", argv[1], r);
-			return 0;
-		}
-		prstat(argv[1]);
-		return 0;
-	}
-
-	while (1) {
-		r = getdirent(i, buf, BUF_SIZ);
-		if (r<0) {
-			printf("dirent(%d) failed: %d\n", i, r);
-			break;
-		} else if (!r) {
-			break;
-		}
-#if 0
-		printf("dirent(%d): \"%s\"\n", i, buf);
-#endif
-		r = stat(buf, &sbuf);
-		if (r<0) {
-			printf("stat(%s) failed: %d\n", buf, r);
-			break;
-		}
-		prstat(buf);
-		i++;
-	}
-	return 0;
-}
-
-static int
-rm(int argc, char **argv)
-{
-	if ( argc != 2 )
-	{
-		printf("usage %s [file]\n", argv[0]);
-		return 1;
-	}
-
-	int r = fremove(argv[1]);
-	if (r < 0)
-	{
-		printf("rm(%s) failed: %d\n", argv[1], r);
-		if (r == SOS_VFS_NOFILE || r == SOS_VFS_PATHINV || r == SOS_VFS_NOVNODE) {
-			printf("file doesn't exist!\n");
-		} else if (r == SOS_VFS_PERM) {
-			printf("Invalid permissions\n");
-		} else if (r == SOS_VFS_NOTIMP) {
-			printf("Can't remove this type of file\n");
-		} else if (r == SOS_VFS_ERROR) {
-			printf("General failure\n");
-		}
-	}
-
-	return 0;
-}
-
-static int
-segfault(int argc, char **argv)
-{
-	int *null = NULL;
-	return *null;
-}
-
-static int 
-nap(int argc, char **argv)
-{
-	if ( argc < 2 )
-	{
-		printf("usage: %s msec\n", argv[0]);
-		return 1;
-	}
-
-	int msec = atoi(argv[1]);
-	sleep(msec);
-	return 0;
-}
-
-static int 
-howlong(int argc, char **argv)
-{
-	long us = uptime();
-	long us2 = us;
-	long secs = us / 1000000;
-	long mins = secs / 60;
-
-	us2 -= 1000 * secs;
-	secs -= 60 * mins;
-
-	printf("up %ld mins %ld secs %lu us (total %lu)\n", mins, secs, us2, us);
-	return 0;
-}
-
-static int
-benchmark(int argc, char *argv[])
-{
-	char *timeArgs[4];
-	printf("*** TESTING READ PERFORMANCE\n");
-
-	timeArgs[0] = "time";
-	timeArgs[1] = "cat";
-
-	printf("\n");
-	timeArgs[2] = "1kb";
-	time(3, timeArgs);
-	printf("\n");
-	timeArgs[2] = "2kb";
-	time(3, timeArgs);
-	printf("\n");
-	timeArgs[2] = "4kb";
-	time(3, timeArgs);
-	printf("\n");
-	timeArgs[2] = "8kb";
-	time(3, timeArgs);
-	printf("\n");
-	timeArgs[2] = "16kb";
-	time(3, timeArgs);
-	printf("\n");
-	timeArgs[2] = "32kb";
-	time(3, timeArgs);
-
-	printf("*** TESTING READ/WRITE PERFORMANCE\n");
-
-	timeArgs[1] = "cp";
-
-	printf("\n");
-	timeArgs[2] = "1kb";
-	timeArgs[3] = "1kb.cp";
-	time(4, timeArgs);
-	printf("\n");
-	timeArgs[2] = "2kb";
-	timeArgs[3] = "2kb.cp";
-	time(4, timeArgs);
-	printf("\n");
-	timeArgs[2] = "4kb";
-	timeArgs[3] = "4kb.cp";
-	time(4, timeArgs);
-	printf("\n");
-	timeArgs[2] = "8kb";
-	timeArgs[3] = "8kb.cp";
-	time(4, timeArgs);
-	printf("\n");
-	timeArgs[2] = "16kb";
-	timeArgs[3] = "16kb.cp";
-	time(4, timeArgs);
-	printf("\n");
-	timeArgs[2] = "32kb";
-	timeArgs[3] = "32kb.cp";
-	time(4, timeArgs);
-
-	return 0;
-}
-
-static int
-pttest(int argc, char *argv[])
-{
-	return pt_test();
-}
-
-struct command {
-	char *name;
-	int (*command)(int argc, char **argv);
-};
-
-static struct command commands[] = {
-	{"dir", dir},
-	{"ls", dir},
+struct command sosh_commands[] = {
+	{"dir", ls},
+	{"ls", ls},
 	{"cat", cat},
 	{"cp", cp},
 	{"rm", rm},
 	{"ps", ps},
 	{"exec", exec},
 	{"segfault", segfault},
-	{"sleep", nap},
-	{"uptime", howlong},
+	{"sleep", sleep},
+	{"up", up},
 	{"help", help},
 	{"time", time},
 	{"m5bench", m5bench},
-	{"benchmark", benchmark},
-	{"pttest", pttest},
+	{"pt_test", pt_test},
 	{"kecho", kecho},
 	{"null", NULL}
 };
-
-static int
-help(int argc, char *argv[])
-{
-	printf("Available commands:\n");
-	for (int i = 0; commands[i].command != NULL; i++) {
-		printf("\t%s\n", commands[i].name);
-	}
-	return 0;
-}
-
-static int
-time(int argc, char **argv)
-{
-	long int start = 0, finish = 0;
-
-	if (argc < 2) {
-		printf("Usage: time cmd [args]\n");
-		return 1;
-	}
-
-	for (int i = 0; commands[i].name != NULL; i++) {
-		if (strcmp(commands[i].name, argv[1]) == 0) {
-			start = uptime();
-			commands[i].command(argc - 1, argv + 1);
-			finish = uptime();
-			printf("*******\n%ld us\n", finish - start);
-			return 0;
-		}
-	}
-
-	printf("time: command %s not found\n", argv[1]);
-	return 1;
-}
 
 int
 main(void)
@@ -552,9 +169,9 @@ main(void)
 
 		found = 0;
 
-		for (i = 0; i < sizeof(commands) / sizeof(struct command); i++) {
-			if (strcmp(argv[0], commands[i].name) == 0) {
-				commands[i].command(argc, argv);
+		for (i = 0; i < sizeof(sosh_commands) / sizeof(struct command); i++) {
+			if (strcmp(argv[0], sosh_commands[i].name) == 0) {
+				sosh_commands[i].command(argc, argv);
 				found = 1;
 				break;
 			}
