@@ -23,8 +23,9 @@
 #include "libsos.h"
 #include "pager.h"
 #include "process.h"
-#include "thread.h"
+#include "swapfile.h"
 #include "syscall.h"
+#include "thread.h"
 
 #define verbose 1
 
@@ -144,6 +145,9 @@ pager_init(void) {
 
 	copyInOutData = (L4_Word_t*) kallocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) kallocFrames(numFrames);
+
+	// Initialise the swap file
+	swapfile_init();
 
 	// Start the real pager process
 	Process *pager = process_init();
