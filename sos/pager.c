@@ -1,19 +1,3 @@
-/****************************************************************************
- *
- *      $Id: pager.c,v 1.4 2003/08/06 22:52:04 benjl Exp $
- *
- *      Description: Example pager for the SOS project.
- *
- *      Author:			Godfrey van der Linden
- *      Original Author:	Ben Leslie
- *
- ****************************************************************************/
-
-
-//
-// Pager is called from the syscall loop whenever a page fault occurs.//
-//
-
 #include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,6 +93,14 @@ void region_append(Region *r, Region *toAppend) {
 	r->next = toAppend;
 }
 
+void region_free_all(Region *r) {
+	while (r != NULL) {
+		Region *next = r->next;
+		free(r);
+		r = next;
+	}
+}
+
 PageTable *pagetable_init(void) {
 	assert(sizeof(PageTable1) == PAGESIZE);
 	PageTable1 *pt = (PageTable1*) kframe_alloc();
@@ -118,6 +110,18 @@ PageTable *pagetable_init(void) {
 	}
 
 	return (PageTable*) pt;
+}
+
+void pagetable_free(PageTable *pt) {
+	PageTable1 *pt1 = (PageTable1*) pt;
+
+	for (int i = 0; i < PAGEWORDS; i++) {
+		if (pt1->pages2[i] != NULL) {
+			frame_free((L4_Word_t) pt1->pages2[i]);
+		}
+	}
+
+	frame_free((L4_Word_t) pt1);
 }
 
 static L4_Word_t *kallocFrames(int n) {

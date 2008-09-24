@@ -18,6 +18,7 @@
 #include "cp.h"
 #include "exec.h"
 #include "kecho.h"
+#include "kill.h"
 #include "ls.h"
 #include "m5bench.h"
 #include "pid.h"
@@ -51,6 +52,7 @@ struct command sosh_commands[] = {
 	{"help", help},
 	{"ls", ls},
 	{"kecho", kecho},
+	{"kill", kill},
 	{"m5bench", m5bench},
 	{"pid", pid},
 	{"ps", ps},

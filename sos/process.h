@@ -53,7 +53,7 @@ void process_set_prequest(Process *p, PagerRequest *pr);
 PagerRequest *process_get_prequest(Process *p);
 
 // Kill a process and free its resources
-void process_kill(pid_t pid);
+void process_kill(Process *p);
 
 // Write the status of the first n processes to dest
 int process_write_status(process_t *dest, int n);

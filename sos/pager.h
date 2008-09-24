@@ -38,8 +38,10 @@ uintptr_t region_size(Region *r);
 Region *region_next(Region *r);
 void region_set_rights(Region *r, int rights);
 void region_append(Region *r, Region *toAppend);
+void region_free_all(Region *r);
 
 PageTable *pagetable_init(void);
+void pagetable_free(PageTable *pt);
 
 void pager_init(void);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);

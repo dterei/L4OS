@@ -26,3 +26,8 @@ the hack that is the global rval value in syscall.
 - syscall_reply should check that the thread still exists (either through the
 PCB or through L4, need to think about that one)
 
+- All callbacks will now have to deal with a process no longer existing.  There
+is also the odd possibility that a process will have been deleted and a new one
+created, and one of the callbacks arrives for the old one.  Pretty unlikely but
+still something to think about.
+

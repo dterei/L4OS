@@ -6,6 +6,7 @@
 #include "libsos.h"
 #include "pager.h"
 #include "process.h"
+#include "thread.h"
 #include "vfs.h"
 
 #define STDOUT_FN "console"
@@ -187,12 +188,40 @@ PagerRequest *process_get_prequest(Process *p) {
 	return p->prequest;
 }
 
-void process_kill(pid_t pid) {
-	printf("process_kill(%u) not implemented\n", pid);
+void process_kill(Process *p) {
+	/*
+	 * Will need to:
+	 * 	- kill thread
+	 * 	- close all files
+	 * 	- free page table
+	 * 	- free regions
+	 * 	- free up the pid for another process
+	 * 	- free the PCB
+	 *
+	 * Won't need to:
+	 * 	- free the pager request (will happen by itself)
+	 * 	- worry about stray messages (sycall_reply is ok)
+	 */
 
-	// Free the process struct,
-	// Close all the files (easier if in the struct),
-	// Free up the pid
+	// Kill all threads associated with the process
+	thread_kill(process_get_tid(p));
+
+	// Close all files opened by it
+	int dummy;
+
+	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
+		vfs_close(process_get_tid(p), fd, &dummy);
+	}
+
+	// Free the page table and regions
+	pagetable_free(p->pagetable);
+	region_free_all(p->regions);
+
+	// Freeing the PCB and setting to NULL is enough to
+	// free the pid as well
+	pid_t ghostPid = p->info.pid;
+	free(p);
+	sos_procs[ghostPid] = NULL;
 }
 
 int process_write_status(process_t *dest, int n) {
