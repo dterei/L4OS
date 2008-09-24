@@ -303,11 +303,11 @@ long uptime(void) {
 }
 
 /* Sleeps for the specified number of microseconds. */
-void usleep(int msec) {
+void usleep(int usec) {
 	L4_Msg_t msg;
 
 	prepareSyscall(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) msec);
+	L4_MsgAppendWord(&msg, (L4_Word_t) usec);
 	makeSyscall(SOS_USLEEP, YES_REPLY, &msg);
 }
 
