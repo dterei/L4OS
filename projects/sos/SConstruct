@@ -11,10 +11,6 @@
 
 from math import ceil, log
 
-#
-# Change this for the milestone you are building
-milestone = 3
-
 #############################################################################
 ## Global configuration options
 #############################################################################
@@ -100,9 +96,6 @@ rootserver_env.Package("libs/serial")
 rootserver_env.Package("libs/sos")
 sos = rootserver_env.Package("sos");
 
-pager_milestone = 2
-timer_syscall_milestone = 3
-
 # Use the app_env environment for building everything else that will run in the
 # userland context.  Can't add libs/sos 'cause it doesn't exist yet.
 app_env=build.KengeEnvironment("userland") #, LINKFLAGS=["-r"]
@@ -115,17 +108,12 @@ app_env.Package("libs/elf")
 app_env.Package("libs/gcc")
 app_env.Package("libs/sos")
 
-if milestone < pager_milestone:
-    app_name = "tty_test"
-elif milestone < timer_syscall_milestone:
-    app_name = "pt_test"
-else:
-    app_name = "sosh"
-
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling
 # the Application function a number times in the app_env environment.
-app = app_env.Package(app_name)
+userApps = [app_env.Package("sosh"),
+            app_env.Package("bin/hello3"),
+            app_env.Package("bin/hello4")]
 
 # Memory pools
 pools = rootserver_env.IguanaDefaultMemoryPools(sos)
@@ -135,7 +123,7 @@ pools = rootserver_env.IguanaDefaultMemoryPools(sos)
 # Elfweaver takes a comma separated list of Applications that are linked
 # together into a single bootimg.bin binary.
 elfweaver_env = build.KengeEnvironment("images")
-apps = elfweaver_env.LayoutVirtual([pools, l4kernel, sos, app])
+apps = elfweaver_env.LayoutVirtual([pools, l4kernel, sos] + userApps)
 spec = elfweaver_env.GenWeaverXML(apps)
 elf_image, sim_image, boot_image = elfweaver_env.CreateImages(spec, apps)
 build.TestImage(boot_image)
