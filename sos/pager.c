@@ -9,7 +9,6 @@
 #include "process.h"
 #include "swapfile.h"
 #include "syscall.h"
-#include "thread.h"
 
 #define verbose 1
 
@@ -282,7 +281,7 @@ pager(PagerRequest *pr) {
 
 	if (r == NULL) {
 		printf("Segmentation fault\n");
-		thread_kill(process_get_tid(pr->p));
+		process_kill(pr->p);
 		return;
 	}
 
@@ -376,7 +375,8 @@ static void virtualPagerHandler(void) {
 				break;
 
 			default:
-				dprintf(0, "!!! virtualPagerHandler: unhandled message!\n");
+				dprintf(0, "!!! virtualPagerHandler: unhandled %s from %d\n",
+						syscall_show(TAG_SYSLAB(tag)), L4_SpaceNo(L4_SenderSpace()));
 		}
 	}
 }

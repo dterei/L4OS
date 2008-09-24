@@ -290,8 +290,12 @@ int process_status(process_t *processes, unsigned max) {
  * to exit. Returns the pid of the process which exited.
  */
 pid_t process_wait(pid_t pid) {
-	printf("process_wait: system call not implemented.\n");
-	return 0;
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+
+	L4_MsgAppendWord(&msg, pid);
+
+	return makeSyscall(SOS_PROCESS_WAIT, YES_REPLY, &msg);
 }
 
 /* Returns time in microseconds since booting. */

@@ -49,6 +49,7 @@ int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf; (void) buf;
+	L4_Word_t word;
 
 	L4_CacheFlushAll();
 
@@ -143,13 +144,22 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			syscall_reply(tid, rval);
 			break;
 
+		case SOS_PROCESS_WAIT:
+			word = L4_MsgWord(msg, 0);
+			if (word == ((L4_Word_t) -1)) {
+				process_wait_any(process_lookup(L4_ThreadNo(tid)));
+			} else {
+				process_wait_for(process_lookup(word),
+						process_lookup(L4_ThreadNo(tid)));
+			}
+			break;
+
 		case SOS_PROCESS_STATUS:
 			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
 			syscall_reply(tid, rval);
 			break;
 
 		case SOS_PROCESS_CREATE:
-		case SOS_PROCESS_WAIT:
 		case SOS_SHARE_VM:
 		default:
 			// Unknown system call, so we don't want to reply to this thread

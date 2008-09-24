@@ -31,3 +31,6 @@ is also the odd possibility that a process will have been deleted and a new one
 created, and one of the callbacks arrives for the old one.  Pretty unlikely but
 still something to think about.
 
+- Update crt (whatever that is) to kill a process when it finishes.  At the
+moment it just pagefaults like crazy.
+

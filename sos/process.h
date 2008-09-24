@@ -65,4 +65,10 @@ process_t *process_get_info(Process *p);
 // Get the list of files used by a process
 VFile *process_get_files(Process *p);
 
+// Wait for any process to exit before waking
+void process_wait_any(Process *waiter);
+
+// Wait for a specified process to exit before waking
+void process_wait_for(Process *waitFor, Process *waiter);
+
 #endif // process.h

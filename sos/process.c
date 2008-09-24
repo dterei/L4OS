@@ -6,10 +6,13 @@
 #include "libsos.h"
 #include "pager.h"
 #include "process.h"
-#include "thread.h"
+#include "syscall.h"
 #include "vfs.h"
 
 #define STDOUT_FN "console"
+
+#define WAIT_ANYBODY (-1)
+#define WAIT_NOBODY (-2)
 
 #define verbose 1
 
@@ -23,6 +26,7 @@ struct Process_t {
 	void         *ip;
 	timestamp_t   startedAt;
 	VFile         files[PROCESS_MAX_FILES];
+	pid_t         waitingOn;
 };
 
 // Array of all PCBs
@@ -66,6 +70,7 @@ Process *process_init(void) {
 	p->sp = NULL;
 	p->ip = NULL;
 	vfiles_init(p->files);
+	p->waitingOn = WAIT_NOBODY;
 
 	return p;
 }
@@ -138,17 +143,18 @@ static void addBuiltinRegions(Process *p) {
 static void process_dump(Process *p) {
 	(void) process_dump;
 
-	dprintf(1, "*** %s on %ld\n", __FUNCTION__, p->info.pid);
-	dprintf(1, "*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
-	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
+	printf("*** %s on %d\n", __FUNCTION__, p->info.pid);
+	printf("*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
+	printf("*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
 	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
-		dprintf(1, "*** %s: region %p -> %p (%p)\n", __FUNCTION__,
-				region_base(r), region_base(r) + region_size(r), r);
+		printf("*** %s: region %p -> %p (%p)\n", __FUNCTION__,
+				(void*) region_base(r), (void*) (region_base(r) + region_size(r)),
+				(void*) r);
 	}
 
-	dprintf(1, "*** %s: sp: %p\n", __FUNCTION__, p->sp);
-	dprintf(1, "*** %s: ip: %p\n", __FUNCTION__, p->ip);
+	printf("*** %s: sp: %p\n", __FUNCTION__, p->sp);
+	printf("*** %s: ip: %p\n", __FUNCTION__, p->ip);
 }
 
 static L4_Word_t getNextPid(void) {
@@ -195,7 +201,7 @@ void process_prepare(Process *p) {
 
 L4_ThreadId_t process_run(Process *p, int asThread) {
 	L4_ThreadId_t tid;
-	process_dump(p);
+	if (verbose > 1) process_dump(p);
 
 	p->startedAt = time_stamp();
 
@@ -237,6 +243,15 @@ PagerRequest *process_get_prequest(Process *p) {
 	return p->prequest;
 }
 
+static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
+	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
+		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
+			sosProcs[i]->waitingOn = WAIT_NOBODY;
+			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
+		}
+	}
+}
+
 int process_kill(Process *p) {
 	if (p == NULL) return (-1);
 
@@ -250,6 +265,7 @@ int process_kill(Process *p) {
 	 * 	- free regions
 	 * 	- free up the pid for another process
 	 * 	- free the PCB
+	 * 	- wake up waiting processes
 	 *
 	 * Points marked with (!) are ones that haven't been
 	 * done yet.
@@ -260,7 +276,8 @@ int process_kill(Process *p) {
 	 */
 
 	// Kill all threads associated with the process
-	thread_kill(process_get_tid(p));
+	L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
+			L4_nilthread, L4_nilthread, 0, NULL);
 
 	// Close all files opened by it
 	int dummy;
@@ -278,6 +295,10 @@ int process_kill(Process *p) {
 	pid_t ghostPid = p->info.pid;
 	free(p);
 	sosProcs[ghostPid] = NULL;
+
+	// Wake all process waiting on this process (or any)
+	wakeAll(ghostPid, ghostPid);
+	wakeAll(WAIT_ANYBODY, ghostPid);
 
 	return 0;
 }
@@ -304,5 +325,13 @@ process_t *process_get_info(Process *p) {
 
 VFile *process_get_files(Process *p) {
 	return p->files;
+}
+
+void process_wait_any(Process *waiter) {
+	waiter->waitingOn = WAIT_ANYBODY;
+}
+
+void process_wait_for(Process *waitFor, Process *waiter) {
+	waiter->waitingOn = process_get_pid(waitFor);
 }
 
