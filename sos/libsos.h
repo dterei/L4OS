@@ -100,10 +100,13 @@ extern void sos_logf(const char *msg, ...);
 // thread id.  You will probably have to replace this functionality at some
 // stage in the future to keep track of currently active threadIds.
 //
-extern L4_ThreadId_t sos_get_new_tid(void);
+L4_ThreadId_t sos_get_new_tid(void);
+
+// Disable sos_get_new_tid
+void sos_get_new_tid_disable(void);
 
 // get the next thread id that will be issued
-extern L4_ThreadId_t sos_peek_new_tid(void);
+L4_ThreadId_t sos_peek_new_tid(void);
 
 //
 // sos_my_tid(void)

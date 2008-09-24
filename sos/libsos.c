@@ -41,6 +41,7 @@ static L4_Word_t sSosMemoryTop, sSosMemoryBot;
 static L4_Fpage_t utcb_fpage_s;
 static L4_Word_t utcb_base_s;
 static L4_Word_t last_thread_s;
+static L4_Word_t last_thread_disabled_s;
 
 // Address of the bootinfo buffer
 extern void *__okl4_bootinfo;
@@ -195,17 +196,24 @@ sos_logf(const char *msg, ...)
 
 // A simple, i.e. broken, kernel thread id allocator
 L4_ThreadId_t
-sos_get_new_tid(void)
-{
-    dprintf(3, "allocating new tid %lu\n", last_thread_s+1);
-    return L4_GlobalId(++last_thread_s, 1);
+sos_get_new_tid(void) {
+	if (!last_thread_disabled_s) {
+		dprintf(3, "allocating new tid %lu\n", last_thread_s+1);
+		return L4_GlobalId(++last_thread_s, 1);
+	} else {
+		dprintf(0, "sos_get_new_tid has been disabled!\n");
+		return L4_nilthread;
+	}
+}
+
+void sos_get_new_tid_disable(void) {
+	last_thread_disabled_s = 1;
 }
 
 // get the next thread id that will be issued
 L4_ThreadId_t
-sos_peek_new_tid(void)
-{
-    return L4_GlobalId(last_thread_s+1, 1);
+sos_peek_new_tid(void) {
+	return L4_GlobalId(last_thread_s+1, 1);
 }
 
 // Create a new thread
@@ -515,7 +523,7 @@ bootinfo_cleanup(const bi_user_data_t *data) {
 	return 0;
 }
 
-void
+	void
 sos_start_binfo_executables(void *userstack)
 {
 	int result;
@@ -538,26 +546,26 @@ sos_start_binfo_executables(void *userstack)
 // Memory for the ixp400 networking layers
 extern void *sos_malloc(uint32_t size);
 
-void
+	void
 *sos_malloc(uint32_t size)
 {
-    if (sSosMemoryBot + size < sSosMemoryTop) {
-        L4_Word_t bot = sSosMemoryBot;
-        sSosMemoryBot += size;
-        return (void *) bot;
-    } else {
-        dprintf(0, "sos_malloc failed\n");
-        return (void *) 0;
+	if (sSosMemoryBot + size < sSosMemoryTop) {
+		L4_Word_t bot = sSosMemoryBot;
+		sSosMemoryBot += size;
+		return (void *) bot;
+	} else {
+		dprintf(0, "sos_malloc failed\n");
+		return (void *) 0;
 	}
 }
 
-void
+	void
 sos_usleep(uint32_t microseconds)
 {
-    utimer_sleep(microseconds);	// M4 must change to your timer
+	utimer_sleep(microseconds);	// M4 must change to your timer
 }
 
-L4_Word_t
+	L4_Word_t
 getCurrentProcNum(void)
 {
 	L4_SpaceId_t sp = L4_SenderSpace();
@@ -575,7 +583,7 @@ getCurrentProcNum(void)
 	return as;
 }
 
-void
+	void
 msgClearWith(L4_Word_t x)
 {
 	L4_Msg_t clear;

@@ -13,6 +13,7 @@
 
 #define verbose 1
 
+// The equivalent of a PCB
 struct Process_t {
 	process_t     info;
 	PageTable    *pagetable;
@@ -24,13 +25,33 @@ struct Process_t {
 	VFile         files[PROCESS_MAX_FILES];
 };
 
-static Process *sos_procs[MAX_ADDRSPACES];
+// Array of all PCBs
+static Process *sosProcs[MAX_ADDRSPACES];
+
+// The next pid to allocate
+static L4_Word_t nextPid;
+
+// All pids below this value have already been allocated by libsos
+// as threadids, and all over SOS it has been assumed that there is
+// a 1:1 mapping between pid and tid (and sid incidentally), so just
+// never allocate a pid below this value.
+static L4_Word_t tidOffset;
 
 Process *process_lookup(L4_Word_t key) {
-	return sos_procs[key];
+	return sosProcs[key];
 }
 
 Process *process_init(void) {
+	// On the first process initialisation set the offset
+	// to whatever it is, and disable libsos from allocating
+	// any more threadids.  Admittedly, this is a bit of a hack.
+	if (tidOffset == 0) {
+		tidOffset = L4_ThreadNo(sos_peek_new_tid());
+		sos_get_new_tid_disable();
+		nextPid = tidOffset;
+	}
+
+	// Do the normal process initialisation
 	Process *p = (Process*) malloc(sizeof(Process));
 
 	p->info.pid = 0;   // decide later
@@ -130,14 +151,42 @@ static void process_dump(Process *p) {
 	dprintf(1, "*** %s: ip: %p\n", __FUNCTION__, p->ip);
 }
 
+static L4_Word_t getNextPid(void) {
+	L4_Word_t oldPid = nextPid;
+	int firstIteration = 1;
+
+	while (sosProcs[nextPid] != NULL) {
+		// Detect loop, no more pids!
+		if (!firstIteration && oldPid == nextPid) {
+			dprintf(0, "!!! getNextPid: none left\n");
+			break;
+		}
+
+		nextPid++;
+
+		// Gone past the end, loop around
+		if (nextPid > MAX_THREADS) {
+			nextPid = tidOffset;
+		}
+
+		firstIteration = 0;
+	}
+
+	// Should probably throw error here instead, but
+	// it's too much effort
+	assert(sosProcs[nextPid] == NULL);
+
+	return nextPid;
+}
+
 void process_prepare(Process *p) {
 	// Add the builtin regions (stack, heap)
 	// This will set the stack pointer too
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
-	p->info.pid = L4_ThreadNo(sos_get_new_tid());
-	sos_procs[p->info.pid] = p;
+	p->info.pid = getNextPid();
+	sosProcs[p->info.pid] = p;
 
 	// Open stdout
 	int dummy;
@@ -195,10 +244,15 @@ int process_kill(Process *p) {
 	 * Will need to:
 	 * 	- kill thread
 	 * 	- close all files
+	 * 	! free all frames allocted by the process
+	 * 	! free all swapped frames
 	 * 	- free page table
 	 * 	- free regions
 	 * 	- free up the pid for another process
 	 * 	- free the PCB
+	 *
+	 * Points marked with (!) are ones that haven't been
+	 * done yet.
 	 *
 	 * Won't need to:
 	 * 	- free the pager request (will happen by itself)
@@ -223,7 +277,7 @@ int process_kill(Process *p) {
 	// free the pid as well
 	pid_t ghostPid = p->info.pid;
 	free(p);
-	sos_procs[ghostPid] = NULL;
+	sosProcs[ghostPid] = NULL;
 
 	return 0;
 }
@@ -232,9 +286,9 @@ int process_write_status(process_t *dest, int n) {
 	int count = 0;
 
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sos_procs[i] != NULL) {
-			sos_procs[i]->info.stime = (time_stamp() - sos_procs[i]->startedAt);
-			*dest = sos_procs[i]->info;
+		if (sosProcs[i] != NULL) {
+			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
+			*dest = sosProcs[i]->info;
 			dest++;
 			count++;
 		}
