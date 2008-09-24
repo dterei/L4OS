@@ -23,3 +23,6 @@ getting negative.
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
 
+- syscall_reply should check that the thread still exists (either through the
+PCB or through L4, need to think about that one)
+
