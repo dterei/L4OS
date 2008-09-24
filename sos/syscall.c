@@ -134,7 +134,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_PROCESS_DELETE:
-			process_kill(process_lookup(L4_MsgWord(msg, 0)));
+			rval = process_kill(process_lookup(L4_MsgWord(msg, 0)));
+			syscall_reply(tid, rval);
 			break;
 
 		case SOS_MY_ID:

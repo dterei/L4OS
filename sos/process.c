@@ -188,7 +188,9 @@ PagerRequest *process_get_prequest(Process *p) {
 	return p->prequest;
 }
 
-void process_kill(Process *p) {
+int process_kill(Process *p) {
+	if (p == NULL) return (-1);
+
 	/*
 	 * Will need to:
 	 * 	- kill thread
@@ -222,6 +224,8 @@ void process_kill(Process *p) {
 	pid_t ghostPid = p->info.pid;
 	free(p);
 	sos_procs[ghostPid] = NULL;
+
+	return 0;
 }
 
 int process_write_status(process_t *dest, int n) {

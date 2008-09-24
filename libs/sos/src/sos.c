@@ -258,8 +258,7 @@ int process_delete(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pid);
 
-	makeSyscall(SOS_PROCESS_DELETE, NO_REPLY, &msg);
-	return 0;
+	return makeSyscall(SOS_PROCESS_DELETE, YES_REPLY, &msg);
 }
 
 /* Returns ID of caller's process. */
