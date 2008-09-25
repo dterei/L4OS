@@ -13,7 +13,7 @@
 #define verbose 1
 
 // For (demand and otherwise) paging
-#define FRAME_ALLOC_LIMIT 4096
+#define FRAME_ALLOC_LIMIT 1024 // limited by the swapfile size
 
 #define ONDISK_MASK  0x00000001
 #define PINNED_MASK  0x00000002
@@ -23,7 +23,6 @@
 typedef struct FrameList_t FrameList;
 struct FrameList_t {
 	Process   *p;     // process currently allocated to
-	L4_Word_t  frame; // physical frame
 	L4_Word_t *page;  // (pointer to) virtual page within that process
 	FrameList *next;
 };
@@ -31,6 +30,28 @@ struct FrameList_t {
 static int allocLimit;
 static FrameList *allocHead;
 static FrameList *allocLast;
+
+// Asynchronous pager requests
+typedef enum {
+	SWAP_IGNORE,
+	SWAP_IN,
+	SWAP_OUT,
+	SWAP_INOUT
+} swap_t;
+
+#define EXPECTING_SWAPIN
+#define EXPECTING_SWAPOUT
+
+struct PagerRequest_t {
+	Process *p;
+	L4_Word_t addr;
+	swap_t type;
+	void (*callback)(PagerRequest *pr);
+};
+
+static struct PagerRequest *pagerRequests = NULL;
+static int pagerExpecting;
+static L4_Word_t pinnedFrame = 0;
 
 // For the pager process
 #define PAGER_STACK_SIZE PAGESIZE
@@ -67,13 +88,6 @@ struct Region_t {
 	int mapDirectly;  // do we directly (1:1) map it?
 	int id;           // what bootinfo uses to identify the region
 	struct Region_t *next;
-};
-
-// Asynchronous pager requests
-struct PagerRequest_t {
-	Process *p;
-	L4_Word_t addr;
-	void (*callback)(PagerRequest *pr);
 };
 
 Region *region_init(region_type type, uintptr_t base,
@@ -155,11 +169,10 @@ static L4_Word_t *allocFrames(int n) {
 	return (L4_Word_t*) frame;
 }
 
-static void addFrameList(Process *p, L4_Word_t *page, L4_Word_t frame) {
+static void addFrameList(Process *p, L4_Word_t *page) {
 	FrameList *new = (FrameList*) malloc(sizeof(FrameList));
 
 	new->p = p;
-	new->frame = frame;
 	new->page = page;
 
 	if (allocLast == NULL) {
@@ -215,7 +228,9 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t *page) {
 		dprintf(1, "*** allocated frame %p\n", frame);
 		process_get_info(p)->size++;
 		allocLimit--;
-		addFrameList(p, page, frame);
+
+		*page = frame | (*page & ~ADDRESS_MASK);
+		addFrameList(p, page);
 	}
 
 	return frame;
@@ -350,8 +365,13 @@ static void pagerContinue(PagerRequest *pr) {
 	syscall_reply(replyTo, 0);
 }
 
-static void
-pager(PagerRequest *pr) {
+static void queueSwap(PagerRequest *pr) {
+	(void) pagerRequests;
+	(void) pagerExpecting;
+	(void) pinnedFrame;
+}
+
+static void pager(PagerRequest *pr) {
 	L4_Word_t frame;
 	int rights;
 	int mapKernelToo = 0;
@@ -375,25 +395,39 @@ pager(PagerRequest *pr) {
 	// Place in, or retrieve from, page table.
 	dprintf(1, "*** pager: finding entry\n");
 	L4_Word_t *entry = findPageTableWord(process_get_pagetable(pr->p), addr);
+	L4_Word_t entryAddr = *entry & ADDRESS_MASK;
 
 	dprintf(1, "*** pager: entry found to be %p at %p\n", (void*) *entry, entry);
 
-	if (*entry != 0) {
-		// Already appears in page table, just got unmapped somehow.
-		dprintf(1, "*** pager: already mapped to %p\n", (void*) *entry);
+	if ((entryAddr != 0) && !(*entry & ONDISK_MASK)) {
+		// Already appears in page table as a frame, just got unmapped somehow
+		dprintf(1, "*** pager: got unmapped\n");
 	} else if (r->mapDirectly) {
 		// Wants to be mapped directly (code/data probably).
 		// In this case the kernel doesn't know about it from the
 		// frame table, so map it 1:1 in the kernel too.
 		dprintf(1, "*** pager: mapping directly\n");
-		*entry = addr;
+		entryAddr = *entry = addr;
 		mapKernelToo = 1;
 	} else {
+		// Either it didn't appear in the frame table or it appeared on
+		// disk, either way we need to allocate a new frame for it
 		dprintf(1, "*** pager: allocating frame\n");
-		*entry = pagerFrameAlloc(pr->p, entry);
+		entryAddr = pagerFrameAlloc(pr->p, entry);
+		assert((entryAddr & ~ADDRESS_MASK) == 0);
+
+		// The frame returned might be 0 if there are no more frames, in
+		// which case need to swap something out and then swap something
+		// else back in
+		if (entryAddr == 0) {
+			dprintf(1, "*** pager: not enough memory\n");
+			queueSwap(pr);
+			return;
+		}
 	}
 
-	frame = *entry;
+	*entry |= REFBIT_MASK;
+	frame = entryAddr;
 	rights = r->rights;
 
 	L4_SpaceId_t sid = sos_tid2sid(process_get_tid(pr->p));
@@ -508,8 +542,9 @@ static void copyInContinue(PagerRequest *pr) {
 
 	// Assume it's already there - this function should only get
 	// called as a continutation from the pager, so no problem
-	char *src = (char*) *findPageTableWord(
-			process_get_pagetable(pr->p), pr->addr);
+	char *src = (char*) (*findPageTableWord(
+			process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
+
 	src += pr->addr & (PAGESIZE - 1);
 	dprintf(1, "*** copyInContinue: src=%p\n", src);
 
@@ -576,7 +611,9 @@ static void copyOutContinue(PagerRequest *pr) {
 	dprintf(1, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
 			size, offset, src);
 
-	char *dest = (char*) *findPageTableWord(process_get_pagetable(pr->p), pr->addr);
+	char *dest = (char*) (*findPageTableWord(
+				process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
+
 	dest += pr->addr & (PAGESIZE - 1);
 	dprintf(1, "*** copyOutContinue: dest=%p\n", dest);
 
