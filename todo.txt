@@ -1,5 +1,7 @@
 - Milestone 6 - also, think ahead with ELF loading and as such, a generalised
-swap file (rather than assumings it's always .swap or whatever).  
+swap file (rather than assumings it's always .swap or whatever).  I believe we
+have a swap file going now?  Still need to add the mechanism of dealing with it
+though.
 
 - Testing.  Jesus we need to do more testing.
 
@@ -18,13 +20,13 @@ process.[ch]).  I'm looking at the file tables right now.
 - There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
 getting negative.
 
-- Need to pin pages when preparing the callback to read them in over NFS.
-
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
 
 - syscall_reply should check that the thread still exists (either through the
-PCB or through L4, need to think about that one)
+PCB or through L4, need to think about that one).  There is also the problem in
+the point below this (deal with processes being replaced with another one)
+which interestingly the last AOS lecture was on.  Hah funny how that happens.
 
 - All callbacks will now have to deal with a process no longer existing.  There
 is also the odd possibility that a process will have been deleted and a new one
