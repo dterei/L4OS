@@ -12,13 +12,41 @@
 
 #define verbose 1
 
-#define ONDISK_MASK 0x00000001
-#define PINNED_MASK 0x00000002
+// For (demand and otherwise) paging
+#define FRAME_ALLOC_LIMIT 4096
 
+#define ONDISK_MASK  0x00000001
+#define PINNED_MASK  0x00000002
+#define REFBIT_MASK  0x00000004
+#define ADDRESS_MASK 0xfffff000
+
+typedef struct FrameList_t FrameList;
+struct FrameList_t {
+	Process   *p;     // process currently allocated to
+	L4_Word_t  frame; // physical frame
+	L4_Word_t *page;  // (pointer to) virtual page within that process
+	FrameList *next;
+};
+
+static int allocLimit;
+static FrameList *allocHead;
+static FrameList *allocLast;
+
+// For the pager process
+#define PAGER_STACK_SIZE PAGESIZE
+
+static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
+L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
+static void virtualPagerHandler(void);
+
+// For copyin/copyout
 #define LO_HALF_MASK 0x0000ffff
 #define LO_HALF(word) ((word) & 0x0000ffff)
 #define HI_HALF_MASK 0xffff0000
 #define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
+
+static L4_Word_t *copyInOutData;
+static char *copyInOutBuffer;
 
 // Page table structures
 // Each level of the page table is assumed to be of size PAGESIZE
@@ -47,17 +75,6 @@ struct PagerRequest_t {
 	L4_Word_t addr;
 	void (*callback)(PagerRequest *pr);
 };
-
-// For copyin/copyout
-static L4_Word_t *copyInOutData;
-static char *copyInOutBuffer;
-
-// The pager process
-#define PAGER_STACK_SIZE PAGESIZE
-
-static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
-L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
-static void virtualPagerHandler(void);
 
 Region *region_init(region_type type, uintptr_t base,
 		uintptr_t size, int rights, int dirmap) {
@@ -102,7 +119,7 @@ void region_free_all(Region *r) {
 
 PageTable *pagetable_init(void) {
 	assert(sizeof(PageTable1) == PAGESIZE);
-	PageTable1 *pt = (PageTable1*) kframe_alloc();
+	PageTable1 *pt = (PageTable1*) frame_alloc();
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		pt->pages2[i] = NULL;
@@ -123,31 +140,101 @@ void pagetable_free(PageTable *pt) {
 	frame_free((L4_Word_t) pt1);
 }
 
-static L4_Word_t *kallocFrames(int n) {
+static L4_Word_t *allocFrames(int n) {
 	assert(n > 0);
 	L4_Word_t frame, nextFrame;
 
-	frame = kframe_alloc();
+	frame = frame_alloc();
 	n--;
 
 	for (int i = 1; i < n; i++) {
-		nextFrame = kframe_alloc();
+		nextFrame = frame_alloc();
 		assert((frame + i * PAGESIZE) == nextFrame);
 	}
 
 	return (L4_Word_t*) frame;
 }
 
-void
-pager_init(void) {
+static void addFrameList(Process *p, L4_Word_t *page, L4_Word_t frame) {
+	FrameList *new = (FrameList*) malloc(sizeof(FrameList));
+
+	new->p = p;
+	new->frame = frame;
+	new->page = page;
+
+	if (allocLast == NULL) {
+		allocLast = new->next;
+		assert(allocHead == NULL);
+		allocHead = new->next;
+	} else {
+		new->next = NULL;
+		allocLast->next = new;
+	}
+}
+
+static FrameList *deleteFrameList(void) {
+	(void) deleteFrameList;
+	assert(allocHead != NULL);
+	assert(allocLast != NULL);
+
+	FrameList *tmp;
+	FrameList *found = NULL;
+
+	// Second-chance algorithm
+	while (found != NULL) {
+		if ((*allocHead->page & REFBIT_MASK) == 0) {
+			// Not been referenced, this is the frame to swap
+			found = allocHead;
+			allocHead = allocHead->next;
+		} else {
+			// Been referenced, clear...
+			*allocHead->page &= ~REFBIT_MASK;
+
+			// and move to back
+			tmp = allocHead;
+			allocHead = allocHead->next;
+			allocLast->next = tmp;
+			tmp->next = NULL;
+			allocLast = tmp;
+		}
+	}
+
+	return found;
+}
+
+static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t *page) {
+	L4_Word_t frame;
+
+	assert(allocLimit >= 0);
+
+	if (allocLimit == 0) {
+		dprintf(0, "*** allocLimit reached\n");
+		frame = 0;
+	} else {
+		frame = frame_alloc();
+		dprintf(1, "*** allocated frame %p\n", frame);
+		process_get_info(p)->size++;
+		allocLimit--;
+		addFrameList(p, page, frame);
+	}
+
+	return frame;
+}
+
+void pager_init(void) {
+	// Set up alloc frame list
+	allocLimit = FRAME_ALLOC_LIMIT;
+	allocHead = NULL;
+	allocLast = NULL;
+
 	// Grab a bunch of frames to use for copyin/copyout
 	assert((PAGESIZE % MAX_IO_BUF) == 0);
 	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
 
 	dprintf(1, "*** pager_init: grabbing %d frames\n", numFrames);
 
-	copyInOutData = (L4_Word_t*) kallocFrames(sizeof(L4_Word_t));
-	copyInOutBuffer = (char*) kallocFrames(numFrames);
+	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
+	copyInOutBuffer = (char*) allocFrames(numFrames);
 
 	// Initialise the swap file
 	swapfile_init();
@@ -217,7 +304,7 @@ findPageTableWord(PageTable *pt, L4_Word_t addr) {
 
 	if (level1->pages2[offset1] == NULL) {
 		assert(sizeof(PageTable2) == PAGESIZE);
-		level1->pages2[offset1] = (PageTable2*) kframe_alloc();
+		level1->pages2[offset1] = (PageTable2*) frame_alloc();
 
 		for (int i = 0; i < PAGEWORDS; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
@@ -303,8 +390,7 @@ pager(PagerRequest *pr) {
 		mapKernelToo = 1;
 	} else {
 		dprintf(1, "*** pager: allocating frame\n");
-		process_get_info(pr->p)->size++;
-		*entry = frame_alloc();
+		*entry = pagerFrameAlloc(pr->p, entry);
 	}
 
 	frame = *entry;

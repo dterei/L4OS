@@ -30,7 +30,7 @@ void
 swapfile_init(void)
 {
 	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
-	FileSlots = (L4_Word_t *) kframe_alloc();
+	FileSlots = (L4_Word_t *) frame_alloc();
 	NextSlot = 0;
 	LastSlot = 0;
 	SlotsFree = SWAPSIZE;

@@ -6,11 +6,8 @@
 // Initialise the frame table
 void frame_init(L4_Word_t low, L4_Word_t frame);
 
-// Allocate a frame, counted towards the limit
+// Allocate a frame
 L4_Word_t frame_alloc(void);
-
-// Allocate a frame, not counted towards the limit
-L4_Word_t kframe_alloc(void);
 
 // Get the next frame to swap out
 L4_Word_t frame_nextswap(void);
