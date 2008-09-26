@@ -371,6 +371,41 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	process_get_files(p)[file].fp += nbyte;
 }
 
+/* Seek to a position in a file */
+void
+vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
+	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
+
+	// get file
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = NULL;
+	if (p != NULL) {
+		 vf = &process_get_files(p)[file];
+	}
+
+	// get vnode to make sure file exists
+	VNode vnode = vf->vnode;
+
+	// make sure ok
+	if (p == NULL || vf == NULL || vnode == NULL) {
+		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
+		*rval = SOS_VFS_NOFILE;
+		syscall_reply(tid, *rval);
+		return;
+	}
+
+	if (whence == SEEK_SET) {
+		vf->fp = (L4_Word_t) pos;
+	} else if (whence == SEEK_CUR) {
+		vf->fp += pos;
+	} else if (whence == SEEK_END) {
+		vf->fp = vnode->vstat.st_size - pos;
+	}
+
+	*rval = SOS_VFS_OK;
+	syscall_reply(tid, *rval);
+}
+
 /* Get a directory listing */
 void
 vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {

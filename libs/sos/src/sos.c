@@ -25,6 +25,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_CLOSE: return "SOS_CLOSE";
 		case SOS_READ: return "SOS_READ";
 		case SOS_WRITE: return "SOS_WRITE";
+		case SOS_LSEEK: return "SOS_LSEEK";
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
 		case SOS_REMOVE: return "SOS_REMOVE";
@@ -170,6 +171,29 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
 	return make_syscall(SOS_WRITE, YES_REPLY, &msg);
+}
+
+/* Lseek sets the file position indicator to the specified position "pos".
+ * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
+ * to the start of the file, current position in the file or end of the file
+ * respectively.
+ *
+ * Note: SEEK_END not supported.
+ *
+ * Returns 0 on success and -1 on error.
+ */
+int lseek(fildes_t file, fpos_t pos, int whence) {
+	int rval;
+	L4_Msg_t msg;
+	prepare_syscall(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
+	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
+
+	rval = make_syscall(SOS_LSEEK, YES_REPLY, &msg);
+
+	return rval;
 }
 
 /* 

@@ -23,6 +23,7 @@ static void m5test_iocopy(void);
 static void m5test_writeread(void);
 static void m5test_getdirent(void);
 static void m5test_stat(void);
+static void m5test_lseek(void);
 
 struct command {
 	char *name;
@@ -30,7 +31,7 @@ struct command {
 };
 
 static
-struct command commands[] = {
+struct command m5commands[] = {
 	{"timer", m5test_timer},
 	{"createfiles", m5test_createfiles},
 	{"ioband", m5test_iobandwidth},
@@ -38,7 +39,9 @@ struct command commands[] = {
 	{"writeread", m5test_writeread},
 	{"getdirent", m5test_getdirent},
 	{"stat", m5test_stat},
+	{"seek", m5test_lseek},
 	{"help", m5test_help}
+	{"NULL", NULL}
 };
 
 static int benchmark(int argc, char *argv[]) {
@@ -109,9 +112,9 @@ m5bench(int argc, char **argv)
 	}
 
 	int found = 0;
-	for (int i = 0; i < sizeof(commands) / sizeof(struct command); i++) {
-		if (strcmp(argv[1], commands[i].name) == 0) {
-			commands[i].command();
+	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++) {
+		if (strcmp(argv[1], m5commands[i].name) == 0) {
+			m5commands[i].command();
 			found = 1;
 			break;
 		}
@@ -133,8 +136,8 @@ m5test_help(void)
 {
 	printf("Usage: m5bench [test]\n");
 	printf("\nTests: ");
-	for (int i = 0; commands[i].command != NULL; i++) {
-		printf(" %s", commands[i].name);
+	for (int i = 0; m5commands[i].command != NULL; i++) {
+		printf(" %s", m5commands[i].name);
 	}
 	printf("\n");
 }
@@ -306,5 +309,30 @@ void
 m5test_stat(void)
 {
 
+}
+
+static
+void
+m5test_lseek(void)
+{
+	static char *file = "m5bench_seek";
+
+	printf("M5 Test: seek started\n");
+
+	fildes_t fp = open(file, FM_WRITE);
+	long time = uptime();
+
+	int d = write(fp, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 32);
+	printf("Wrote %d bytes to file (%s)\n", d, file);
+
+	int pos = 0;
+	d = lseek(fp, pos, SEEK_SET);
+	printf("Seek'd to pos (%d), status (%d) using SEEK_SET\n", pos, d);
+
+	d = write(fp, "AAAA", 4);
+	printf("Wrote %d bytes to file (%s)\n", d, file);
+
+	printf("M5 Test: seek finished (took %ld microseconds)\n", time);
+	close(fp);
 }
 
