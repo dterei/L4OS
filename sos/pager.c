@@ -1,6 +1,7 @@
 #include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "frames.h"
 #include "l4.h"
@@ -511,7 +512,7 @@ static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
 	copyInOutData[L4_ThreadNo(tid)] = data;
 }
 
-static int writeNonblocking(fildes_t file, size_t nbyte) {
+static void writeNonblocking(fildes_t file, size_t nbyte) {
 	L4_Msg_t msg;
 
 	// the actual buffer will be the normal copyin buffer
@@ -522,7 +523,7 @@ static int writeNonblocking(fildes_t file, size_t nbyte) {
 	make_syscall(SOS_WRITE, NO_REPLY, &msg);
 }
 
-static int readNonblocking(fildes_t file, size_t nbyte) {
+static void readNonblocking(fildes_t file, size_t nbyte) {
 	L4_Msg_t msg;
 
 	// the actual buffer will be the normal copyin buffer
@@ -533,7 +534,7 @@ static int readNonblocking(fildes_t file, size_t nbyte) {
 	make_syscall(SOS_READ, NO_REPLY, &msg);
 }
 
-static int lseekNonblocking(fildes_t file, int offset, int whence) {
+static void lseekNonblocking(fildes_t file, int offset, int whence) {
 	L4_Msg_t msg;
 
 	// the actual buffer will be the normal copyin buffer
@@ -563,7 +564,7 @@ static void queueSwapout(void) {
 	*entry |= ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
 
-	assert(isPageAligned(swapoutRequest.offset));
+	assert(isPageAligned(&(swapoutRequest.offset)));
 	*entry |= swapoutRequest.offset;
 
 	lseekNonblocking(swapfile, swapoutRequest.offset, SEEK_SET);
@@ -622,8 +623,9 @@ static void finishedSwapin(void) {
 	frame_free(pinnedFrame);
 
 	// need to unset the ondisk mask
-	L4_Word_t *ptEntry = findPageTableWord(swapinRequestHead->addr);
-	ptEntry &= ~ONDISK_MASK;
+	L4_Word_t *ptEntry = findPageTableWord(process_get_pagetable(swapinRequestsHead->p),
+			swapinRequestsHead->addr);
+	*ptEntry &= ~ONDISK_MASK;
 
 	// pager will free the request
 	PagerRequest *nextRequest = swapinRequestsHead->next;
@@ -676,7 +678,7 @@ static void demandPager(int vfsRval) {
 			finishedSwapin();
 		} else {
 			// still swapping in, continue the vfs read
-			readNonBlocking(swapfile, SWAP_BUFSIZ);
+			readNonblocking(swapfile, SWAP_BUFSIZ);
 			swapinRequestsHead->offset += SWAP_BUFSIZ;
 		}
 	}

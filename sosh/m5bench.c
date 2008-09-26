@@ -40,7 +40,7 @@ struct command m5commands[] = {
 	{"getdirent", m5test_getdirent},
 	{"stat", m5test_stat},
 	{"seek", m5test_lseek},
-	{"help", m5test_help}
+	{"help", m5test_help},
 	{"NULL", NULL}
 };
 
