@@ -39,19 +39,17 @@ typedef enum {
 	SWAP_INOUT
 } swap_t;
 
-#define EXPECTING_SWAPIN
-#define EXPECTING_SWAPOUT
+#define SWAP_BUFSIZ 256
 
 struct PagerRequest_t {
 	Process *p;
 	L4_Word_t addr;
 	swap_t type;
+	int offset;
 	void (*callback)(PagerRequest *pr);
 };
 
-static struct PagerRequest *pagerRequests = NULL;
-static int pagerExpecting;
-static L4_Word_t pinnedFrame = 0;
+static PagerRequest *pagerRequests = NULL;
 
 // For the pager process
 #define PAGER_STACK_SIZE PAGESIZE
@@ -352,6 +350,7 @@ static PagerRequest *newPagerRequest(
 	newPr->p = p;
 	newPr->addr = addr;
 	newPr->type = SWAP_NOT_APPLICABLE;
+	newPr->offset = 0;
 	newPr->callback = callback;
 
 	return newPr;
@@ -368,8 +367,6 @@ static void pagerContinue(PagerRequest *pr) {
 
 static void queueSwap(PagerRequest *pr) {
 	(void) pagerRequests;
-	(void) pagerExpecting;
-	(void) pinnedFrame;
 }
 
 static void pager(PagerRequest *pr) {
@@ -468,6 +465,83 @@ static void pager(PagerRequest *pr) {
 	pr->callback(pr);
 }
 
+static void copyInPrepare(L4_ThreadId_t tid, void *src, size_t size,
+		int append) {
+	dprintf(2, "*** copyInPrepare: tid=%ld src=%p size=%d\n",
+			L4_ThreadNo(tid), src, size);
+
+	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
+	int newSize = LO_HALF(data);
+	int base = HI_HALF(data);
+
+	if (append) {
+		newSize += size;
+	} else {
+		newSize = size;
+		base = 0;
+	}
+
+	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
+	copyInOutData[L4_ThreadNo(tid)] = data;
+}
+
+static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
+		int append) {
+	dprintf(2, "*** copyOutPrepare: tid=%ld dest=%p size=%d\n",
+			L4_ThreadNo(tid), dest, size);
+
+	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
+	int newSize = LO_HALF(data);
+	int base = HI_HALF(data);
+
+	if (append) {
+		newSize += size;
+	} else {
+		newSize = size;
+		base = 0;
+	}
+
+	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
+	copyInOutData[L4_ThreadNo(tid)] = data;
+}
+
+static int writeNonblocking(fildes_t file, size_t nbyte) {
+	(void) writeNonblocking;
+	L4_Msg_t msg;
+
+	// the actual buffer will be the normal copyin buffer
+	prepare_syscall(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+
+	make_syscall(SOS_WRITE, NO_REPLY, &msg);
+}
+
+static void demandPager(void) {
+	/*
+	 * Algorithm:
+	 *
+	 * If we're swapping out then continue the swap.
+	 * If not then we must be swapping in.
+	 */
+
+	if (pagerRequests != NULL) {
+		if (pagerRequests->offset == PAGESIZE) {
+			// we finished the swapout, use the now-free frame
+			// as either a swapin target or a free frame
+		} else {
+			// still swapping out, continue the operation
+			// need to copyin the data manually, don't need
+			// system call though thankfully since we can
+			// just copy in normally.
+			// note that this will go in to SOS's copyin
+			// buffer but that will work nicely
+		}
+	} else {
+		;
+	}
+}
+
 void
 pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 	// There is actually a magic fpage that we can use to unmap
@@ -503,6 +577,11 @@ static void virtualPagerHandler(void) {
 			case L4_PAGEFAULT:
 				pr = newPagerRequest(p, L4_MsgWord(&msg, 0), pagerContinue);
 				pager(pr);
+				break;
+
+			case SOS_REPLY:
+				dprintf(1, "*** virtualPagerHandler: got reply\n");
+				demandPager();
 				break;
 
 			default:
@@ -587,19 +666,7 @@ void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(2, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
 
-	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
-	int newSize = LO_HALF(data);
-	int base = HI_HALF(data);
-
-	if (append) {
-		newSize += size;
-	} else {
-		newSize = size;
-		base = 0;
-	}
-
-	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
-	copyInOutData[L4_ThreadNo(tid)] = data;
+	copyInPrepare(tid, src, size, append);
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),
@@ -653,19 +720,7 @@ void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	dprintf(2, "*** copyOut: tid=%ld dest=%p size=%d\n",
 			L4_ThreadNo(tid), dest, size);
 
-	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
-	int newSize = LO_HALF(data);
-	int base = HI_HALF(data);
-
-	if (append) {
-		newSize += size;
-	} else {
-		newSize = size;
-		base = 0;
-	}
-
-	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
-	copyInOutData[L4_ThreadNo(tid)] = data;
+	copyOutPrepare(tid, dest, size, append);
 
 	pager(newPagerRequest(
 				process_lookup(L4_ThreadNo(tid)),

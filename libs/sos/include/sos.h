@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <l4/message.h>
 #include <l4/types.h>
 
 /* VFS Return Codes */
@@ -96,6 +97,13 @@ typedef struct {
 
 /* Get the string representation of a syscall */
 char *syscall_show(syscall_t syscall);
+
+/* For handling syscalls */
+#define YES_REPLY 1
+#define NO_REPLY 0
+
+void prepare_syscall(L4_Msg_t *msg);
+L4_Word_t make_syscall(syscall_t s, int reply, L4_Msg_t *msg);
 
 /* Misc system calls */
 
