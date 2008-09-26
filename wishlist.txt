@@ -1,6 +1,6 @@
 - Clean, stable, robust, and completed SOS.
 
-- User network library.  Handled through VFS?
+- User network library.  Handled through VFS?  Internally use TCP-over-UDP?
 
 - USB stack/driver/library.
 
