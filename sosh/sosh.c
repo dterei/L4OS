@@ -29,6 +29,7 @@
 #include "sleep.h"
 #include "sosh.h"
 #include "time.h"
+#include "top.h"
 #include "up.h"
 
 static int
@@ -61,6 +62,7 @@ struct command sosh_commands[] = {
 	{"segfault", segfault},
 	{"sleep", sleep},
 	{"time", time},
+	{"top", top},
 	{"up", up},
 	{"null", NULL}
 };

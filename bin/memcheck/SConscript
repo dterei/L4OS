@@ -1,0 +1,11 @@
+Import("*")
+
+addressing = env.WeaverAddressing(direct=True)
+weaver = env.WeaverIguanaProgram(addressing = addressing)
+
+libs = Split("c sos l4")
+memcheck = env.KengeProgram("memcheck", source=["memcheck.c"], weaver=weaver, LIBS=libs)
+
+Return("memcheck")
+
+# vim: set filetype=python:

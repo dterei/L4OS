@@ -21,7 +21,6 @@ struct Process_t {
 	process_t     info;
 	PageTable    *pagetable;
 	Region       *regions;
-	PagerRequest *prequest;
 	void         *sp;
 	void         *ip;
 	timestamp_t   startedAt;
@@ -66,7 +65,6 @@ Process *process_init(void) {
 
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
-	p->prequest = NULL;
 	p->sp = NULL;
 	p->ip = NULL;
 	vfiles_init(p->files);
@@ -235,14 +233,6 @@ Region *process_get_regions(Process *p) {
 	return p->regions;
 }
 
-void process_set_prequest(Process *p, PagerRequest *pr) {
-	p->prequest = pr;
-}
-
-PagerRequest *process_get_prequest(Process *p) {
-	return p->prequest;
-}
-
 static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
 		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
@@ -253,7 +243,13 @@ static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 }
 
 int process_kill(Process *p) {
-	if (p == NULL) return (-1);
+	printf("process_kill on %p\n", p);
+
+	if (p == NULL) {
+		return (-1);
+	} else {
+		printf("pid is %d\n", p->info.pid);
+	}
 
 	/*
 	 * Will need to:
@@ -286,7 +282,8 @@ int process_kill(Process *p) {
 		vfs_close(process_get_tid(p), fd, &dummy);
 	}
 
-	// Free the page table and regions
+	// Free the used frames, page table, and regions
+	//frames_free(p->info.pid);
 	pagetable_free(p->pagetable);
 	region_free_all(p->regions);
 

@@ -46,6 +46,7 @@ typedef enum {
 	SOS_PROCESS_WAIT,
 	SOS_TIME_STAMP,
 	SOS_USLEEP,
+	SOS_MEMUSE,
 	SOS_SHARE_VM
 } syscall_t;
 
@@ -201,6 +202,8 @@ long uptime(void);
  */
 void usleep(int msec);
 
+/* Get the number of frames in use by user processes */
+int memuse(void);
 
 /*************************************************************************/
 /*									 */

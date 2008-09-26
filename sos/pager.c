@@ -128,6 +128,11 @@ PageTable *pagetable_init(void) {
 	return (PageTable*) pt;
 }
 
+static void pagerFrameFree(L4_Word_t frame) {
+	frame_free(frame);
+	allocLimit++;
+}
+
 void pagetable_free(PageTable *pt) {
 	PageTable1 *pt1 = (PageTable1*) pt;
 
@@ -138,6 +143,14 @@ void pagetable_free(PageTable *pt) {
 	}
 
 	frame_free((L4_Word_t) pt1);
+}
+
+void frames_free(pid_t pid) {
+	for (FrameList *list = allocHead; list != NULL; list = list->next) {
+		if (list->p != NULL && process_get_pid(list->p) == pid) {
+			pagerFrameFree(list->frame);
+		}
+	}
 }
 
 static L4_Word_t *allocFrames(int n) {
@@ -253,8 +266,7 @@ void pager_init(void) {
 	virtual_pager = process_get_tid(pager);
 }
 
-int
-sos_moremem(uintptr_t *base, unsigned int nb) {
+int sos_moremem(uintptr_t *base, unsigned int nb) {
 	dprintf(1, "*** sos_moremem(%p, %lx)\n", base, nb);
 
 	// Find the current heap section.
@@ -284,6 +296,10 @@ sos_moremem(uintptr_t *base, unsigned int nb) {
 
 	// Have the option of returning 0 to signify no more memory.
 	return 1;
+}
+
+int sos_memuse(void) {
+	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
 static L4_Word_t*

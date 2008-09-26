@@ -46,12 +46,6 @@ PageTable *process_get_pagetable(Process *p);
 // Get the regions of a process
 Region *process_get_regions(Process *p);
 
-// Set the pager request associated with a process
-void process_set_prequest(Process *p, PagerRequest *pr);
-
-// Get the pager request associated with a process
-PagerRequest *process_get_prequest(Process *p);
-
 // Kill a process and free its resources
 // Returns 0 if successful, -1 otherwise
 int process_kill(Process *p);

@@ -42,12 +42,14 @@ void region_free_all(Region *r);
 
 PageTable *pagetable_init(void);
 void pagetable_free(PageTable *pt);
+void frames_free(pid_t pid);
 
 void pager_init(void);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 void sos_pager_handler(L4_Word_t addr, L4_Word_t ip);
 
 int sos_moremem(uintptr_t *base, unsigned int nb);
+int sos_memuse(void);
 
 void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
 void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);

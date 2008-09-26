@@ -37,6 +37,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
+		case SOS_MEMUSE: return "SOS_MEMUSE";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 	}
 
@@ -312,6 +313,13 @@ void usleep(int usec) {
 	prepareSyscall(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) usec);
 	makeSyscall(SOS_USLEEP, YES_REPLY, &msg);
+}
+
+/* Get the number of frames in use by user processes */
+int memuse(void) {
+	L4_Msg_t msg;
+	prepareSyscall(&msg);
+	return makeSyscall(SOS_MEMUSE, YES_REPLY, &msg);
 }
 
 /* 
