@@ -41,6 +41,7 @@ struct command m5commands[] = {
 	{"stat", m5test_stat},
 	{"seek", m5test_lseek},
 	{"help", m5test_help}
+	{"NULL", NULL}
 };
 
 static int benchmark(int argc, char *argv[]) {
