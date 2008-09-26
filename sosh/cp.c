@@ -19,13 +19,12 @@ int cp(int argc, char **argv) {
 	file2 = argv[2];
 
 	fd = open(file1, FM_READ);
-	fd_out = open(file2, FM_WRITE);
-
 	if (fd < 0) {
 		printf("%s cannot be opened\n", file1);
 		return 1;
 	}
 
+	fd_out = open(file2, FM_WRITE);
 	if (fd_out < 0) {
 		printf("%s cannot be opened\n", file2);
 		close(fd);

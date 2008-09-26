@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <l4/message.h>
 #include <l4/types.h>
 
 /* VFS Return Codes */
@@ -36,6 +37,7 @@ typedef enum {
 	SOS_CLOSE,
 	SOS_READ,
 	SOS_WRITE,
+	SOS_LSEEK,
 	SOS_GETDIRENT,
 	SOS_STAT,
 	SOS_REMOVE,
@@ -52,9 +54,9 @@ typedef enum {
 
 /* Limits */
 #define MAX_ADDRSPACES 256
-#define MAX_THREADS 4096
+#define MAX_THREADS 1024
 #define PROCESS_MAX_FILES 16
-#define MAX_IO_BUF 1024
+#define MAX_IO_BUF PAGESIZE
 #define N_NAME 32
 
 /* file modes */
@@ -97,6 +99,13 @@ typedef struct {
 
 /* Get the string representation of a syscall */
 char *syscall_show(syscall_t syscall);
+
+/* For handling syscalls */
+#define YES_REPLY 1
+#define NO_REPLY 0
+
+void syscall_prepare(L4_Msg_t *msg);
+L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg);
 
 /* Misc system calls */
 
@@ -153,6 +162,17 @@ int read(fildes_t file, char *buf, size_t nbyte);
  * Returns -1 on error (invalid file).
  */
 int write(fildes_t file, const char *buf, size_t nbyte);
+
+/* Lseek sets the file position indicator to the specified position "pos".
+ * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
+ * to the start of the file, current position in the file or end of the file
+ * respectively.
+ *
+ * Note: SEEK_END not supported.
+ *
+ * Returns 0 on success and -1 on error.
+ */
+int lseek(fildes_t file, fpos_t pos, int whence);
 
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,

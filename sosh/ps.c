@@ -22,6 +22,7 @@ int ps(int argc, char **argv) {
 	for (i = 0; i < processes; i++) {
 		printf("%3x %4x %7d %7d %s\n", process[i].pid, process[i].size,
 				process[i].stime, process[i].ctime, process[i].command);
+		usleep(1000 * 100);
 	}
 
 	free(process);

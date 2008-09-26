@@ -1,7 +1,11 @@
 #ifndef _SWAPFILE_H
 #define _SWAPFILE_H
 
+#include <sos/sos.h>
+
 #include "l4.h"
+
+extern fildes_t swapfile;
 
 void swapfile_init(void);
 

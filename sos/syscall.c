@@ -108,6 +108,13 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					&rval);
 			break;
 
+		case SOS_LSEEK:
+			vfs_lseek(tid,
+					(fildes_t) L4_MsgWord(msg, 0),
+					(fpos_t) L4_MsgWord(msg, 1),
+					(int) L4_MsgWord(msg, 2),
+					&rval);
+
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
 					(int) L4_MsgWord(msg, 0),

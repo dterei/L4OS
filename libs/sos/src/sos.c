@@ -8,8 +8,6 @@
 
 #include <sos/sos.h>
 
-#define YES_REPLY 1
-#define NO_REPLY 0
 #define MAGIC_THAT_MAKES_LABELS_WORK 4
 
 fildes_t stdout_fd = 0;
@@ -27,6 +25,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_CLOSE: return "SOS_CLOSE";
 		case SOS_READ: return "SOS_READ";
 		case SOS_WRITE: return "SOS_WRITE";
+		case SOS_LSEEK: return "SOS_LSEEK";
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
 		case SOS_REMOVE: return "SOS_REMOVE";
@@ -44,11 +43,11 @@ char *syscall_show(syscall_t syscall) {
 	return "UNRECOGNISED";
 }
 
-static void prepareSyscall(L4_Msg_t *msg) {
+void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-static L4_Word_t makeSyscall(syscall_t s, int reply, L4_Msg_t *msg) {
+L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg) {
 	L4_MsgTag_t tag;
 	L4_Msg_t rMsg;
 
@@ -69,14 +68,14 @@ void kprint(char *str) {
 	copyin(str, strlen(str) + 1, 0);
 
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	makeSyscall(SOS_KERNEL_PRINT, NO_REPLY, &msg);
+	syscall_prepare(&msg);
+	syscall_run(SOS_KERNEL_PRINT, NO_REPLY, &msg);
 }
 
 void debug_flush(void) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	makeSyscall(SOS_DEBUG_FLUSH, NO_REPLY, &msg);
+	syscall_prepare(&msg);
+	syscall_run(SOS_DEBUG_FLUSH, NO_REPLY, &msg);
 }
 
 void thread_block(void) {
@@ -92,12 +91,12 @@ void thread_block(void) {
 
 int moremem(uintptr_t *base, unsigned int nb) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) base);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
 
-	int rval = makeSyscall(SOS_MOREMEM, YES_REPLY, &msg);
+	int rval = syscall_run(SOS_MOREMEM, YES_REPLY, &msg);
 
 	if (rval == 0) {
 		return 0; // no memory
@@ -109,54 +108,54 @@ int moremem(uintptr_t *base, unsigned int nb) {
 
 void copyin(void *data, size_t size, int append) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) data);
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
-	makeSyscall(SOS_COPYIN, YES_REPLY, &msg);
+	syscall_run(SOS_COPYIN, YES_REPLY, &msg);
 }
 
 void copyout(void *data, size_t size, int append) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) data);
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
-	makeSyscall(SOS_COPYOUT, YES_REPLY, &msg);
+	syscall_run(SOS_COPYOUT, YES_REPLY, &msg);
 }
 
 fildes_t open(const char *path, fmode_t mode) {
 	copyin((void*) path, strlen(path) + 1, 0);
 
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
 
-	return makeSyscall(SOS_OPEN, YES_REPLY, &msg);
+	return syscall_run(SOS_OPEN, YES_REPLY, &msg);
 }
 
 int close(fildes_t file) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 
-	return makeSyscall(SOS_CLOSE, YES_REPLY, &msg);
+	return syscall_run(SOS_CLOSE, YES_REPLY, &msg);
 }
 
 int read(fildes_t file, char *buf, size_t nbyte) {
 	int rval;
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	rval = makeSyscall(SOS_READ, YES_REPLY, &msg);
+	rval = syscall_run(SOS_READ, YES_REPLY, &msg);
 
 	copyout(buf, nbyte, 0);
 
@@ -167,12 +166,35 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 	copyin((void*) buf, nbyte, 0);
 
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	return makeSyscall(SOS_WRITE, YES_REPLY, &msg);
+	return syscall_run(SOS_WRITE, YES_REPLY, &msg);
+}
+
+/* Lseek sets the file position indicator to the specified position "pos".
+ * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
+ * to the start of the file, current position in the file or end of the file
+ * respectively.
+ *
+ * Note: SEEK_END not supported.
+ *
+ * Returns 0 on success and -1 on error.
+ */
+int lseek(fildes_t file, fpos_t pos, int whence) {
+	int rval;
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
+	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
+
+	rval = syscall_run(SOS_LSEEK, YES_REPLY, &msg);
+
+	return rval;
 }
 
 /* 
@@ -183,12 +205,12 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 int getdirent(int pos, char *name, size_t nbyte) {
 	int rval;
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	rval = makeSyscall(SOS_GETDIRENT, YES_REPLY, &msg);
+	rval = syscall_run(SOS_GETDIRENT, YES_REPLY, &msg);
 
 	copyout((void*) name, nbyte, 0);
 
@@ -205,9 +227,9 @@ int stat(const char *path, stat_t *buf) {
 
 	int rval;
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
-	rval = makeSyscall(SOS_STAT, YES_REPLY, &msg);
+	rval = syscall_run(SOS_STAT, YES_REPLY, &msg);
 
 	// The copyin could have left the position not word
 	// aligned however SOS will copy the stat info into
@@ -232,9 +254,9 @@ int fremove(const char *path) {
 
 	int rval;
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
-	rval = makeSyscall(SOS_REMOVE, YES_REPLY, &msg);
+	rval = syscall_run(SOS_REMOVE, YES_REPLY, &msg);
 
 	return rval;
 }
@@ -255,18 +277,18 @@ pid_t process_create(const char *path) {
  */
 int process_delete(pid_t pid) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pid);
 
-	return makeSyscall(SOS_PROCESS_DELETE, YES_REPLY, &msg);
+	return syscall_run(SOS_PROCESS_DELETE, YES_REPLY, &msg);
 }
 
 /* Returns ID of caller's process. */
 pid_t my_id(void) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	return makeSyscall(SOS_MY_ID, YES_REPLY, &msg);
+	syscall_prepare(&msg);
+	return syscall_run(SOS_MY_ID, YES_REPLY, &msg);
 }
 
 /* 
@@ -277,9 +299,9 @@ int process_status(process_t *processes, unsigned max) {
 	L4_Msg_t msg;
 	int rval;
 
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) max);
-	rval = makeSyscall(SOS_PROCESS_STATUS, YES_REPLY, &msg);
+	rval = syscall_run(SOS_PROCESS_STATUS, YES_REPLY, &msg);
 
 	copyout(processes, rval * sizeof(process_t), 0);
 
@@ -292,34 +314,34 @@ int process_status(process_t *processes, unsigned max) {
  */
 pid_t process_wait(pid_t pid) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, pid);
 
-	return makeSyscall(SOS_PROCESS_WAIT, YES_REPLY, &msg);
+	return syscall_run(SOS_PROCESS_WAIT, YES_REPLY, &msg);
 }
 
 /* Returns time in microseconds since booting. */
 long uptime(void) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	return makeSyscall(SOS_TIME_STAMP, YES_REPLY, &msg);
+	syscall_prepare(&msg);
+	return syscall_run(SOS_TIME_STAMP, YES_REPLY, &msg);
 }
 
 /* Sleeps for the specified number of microseconds. */
 void usleep(int usec) {
 	L4_Msg_t msg;
 
-	prepareSyscall(&msg);
+	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) usec);
-	makeSyscall(SOS_USLEEP, YES_REPLY, &msg);
+	syscall_run(SOS_USLEEP, YES_REPLY, &msg);
 }
 
 /* Get the number of frames in use by user processes */
 int memuse(void) {
 	L4_Msg_t msg;
-	prepareSyscall(&msg);
-	return makeSyscall(SOS_MEMUSE, YES_REPLY, &msg);
+	syscall_prepare(&msg);
+	return syscall_run(SOS_MEMUSE, YES_REPLY, &msg);
 }
 
 /* 

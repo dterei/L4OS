@@ -40,3 +40,5 @@ moment it just pagefaults like crazy.
 really need to fix this if possible.  It's irritating and probably a SOS bug.
 I assume some kind of race condition since it's somewhat random.
 
+- Fix kernel malloc so that morecore uses frame_alloc.
+
