@@ -21,6 +21,8 @@
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
 #define NULL_SLOT ((L4_Word_t) (-1))
 
+fildes_t swapfile;
+
 static L4_Word_t *FileSlots;
 static L4_Word_t NextSlot;
 static L4_Word_t LastSlot;
@@ -39,6 +41,9 @@ swapfile_init(void)
 	{
 		FileSlots[i] = j;
 	}
+
+	// open swapfile
+	(void) swapfile;
 }
 
 L4_Word_t

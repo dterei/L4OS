@@ -52,9 +52,9 @@ typedef enum {
 
 /* Limits */
 #define MAX_ADDRSPACES 256
-#define MAX_THREADS 4096
+#define MAX_THREADS 1024
 #define PROCESS_MAX_FILES 16
-#define MAX_IO_BUF 1024
+#define MAX_IO_BUF PAGESIZE
 #define N_NAME 32
 
 /* file modes */

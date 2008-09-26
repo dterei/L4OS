@@ -3,6 +3,8 @@
 
 #include "l4.h"
 
+extern fildes_t swapfile;
+
 void swapfile_init(void);
 
 L4_Word_t get_swapslot(void);
