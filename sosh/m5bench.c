@@ -333,5 +333,6 @@ m5test_lseek(void)
 	printf("Wrote %d bytes to file (%s)\n", d, file);
 
 	printf("M5 Test: seek finished (took %ld microseconds)\n", time);
+	close(fp);
 }
 
