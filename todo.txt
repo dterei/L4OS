@@ -2,7 +2,7 @@
 
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
-instead of having each fs handle it
+instead of having each fs handle it.
 
 - There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
 getting negative.

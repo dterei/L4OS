@@ -9,3 +9,7 @@
 - Editor (user program, nothing to do with SOS unless it involves writing a few
 more system calls).  Like red.
 
+- Thread management.
+
+- Shared memory.
+
