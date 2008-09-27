@@ -58,66 +58,36 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../k_r_malloc.h"
+#include <l4/types.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
-extern void free(void *);
+#include "../k_r_malloc.h"
 
-#ifdef THREAD_SAFE
-#include <assert.h>
-#include <mutex/mutex.h>
-#include <l4/thread.h>
-extern struct okl4_mutex malloc_mutex;
-#endif /* THREAD_SAFE */
-
-#define NALLOC 100
-#define MALLOC_AREA_SIZE 0x100000
-char __malloc_area[MALLOC_AREA_SIZE];
-uintptr_t __malloc_bss = (uintptr_t) &__malloc_area;
-uintptr_t __malloc_top = (uintptr_t) &__malloc_area[MALLOC_AREA_SIZE];
-
-Header *_kr_malloc_freep = NULL;
-
-void __malloc_init(uintptr_t heap_base, uintptr_t heap_end);
-
-void
-__malloc_init(uintptr_t heap_base, uintptr_t heap_end)
-{
-    __malloc_bss = heap_base;
-    __malloc_top = heap_end + 1;
-
-#ifdef THREAD_SAFE
-    {
-        int error = 0;
-        error = okl4_mutex_init(&malloc_mutex);
-        assert(!error);
-    }
-#endif /* THREAD_SAFE */
-}
+#define NALLOC 0x1000
 
 #define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
-/*
- * sbrk equiv
- */
-Header *
-morecore(unsigned nu)
-{
-    uintptr_t nb;
-    uintptr_t cp;
-    Header *up;
+extern L4_Word_t frame_alloc(void);
 
-    cp = __malloc_bss;
+Header *_kr_malloc_freep = NULL;
 
-    nb = round_up(nu * sizeof(Header), NALLOC);
+Header *morecore(unsigned nu) {
+	uintptr_t nb;
+	uintptr_t cp;
+	Header *up;
 
-    if (__malloc_bss + nb > __malloc_top) {
-        return NULL;
-    }
-    __malloc_bss += nb;
-    up = (Header *)cp;
-    up->s.size = nb / sizeof(Header);
-    free((void *)(up + 1));
-    return _kr_malloc_freep;
+	nb = round_up(nu * sizeof(Header), NALLOC);
+	cp = (uintptr_t) frame_alloc();
+
+	if (cp == 0) {
+		return NULL;
+	}
+
+	up = (Header*) cp;
+	up->s.size = nb / sizeof(Header);
+	free((void*) (up + 1));
+
+	return _kr_malloc_freep;
 }

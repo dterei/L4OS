@@ -93,7 +93,6 @@ int moremem(uintptr_t *base, unsigned int nb) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
-	L4_MsgAppendWord(&msg, (L4_Word_t) base);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
 
 	int rval = syscall_run(SOS_MOREMEM, YES_REPLY, &msg);
