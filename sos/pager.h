@@ -5,17 +5,12 @@
 
 #include "l4.h"
 
-#define PAGESIZE 4096
-#define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
-#define PAGEALIGN (~((PAGESIZE) - 1))
+// Pager-related structures and data
+typedef struct PageTable1 PageTable;
 
-// Access rights
 #define REGION_READ 0x4
 #define REGION_WRITE 0x2
 #define REGION_EXECUTE 0x1
-
-// Pager-related structures and data
-typedef struct PageTable1 PageTable;
 
 typedef enum {
 	REGION_STACK,

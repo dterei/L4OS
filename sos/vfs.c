@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "constants.h"
 #include "console.h"
 #include "libsos.h"
 #include "nfsfs.h"

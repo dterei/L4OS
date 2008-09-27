@@ -2,12 +2,12 @@
 #include <sos/sos.h>
 #include <string.h>
 
+#include "constants.h"
+#include "frames.h"
 #include "l4.h"
 #include "libsos.h"
-#include "pager.h"
 #include "process.h"
 #include "syscall.h"
-#include "vfs.h"
 
 #define STDOUT_FN "console"
 
@@ -307,6 +307,12 @@ int process_kill(Process *p) {
 int process_write_status(process_t *dest, int n) {
 	int count = 0;
 
+	// Firstly, update the size of sos
+	assert(sosProcs[L4_rootserverno] != NULL);
+	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
+
+	// Everything else has size dynamically updated, so just
+	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
 		if (sosProcs[i] != NULL) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);

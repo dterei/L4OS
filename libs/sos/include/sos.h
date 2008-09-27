@@ -52,13 +52,6 @@ typedef enum {
 	SOS_SHARE_VM
 } syscall_t;
 
-/* Limits */
-#define MAX_ADDRSPACES 256
-#define MAX_THREADS 1024
-#define PROCESS_MAX_FILES 16
-#define MAX_IO_BUF PAGESIZE
-#define N_NAME 32
-
 /* file modes */
 #define FM_WRITE 1
 #define FM_READ  2
@@ -88,6 +81,8 @@ typedef int fildes_t;
 /* The FD to which printf() will ultimately write() */
 extern fildes_t stdout_fd;
 extern fildes_t stdin_fd;
+
+#define N_NAME 32
 
 typedef struct {
 	pid_t     pid;

@@ -20,6 +20,7 @@
 #include <serial/serial.h>
 #include <sos/sos.h>
 
+#include "constants.h"
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"

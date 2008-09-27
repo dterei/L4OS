@@ -3,6 +3,7 @@
 #include <l4/interrupt.h>
 #include <stdio.h>
 
+#include "constants.h"
 #include "pager.h"
 #include "l4.h"
 #include "libsos.h"

@@ -15,4 +15,7 @@ L4_Word_t frame_nextswap(void);
 // Free a frame
 void frame_free(L4_Word_t frame);
 
+// Query how many frames are in use
+int frames_allocated(void);
+
 #endif // sos/frames.h

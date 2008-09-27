@@ -17,12 +17,11 @@ int ps(int argc, char **argv) {
 
 	processes = process_status(process, MAX_PROCESSES);
 
-	printf("TID SIZE   STIME   CTIME COMMAND\n");
+	printf("%3s %6s %10s %6s %-10s\n", "TID", "SIZE", "STIME", "CTIME", "COMMAND");
 
 	for (i = 0; i < processes; i++) {
-		printf("%3x %4x %7d %7d %s\n", process[i].pid, process[i].size,
+		printf("%3d %6d %10d %6d %-10s\n", process[i].pid, process[i].size,
 				process[i].stime, process[i].ctime, process[i].command);
-		usleep(1000 * 100);
 	}
 
 	free(process);

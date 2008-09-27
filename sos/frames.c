@@ -1,19 +1,18 @@
 #include <stddef.h>
 
-#include "l4.h"
+#include "constants.h"
 #include "libsos.h"
-#include "pager.h"
 #include "frames.h"
+#include "l4.h"
 
 #define verbose 1
 
 #define NULLFRAME ((L4_Word_t) (0))
 
 static L4_Word_t firstFree;
+static int totalInUse;
 
-void
-frame_init(L4_Word_t low, L4_Word_t frame)
-{
+void frame_init(L4_Word_t low, L4_Word_t frame) {
 	L4_Word_t page, high;
 	L4_Fpage_t fpage;
 	L4_PhysDesc_t ppage;
@@ -39,17 +38,18 @@ frame_init(L4_Word_t low, L4_Word_t frame)
 	dprintf(1, "*** frame_init: trying to set bounds of linked list.\n");
 	firstFree = low;
 	*((L4_Word_t*) (high - PAGESIZE)) = NULLFRAME;
+
+	totalInUse = 0;
 }
 
-L4_Word_t
-frame_alloc(void)
-{
+L4_Word_t frame_alloc(void) {
 	static L4_Word_t alloc;
 
 	alloc = firstFree;
 
 	if (alloc != NULLFRAME) {
 		firstFree = *((L4_Word_t*) firstFree);
+		totalInUse++;
 	} else {
 		// There is no free memory.
 	}
@@ -57,10 +57,13 @@ frame_alloc(void)
 	return alloc;
 }
 
-void
-frame_free(L4_Word_t frame)
-{
+void frame_free(L4_Word_t frame) {
 	*((L4_Word_t*) frame) = firstFree;
 	firstFree = frame;
+	totalInUse--;
+}
+
+int frames_allocated(void) {
+	return totalInUse;
 }
 

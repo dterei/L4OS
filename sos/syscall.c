@@ -1,15 +1,14 @@
 #include <clock/clock.h>
 #include <sos/sos.h>
 
-#include "syscall.h"
-
+#include "constants.h"
+#include "frames.h"
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
-
 #include "pager.h"
 #include "process.h"
-#include "frames.h"
+#include "syscall.h"
 #include "vfs.h"
 
 #define verbose 2
