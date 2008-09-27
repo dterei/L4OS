@@ -11,7 +11,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 1
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 1024 // limited by the swapfile size
@@ -306,9 +306,6 @@ void pager_init(void) {
 
 	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) allocFrames(numFrames);
-
-	// Initialise the swap file
-	swapfile_init();
 
 	// Start the real pager process
 	Process *pager = process_init();
@@ -717,6 +714,9 @@ pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 
 static void virtualPagerHandler(void) {
 	dprintf(1, "*** virtualPagerHandler: started\n");
+
+	// Initialise the swap file
+	swapfile_init();
 
 	// Accept the pages and signal we've actually started
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));

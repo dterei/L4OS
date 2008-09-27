@@ -9,15 +9,17 @@
  * Arm5 processor this is 4MB.
  */
 
-#include "swapfile.h"
+#include <string.h>
 
 #include "frames.h"
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
+#include "swapfile.h"
 
 #define verbose 2
 
+#define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
 #define NULL_SLOT ((L4_Word_t) (-1))
 
@@ -31,6 +33,9 @@ static L4_Word_t SlotsFree;
 void
 swapfile_init(void)
 {
+	L4_Msg_t msg;
+	int rval;
+
 	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
 	FileSlots = (L4_Word_t *) frame_alloc();
 	NextSlot = 0;
@@ -43,7 +48,12 @@ swapfile_init(void)
 	}
 
 	// open swapfile
-	(void) swapfile;
+	dprintf(2, "*** swapfile_init: opening swap file\n");
+	strcpy(pager_buffer(L4_rootserver), SWAPFILE_FN);
+	syscall_prepare(&msg);
+	rval = syscall_run(SOS_OPEN, YES_REPLY, &msg);
+	dprintf(2, "*** swapfile_init: opened swapfile, rval=%d\n", rval);
+
 }
 
 L4_Word_t

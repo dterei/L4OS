@@ -65,4 +65,7 @@ void process_wait_any(Process *waiter);
 // Wait for a specified process to exit before waking
 void process_wait_for(Process *waitFor, Process *waiter);
 
+// Give the rootserver a PCB
+void process_add_rootserver(void);
+
 #endif // process.h

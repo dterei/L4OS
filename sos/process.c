@@ -44,17 +44,7 @@ Process *process_lookup(L4_Word_t key) {
 	return sosProcs[key];
 }
 
-Process *process_init(void) {
-	// On the first process initialisation set the offset
-	// to whatever it is, and disable libsos from allocating
-	// any more threadids.  Admittedly, this is a bit of a hack.
-	if (tidOffset == 0) {
-		tidOffset = L4_ThreadNo(sos_peek_new_tid());
-		sos_get_new_tid_disable();
-		nextPid = tidOffset;
-	}
-
-	// Do the normal process initialisation
+static Process *processAlloc(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
 	p->info.pid = 0;   // decide later
@@ -71,6 +61,20 @@ Process *process_init(void) {
 	p->waitingOn = WAIT_NOBODY;
 
 	return p;
+}
+
+Process *process_init(void) {
+	// On the first process initialisation set the offset
+	// to whatever it is, and disable libsos from allocating
+	// any more threadids.  Admittedly, this is a bit of a hack.
+	if (tidOffset == 0) {
+		tidOffset = L4_ThreadNo(sos_peek_new_tid());
+		sos_get_new_tid_disable();
+		nextPid = tidOffset;
+	}
+
+	// Do the normal process initialisation
+	return processAlloc();
 }
 
 void process_add_region(Process *p, Region *r) {
@@ -330,5 +334,17 @@ void process_wait_any(Process *waiter) {
 
 void process_wait_for(Process *waitFor, Process *waiter) {
 	waiter->waitingOn = process_get_pid(waitFor);
+}
+
+void process_add_rootserver(void) {
+	Process *rootserver = processAlloc();
+
+	rootserver->startedAt = time_stamp();
+	process_set_name(rootserver, "sos");
+
+	assert(rootserver->info.pid == L4_rootserverno);
+	sosProcs[L4_rootserverno] = rootserver;
+
+	if (verbose > 1) process_dump(rootserver);
 }
 

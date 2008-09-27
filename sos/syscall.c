@@ -12,14 +12,21 @@
 #include "frames.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 static int rval;
 
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
-	dprintf(1, "*** syscall_reply: replying to %d\n",
+	if (L4_IsThreadEqual(tid, L4_rootserver)) {
+		// XXX this is a hacked up replacement for thread management
+		dprintf(1, "syscall_reply: rootserver -> virtual_pager\n");
+		assert(!L4_IsThreadEqual(virtual_pager, L4_nilthread));
+		tid = virtual_pager;
+	}
+
+	dprintf(2, "*** syscall_reply: replying to %d\n",
 			L4_ThreadNo(tid));
 
 	L4_CacheFlushAll();
@@ -53,7 +60,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 	L4_CacheFlushAll();
 
-	dprintf(1, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
+	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
