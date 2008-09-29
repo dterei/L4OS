@@ -19,7 +19,7 @@ void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
 	if (L4_IsThreadEqual(tid, L4_rootserver)) {
-		// XXX this is a hacked up replacement for thread management
+		// FIXME this is a hacked up replacement for thread management
 		dprintf(1, "syscall_reply: rootserver -> virtual_pager\n");
 		assert(!L4_IsThreadEqual(virtual_pager, L4_nilthread));
 		tid = virtual_pager;

@@ -54,7 +54,6 @@ swapfile_init(void)
 	syscall_prepare(&msg);
 	rval = syscall_run(SOS_OPEN, YES_REPLY, &msg);
 	dprintf(2, "*** swapfile_init: opened swapfile, rval=%d\n", rval);
-
 }
 
 L4_Word_t

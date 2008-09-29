@@ -13,6 +13,7 @@
 
 #include <sos/sos.h>
 
+#include "alloc.h"
 #include "cat.h"
 #include "commands.h"
 #include "cp.h"
@@ -21,6 +22,7 @@
 #include "kill.h"
 #include "ls.h"
 #include "m5bench.h"
+#include "memdump.h"
 #include "pid.h"
 #include "ps.h"
 #include "pt_test.h"
@@ -46,6 +48,7 @@ static fildes_t in;
 static stat_t sbuf;
 
 struct command sosh_commands[] = {
+	{"alloc", alloc},
 	{"cat", cat},
 	{"cp", cp},
 	{"dir", ls},
@@ -55,6 +58,7 @@ struct command sosh_commands[] = {
 	{"kecho", kecho},
 	{"kill", kill},
 	{"m5bench", m5bench},
+	{"memdump", memdump},
 	{"pid", pid},
 	{"ps", ps},
 	{"pt_test", pt_test},

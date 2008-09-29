@@ -46,3 +46,6 @@ knows maybe more?) requests get put on a queue and executed sequentially.
 M6 - freeing allocated frames, freeing allocated slots in the swap file, and
 freeing pager requests.
 
+- Bug in write either returning the wrong number of bytes or doing something
+wrong with the given number of bytes.  It's off by 1.  See sosh/memdump.c.
+

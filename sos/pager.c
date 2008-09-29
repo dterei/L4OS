@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 1024 // limited by the swapfile size
@@ -34,25 +34,18 @@ static FrameList *allocHead;
 static FrameList *allocLast;
 
 // Asynchronous pager requests
-typedef enum {
-	SWAP_OUT,
-	SWAP_NO,
-	SWAP_YES
-} swap_t;
-
 #define SWAP_BUFSIZ 256
 
 struct PagerRequest_t {
 	Process *p;
 	L4_Word_t addr;
-	swap_t type;
 	int offset;
 	void (*callback)(PagerRequest *pr);
 	PagerRequest *next;
 };
 
-static PagerRequest *swapinRequestsHead = NULL;
-static PagerRequest *swapinRequestsLast = NULL;
+static PagerRequest *requestsHead = NULL;
+static PagerRequest *requestsLast = NULL;
 static PagerRequest swapoutRequest;
 static L4_Word_t pinnedFrame;
 
@@ -318,8 +311,8 @@ void pager_init(void) {
 	// Start pager, but wait until it has actually started before
 	// trying to assign virtual_pager to anything
 	dprintf(1, "*** pager_init: about to run pager\n");
-	process_run(pager, RUN_AS_THREAD);
 	virtual_pager = process_get_tid(pager);
+	process_run(pager, RUN_AS_THREAD);
 }
 
 int sos_moremem(uintptr_t *base, unsigned int nb) {
@@ -422,12 +415,11 @@ static void pager(PagerRequest *pr) {
 	L4_Word_t *entry = pageTableLookup(process_get_pagetable(pr->p), addr);
 	L4_Word_t entryAddr = *entry & ADDRESS_MASK;
 
-	dprintf(3, "*** pager: entry found to be %p at %p\n", (void*) *entry, entry);
+	dprintf(3, "*** pager: entry %p found at %p\n", (void*) *entry, entry);
 
 	if (*entry & ONDISK_MASK) {
 		// on disk, queue a swapin request
 		dprintf(2, "*** pager: page is on disk\n");
-		pr->type = SWAP_YES;
 		queueRequest(pr);
 		return;
 	} else if (entryAddr != 0) {
@@ -451,7 +443,6 @@ static void pager(PagerRequest *pr) {
 		if (entryAddr == 0) {
 			// No free frames
 			dprintf(2, "*** pager: no free frames\n");
-			pr->type = SWAP_NO;
 			queueRequest(pr);
 			return;
 		} else {
@@ -476,8 +467,6 @@ static void pager(PagerRequest *pr) {
 		dprintf(0, "Can't map page at %lx to frame %lx\n",
 				addr, frame);
 	}
-
-	// XXX hopefully this will OVERRIDE any existing mappings
 
 	if (mapKernelToo) {
 		if (!L4_MapFpage(L4_rootspace, fpage, ppage)) {
@@ -561,143 +550,185 @@ static void lseekNonblocking(fildes_t file, int offset, int whence) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) offset);
 	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
 
-	// XXX
-	syscall_run(42, NO_REPLY, &msg);
+	syscall_run(SOS_LSEEK, NO_REPLY, &msg);
 }
 
-static void queueSwapout(void) {
+static void startSwapout(void) {
 	assert(swapoutRequest.p == NULL);
 
+	// to swap something out it has to be in SOS's pager buffer,
+	// since that is how the write system call works
 	FrameList *swapout = deleteFrameList();
-	L4_Word_t *entry = pageTableLookup(process_get_pagetable(swapout->p),
-			swapout->page);
+	L4_Word_t *entry = pageTableLookup(
+			process_get_pagetable(swapout->p), swapout->page);
+	free(swapout);
 
+	memcpy(pager_buffer(L4_rootserver), (void*) (*entry & ADDRESS_MASK), PAGESIZE);
+
+	// set up the swapout
 	swapoutRequest.p = swapout->p;
 	swapoutRequest.addr = *entry & ADDRESS_MASK;
-	swapoutRequest.type = SWAP_OUT;
-	swapoutRequest.offset = get_swapslot();
+	swapoutRequest.offset = 0;
 	swapoutRequest.callback = NULL;
 	swapoutRequest.next = NULL;
 
+	L4_Word_t diskAddr = get_swapslot();
+	assert(isPageAligned((void*) diskAddr));
+
 	*entry |= ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
+	*entry |= diskAddr;
 
-	assert(isPageAligned(&(swapoutRequest.offset)));
-	*entry |= swapoutRequest.offset;
-
-	lseekNonblocking(swapfile, swapoutRequest.offset, SEEK_SET);
+	// kick-start with an lseek, the pager message handler loop
+	// will start writing from then on
+	lseekNonblocking(swapfile, diskAddr, SEEK_SET);
 }
 
 static void startSwapin(void) {
-	// We want to swap something in but there might be no frames left
-	// to actually do so, so we might have to do a swapout first
-	L4_Word_t frame = pagerFrameAlloc(
-			swapinRequestsHead->p,
-			swapinRequestsHead->addr);
+	// kick-start the chain of NFS requests and callbacks by lseeking
+	// to the position in the swap file the page is (and this is found
+	// by ADDR_MASK since it doubles as physical and ondisk memory location)
+	L4_Word_t *entry = pageTableLookup(
+			process_get_pagetable(requestsHead->p), requestsHead->addr);
+	lseekNonblocking(swapfile, *entry & ADDRESS_MASK, SEEK_SET);
+}
 
-	if (frame != 0) {
-		pinnedFrame = frame;
-		lseekNonblocking(swapfile, swapinRequestsHead->offset, SEEK_SET);
+static void startRequest(void) {
+	assert(allocLimit == 0);
+	L4_Word_t *entry = pageTableLookup(
+			process_get_pagetable(requestsHead->p), requestsHead->addr);
+
+	if (*entry & ONDISK_MASK) {
+		// just need to swap something out
+		assert(pinnedFrame == 0);
+		startSwapout();
 	} else {
-		// need to kick something out
-		queueSwapout();
-		// this swapin will be called after the swapout finishes
+		// need to swap the entry in first
+		startSwapin();
+		// swapin continuation will pick up from here
+	}
+}
+
+static void dequeueRequest(void) {
+	PagerRequest *tmp;
+
+	tmp = requestsHead;
+	requestsHead = requestsHead->next;
+	free(tmp);
+
+	if (requestsHead == NULL) {
+		requestsLast = NULL;
+	} else {
+		startRequest();
 	}
 }
 
 static void queueRequest(PagerRequest *pr) {
-	if (swapinRequestsLast == NULL) {
-		assert(swapinRequestsHead == NULL);
-		swapinRequestsLast = swapinRequestsHead = pr;
-		startSwapin();
+	dprintf(1, "*** queueRequest: p=%d addr=%p\n",
+			process_get_pid(pr->p), pr->addr);
+
+	if (requestsLast != NULL) {
+		assert(requestsLast != NULL);
+		dprintf(1, "*** queueRequest: adding to queue\n");
+		requestsLast->next = pr;
 	} else {
-		swapinRequestsLast->next = pr;
+		assert(requestsHead == NULL);
+		dprintf(1, "*** queueRequest: starting new queue\n");
+		requestsLast = pr;
+		requestsHead = pr;
+		startRequest();
 	}
 }
 
 static void finishedSwapout(void) {
-	if (swapinRequestsHead->type == SWAP_NO) {
-		// the process just needed a new frame, nothing to swap in -
-		// the pager should handle everything
-		pager(swapinRequestsHead);
+	// either the swapout was just for a free frame, or it was for
+	// a frame with existing contents (in which case there would be
+	// a pinned frame with the contents we need)
+	// in either case we now have a frame we can free
+	pagerFrameFree(swapoutRequest.addr);
+
+	// pager is now guaranteed to find a page
+	L4_Word_t *entry = pageTableLookup(
+			process_get_pagetable(requestsHead->p), requestsHead->addr);
+	pager(requestsHead);
+
+	if (pinnedFrame != 0) {
+		// there is contents we need to copy across
+		memcpy((void*) (*entry & ADDRESS_MASK), (void*) pinnedFrame, PAGESIZE);
+		frame_free(pinnedFrame);
 	}
 
-	// this will always be true if it was a SWAP_YES
-	if (swapinRequestsHead != NULL) {
-		startSwapin();
-	}
-
-	// delete request
 	swapoutRequest.p = NULL;
+	dequeueRequest();
 }
 
 static void finishedSwapin(void) {
-	// the contents of the page will now be in the per-tid buffer
-	// so copy that to the pinned frame, free the frame, then
-	// call pager manually
-	assert(MAX_IO_BUF >= PAGESIZE);
+	// the contents of the page will now be in SOS's pager buffer,
+	// which we need to clear as soon as possible since we might
+	// need to swapout (which also needs the buffer)
+	L4_Word_t *entry = pageTableLookup(
+			process_get_pagetable(requestsHead->p), requestsHead->addr);
 
-	memcpy((void*) pinnedFrame, (void*) pager_buffer(L4_rootserver), PAGESIZE);
-	frame_free(pinnedFrame);
+	*entry &= ~ONDISK_MASK;
+	*entry &= ~ADDRESS_MASK;
 
-	// need to unset the ondisk mask
-	L4_Word_t *ptEntry = pageTableLookup(process_get_pagetable(swapinRequestsHead->p),
-			swapinRequestsHead->addr);
-	*ptEntry &= ~ONDISK_MASK;
+	if (allocLimit > 0) {
+		// there are free frames so this will definitely return
+		// without anything being queued (it will also wake the
+		// process presumably)
+		pager(requestsHead);
 
-	// pager will free the request
-	PagerRequest *nextRequest = swapinRequestsHead->next;
-	pager(swapinRequestsHead);
-	swapinRequestsHead = nextRequest;
+		// entry will now contain whatever frame was allocated, so
+		// put the swapped-in data there
+		memcpy((void*) (*entry & ADDRESS_MASK),
+				(void*) pager_buffer(L4_rootserver), PAGESIZE);
 
-	if (swapinRequestsHead == NULL) {
-		swapinRequestsLast = NULL;
+		// we're done
+		dequeueRequest();
 	} else {
-		startSwapin();
+		// there are no free frames so we need to swapout before being
+		// able to do anything.  however we now have the problem of
+		// where to put the data from the pager buffer - so create a
+		// new buffer (pinnedFrame) 
+		assert(pinnedFrame == 0);
+		pinnedFrame = frame_alloc();
+		memcpy((void*) pinnedFrame, (void*) pager_buffer(L4_rootserver), PAGESIZE);
+		startSwapout();
 	}
 }
 
 static void demandPager(int vfsRval) {
-	/*
-	 * Algorithm:
-	 *
-	 * If we're swapping out then continue the swap.
-	 * If not then we must be swapping in.
-	 */
-
 	if (swapoutRequest.p != NULL) {
 		// This is part of a swapout continuation
-
 		assert(swapoutRequest.offset <= PAGESIZE);
 
 		if (swapoutRequest.offset == PAGESIZE) {
-			// we finished the swapout, use the now-free frame
+			// we finished the swapout so use the now-free frame
 			// as either a swapin target or a free frame
 			finishedSwapout();
 		} else {
-			// still swapping out, continue the vfs write
-			// need to copyin the data manually, don't need
-			// system call though thankfully since we can
-			// just copy in normally.
-			// note that this will go in to SOS's copyin
-			// buffer but that will work nicely
+			// still swapping out, continue the vfs write.
+			// see startSwapout() - the data we're writing
+			// will be in SOS's pager buffer which maintains
+			// the offset by itself.  in fact we could actually
+			// use the copyinoutdata for offset directly but
+			// it's safer to maintain it ourselves (ideally the
+			// copyinout mechanism is a black box)
 			writeNonblocking(swapfile, SWAP_BUFSIZ);
 			swapoutRequest.offset += SWAP_BUFSIZ;
 		}
 	} else {
 		// This is part of a swapin continuation
+		assert(requestsHead->offset <= PAGESIZE);
 
-		assert(swapinRequestsHead->offset <= PAGESIZE);
-
-		if (swapinRequestsHead->offset == PAGESIZE) {
-			// we finished the swapin so we can wake up the
-			// process now via the continuation and then
-			// service the next request
+		if (requestsHead->offset == PAGESIZE) {
+			// we finished the swapin so we can now attempt to
+			// give the page to the process that needs it
 			finishedSwapin();
 		} else {
 			// still swapping in, continue the vfs read
 			readNonblocking(swapfile, SWAP_BUFSIZ);
-			swapinRequestsHead->offset += SWAP_BUFSIZ;
+			requestsHead->offset += SWAP_BUFSIZ;
 		}
 	}
 }
