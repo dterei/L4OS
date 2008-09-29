@@ -1,0 +1,11 @@
+Import("*")
+
+addressing = env.WeaverAddressing(direct=True)
+weaver = env.WeaverIguanaProgram(addressing = addressing)
+
+libs = Split("c sos l4")
+hello4 = env.KengeProgram("hello4", source=["hello4.c"], weaver=weaver, LIBS=libs)
+
+Return("hello4")
+
+# vim: set filetype=python:

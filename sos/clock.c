@@ -3,6 +3,7 @@
 #include <l4/interrupt.h>
 #include <stdio.h>
 
+#include "constants.h"
 #include "pager.h"
 #include "l4.h"
 #include "libsos.h"
@@ -22,7 +23,7 @@
 #define OST_TIM0    ((uint32_t*) 0xc8005004)
 #define OST_TIM0_RL ((uint32_t*) 0xc8005008)
 #define OST_TIM0_RL ((uint32_t*) 0xc8005008)
-#define OST_STS     ((uint32_t*) 0xC8005020)
+#define OST_STS     ((uint32_t*) 0xc8005020)
 
 #define CLEAR_ST   (1 << 2)
 #define CLEAR_TIM0 (1)
@@ -40,11 +41,27 @@ struct BlockedThread_t {
 	BlockedThreads next;
 };
 
-static BlockedThreads blocked_threads = NULL;
+static struct BlockedThread_t sentinel;
+static BlockedThreads blocked_threads = &sentinel;
 
+static int isSentinel(BlockedThreads bt) {
+	dprintf(1, "*** isSentinel? ");
+	dprintf(1, "%ld\n", L4_ThreadNo(bt->tid));
+
+	if (L4_IsThreadEqual(bt->tid, sentinel.tid)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
 
 int start_timer(void) {
 	dprintf(1, "*** start_timer\n");
+
+	// Set up sentinel node
+	sentinel.tid = L4_nilthread;
+	sentinel.unblock = 0;
+	sentinel.next = NULL;
 
 	// Set up memory mapping for the timer registers, 1:1
 	L4_Fpage_t fpage = L4_Fpage((L4_Word_t) OST_TS, PAGESIZE);
@@ -86,12 +103,14 @@ int register_timer(uint64_t delay, L4_ThreadId_t client) {
 	bt->unblock = ts + cs;
 	bt->next = blocked_threads;
 
+	dprintf(1, "*** register_timer: unblock at %lld\n", bt->unblock);
+
 	// Better to add at end probably, but more complicated so who cares
 	blocked_threads = bt;
 
 	// Next time to check might be sooner than we will already
 	if (*OST_TIM0 == 0 || ((uint32_t) cs << 2) < *OST_TIM0) {
-		dprintf(0, "reenabling\n");
+		dprintf(1, "reenabling\n");
 		*OST_STS |= CLEAR_TIM0;
 		*OST_TIM0_RL = ((uint32_t) cs) | ONESHOT_ENABLE;
 	}
@@ -132,19 +151,24 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 	uint32_t nextDelay = (uint32_t) (-1);
 
 	// Figure out which threads need to be woken up
-	for (BlockedThreads bt = blocked_threads; bt != NULL; bt = bt->next) {
+	assert(blocked_threads != NULL);
+
+	for (BlockedThreads bt = blocked_threads; bt != NULL && !isSentinel(bt);) {
 		if (bt->unblock <= ts) {
+			dprintf(1, "*** timer_irq: unblocking %ld\n", L4_ThreadNo(bt->tid));
+
 			// Unblock thread
-			syscall_reply(bt->tid, 0); // XXX can give rval now
+			syscall_reply(bt->tid, 0);
 
 			// Delete it from list
-			if (bt->next != NULL) {
-				bt->tid = bt->next->tid;
-				bt->unblock = bt->next->unblock;
-				bt->next = bt->next->next;
-			} else {
-				free(bt);
-				blocked_threads = NULL;
+			BlockedThreads freeMe = bt->next;
+
+			bt->tid = bt->next->tid;
+			bt->unblock = bt->next->unblock;
+			bt->next = bt->next->next;
+
+			if (!isSentinel(freeMe)) {
+				free(freeMe);
 			}
 		} else {
 			// Multiple blocking threads means we need to reenable
@@ -153,6 +177,8 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 				delay = 1;
 				nextDelay = (uint32_t) (bt->unblock - ts);
 			}
+
+			bt = bt->next;
 		}
 	}
 

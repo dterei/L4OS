@@ -1,28 +1,52 @@
-- Milestone 6 - also, think ahead with ELF loading and as such, a generalised
-swap file (rather than assumings it's always .swap or whatever).  
-
 - Testing.  Jesus we need to do more testing.
 
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
-instead of having each fs handle it
-
-- Put extra data in the page table struct - we always have the lower 12 bits
-free, can use this as a permissions bitmask and for demand paging status bits,
-etc.  *** NOTE *** that when this happens, various functions that use the
-findPageTableWord function will break.  Will need to fix them!
-
-- Put /all/ process/thread specific stuff in to the PCB (Process struct, in
-process.[ch]).  I'm looking at the file tables right now.
-
-- There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
-getting negative.
-
-- Need to pin pages when preparing the callback to read them in over NFS.
+instead of having each fs handle it.
+(Undecided, changes live in vfs-exp branch)
 
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
 
-- Put all of the commands in sosh in to different files (i.e. one for cp, one
-for rm, etc).  It's so very ugly at the moment.
+- There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
+getting negative.
+
+- syscall_reply should check that the thread still exists (either through the
+PCB or through L4, need to think about that one).  There is also the problem in
+the point below this (deal with processes being replaced with another one)
+which interestingly the last AOS lecture was on.  Hah funny how that happens.
+
+- All callbacks will now have to deal with a process no longer existing.  There
+is also the odd possibility that a process will have been deleted and a new one
+created, and one of the callbacks arrives for the old one.  Pretty unlikely but
+still something to think about.
+
+- There is a really weird bug (or otherwise) causing mangled output on the
+computers at uni.  But not on my laptop.  Just run "ps" from sosh.  I hope and
+assume that this is some kind of communication problem (and not from SOS) but
+Nick seemed a little mistrusting.  So it could be a bug.
+
+- Update crt (whatever that is) to kill a process when it finishes.  At the
+moment it just pagefaults like crazy.  Apparently this is a mystery funtion
+somewhere, possibly written in assembler (?).
+
+- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", we
+really need to fix this if possible.  It's irritating and probably a SOS bug.
+I assume some kind of race condition since it's somewhat random.
+
+- Need internal synchronisation of NFS, and it would make sense (compared to
+what we already have) to use events.  It also would be easier to implement it
+at the VFS level so may as well do it there.  I.e. VFS read and write (and who
+knows maybe more?) requests get put on a queue and executed sequentially.
+
+- Email Kevin and Gernot about how to hand in M6.
+
+- Finish M6.
+
+- Fill in the missing bits from M7 we couldn't do due to not having a working
+M6 - freeing allocated frames, freeing allocated slots in the swap file, and
+freeing pager requests.
+
+- Bug in write either returning the wrong number of bytes or doing something
+wrong with the given number of bytes.  It's off by 1.  See sosh/memdump.c.
 

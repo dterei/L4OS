@@ -58,68 +58,34 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../k_r_malloc.h"
+#include <assert.h>
+#include <sos/sos.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <assert.h>
 
-#include <sos/sos.h>
+#include "../k_r_malloc.h"
 
-#define NEW_MALLOC
+#define NALLOC 0x1000
 
-#ifdef THREAD_SAFE
-#include <assert.h>
-#include <mutex/mutex.h>
-#include <l4/thread.h>
-extern struct okl4_mutex malloc_mutex;
-#endif /* THREAD_SAFE */
-
-#define NALLOC 0x10000
-#define MALLOC_AREA_SIZE 0x100000
-
-#ifndef NEW_MALLOC
-static char __malloc_area[MALLOC_AREA_SIZE];
-static uintptr_t __malloc_bss = (uintptr_t)&__malloc_area;
-static uintptr_t __malloc_top = (uintptr_t)&__malloc_area[MALLOC_AREA_SIZE];
-
-#endif // NEW_MALLOC
-
-Header *_kr_malloc_freep = NULL; // GLOBAL
+Header *_kr_malloc_freep = NULL;
 
 #define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
-// XXX HACK TO GET AROUND STACK ISSUE WITH sender2kernel
-static uintptr_t cp;
-
-/*
- * sbrk equiv
- */
-Header *
-morecore(unsigned int nu)
-{
+Header *morecore(unsigned int nu) {
 	uintptr_t nb;
-	//uintptr_t cp; XXX HACK TO GET AROUND STACK ISSUE WITH sender2kernel
+	uintptr_t cp;
 	Header *up;
 
 	nb = round_up(nu * sizeof(Header), NALLOC);
 
-#ifdef NEW_MALLOC
 	if (!moremem(&cp, nb)) {
 		return NULL;
 	}
 
-#else
-	if (__malloc_bss + nb > __malloc_top) {
-		return NULL;
-	}
-
-	cp = __malloc_bss;
-	__malloc_bss += nb;
-
-#endif // NEW_MALLOC
-
-	up = (Header *)cp;
+	up = (Header*) cp;
 	up->s.size = nb / sizeof(Header);
-	free((void *)(up + 1));
+	free((void*) (up + 1));
+
 	return _kr_malloc_freep;
 }
+

@@ -1,0 +1,17 @@
+- Clean, stable, robust, and completed SOS.
+
+- User network library.  Handled through VFS?  Internally use TCP-over-UDP?
+
+- USB stack/driver/library.
+
+- Pipes.
+
+- Editor (user program, nothing to do with SOS unless it involves writing a few
+more system calls).  Like red.
+
+- Thread management.
+
+- Shared memory.
+
+- Kernel VM 
+

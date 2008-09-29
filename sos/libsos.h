@@ -20,8 +20,6 @@
 #define L4_INTERRUPT	((L4_Word_t) -1)
 #define L4_EXCEPTION ((L4_Word_t) -5)
 
-#define ONE_MEG (1 * 1024 * 1024)
-
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
 // Bootinfo required callbacks
@@ -100,10 +98,13 @@ extern void sos_logf(const char *msg, ...);
 // thread id.  You will probably have to replace this functionality at some
 // stage in the future to keep track of currently active threadIds.
 //
-extern L4_ThreadId_t sos_get_new_tid(void);
+L4_ThreadId_t sos_get_new_tid(void);
+
+// Disable sos_get_new_tid
+void sos_get_new_tid_disable(void);
 
 // get the next thread id that will be issued
-extern L4_ThreadId_t sos_peek_new_tid(void);
+L4_ThreadId_t sos_peek_new_tid(void);
 
 //
 // sos_my_tid(void)

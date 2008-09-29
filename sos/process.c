@@ -1,38 +1,80 @@
+#include <clock/clock.h>
+#include <sos/sos.h>
+#include <string.h>
+
+#include "constants.h"
+#include "frames.h"
 #include "l4.h"
 #include "libsos.h"
-#include "pager.h"
 #include "process.h"
-#include "vfs.h"
+#include "syscall.h"
 
 #define STDOUT_FN "console"
 
+#define WAIT_ANYBODY (-1)
+#define WAIT_NOBODY (-2)
+
 #define verbose 1
 
+// The equivalent of a PCB
 struct Process_t {
-	L4_ThreadId_t tid;
-	PageTable *pagetable;
-	Region *regions;
-	PagerRequest *prequest;
-	void *sp;
-	void *ip;
+	process_t     info;
+	PageTable    *pagetable;
+	Region       *regions;
+	void         *sp;
+	void         *ip;
+	timestamp_t   startedAt;
+	VFile         files[PROCESS_MAX_FILES];
+	pid_t         waitingOn;
 };
 
-static Process *sos_procs[MAX_ADDRSPACES];
+// Array of all PCBs
+static Process *sosProcs[MAX_ADDRSPACES];
+
+// The next pid to allocate
+static L4_Word_t nextPid;
+
+// All pids below this value have already been allocated by libsos
+// as threadids, and all over SOS it has been assumed that there is
+// a 1:1 mapping between pid and tid (and sid incidentally), so just
+// never allocate a pid below this value.
+static L4_Word_t tidOffset;
 
 Process *process_lookup(L4_Word_t key) {
-	return sos_procs[key];
+	return sosProcs[key];
 }
 
-Process *process_init(void) {
+static Process *processAlloc(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
+
+	p->info.pid = 0;   // decide later
+	p->info.size = 0;  // fill in as we go
+	p->info.stime = 0; // decide later
+	p->info.ctime = 0; // don't ever need
+	p->info.command[0] = '\0';
 
 	p->pagetable = pagetable_init();
 	p->regions = NULL;
-	p->prequest = NULL;
 	p->sp = NULL;
 	p->ip = NULL;
+	vfiles_init(p->files);
+	p->waitingOn = WAIT_NOBODY;
 
 	return p;
+}
+
+Process *process_init(void) {
+	// On the first process initialisation set the offset
+	// to whatever it is, and disable libsos from allocating
+	// any more threadids.  Admittedly, this is a bit of a hack.
+	if (tidOffset == 0) {
+		tidOffset = L4_ThreadNo(sos_peek_new_tid());
+		sos_get_new_tid_disable();
+		nextPid = tidOffset;
+	}
+
+	// Do the normal process initialisation
+	return processAlloc();
 }
 
 void process_add_region(Process *p, Region *r) {
@@ -53,6 +95,10 @@ void process_set_sp(Process *p, void *sp) {
 	// will then need to manage its memory
 	// manually.  
 	p->sp = sp;
+}
+
+void process_set_name(Process *p, char *name) {
+	strncpy(p->info.command, name, N_NAME);
 }
 
 static void addRegion(Process *p, region_type type,
@@ -99,17 +145,46 @@ static void addBuiltinRegions(Process *p) {
 static void process_dump(Process *p) {
 	(void) process_dump;
 
-	dprintf(1, "*** %s on %ld\n", __FUNCTION__, L4_ThreadNo(p->tid));
-	dprintf(1, "*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
-	dprintf(1, "*** %s: regions: %p\n", __FUNCTION__, p->regions);
+	printf("*** %s on %d\n", __FUNCTION__, p->info.pid);
+	printf("*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
+	printf("*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
 	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
-		dprintf(1, "*** %s: region %p -> %p (%p)\n", __FUNCTION__,
-				region_base(r), region_base(r) + region_size(r), r);
+		printf("*** %s: region %p -> %p (%p)\n", __FUNCTION__,
+				(void*) region_base(r), (void*) (region_base(r) + region_size(r)),
+				(void*) r);
 	}
 
-	dprintf(1, "*** %s: sp: %p\n", __FUNCTION__, p->sp);
-	dprintf(1, "*** %s: ip: %p\n", __FUNCTION__, p->ip);
+	printf("*** %s: sp: %p\n", __FUNCTION__, p->sp);
+	printf("*** %s: ip: %p\n", __FUNCTION__, p->ip);
+}
+
+static L4_Word_t getNextPid(void) {
+	L4_Word_t oldPid = nextPid;
+	int firstIteration = 1;
+
+	while (sosProcs[nextPid] != NULL) {
+		// Detect loop, no more pids!
+		if (!firstIteration && oldPid == nextPid) {
+			dprintf(0, "!!! getNextPid: none left\n");
+			break;
+		}
+
+		nextPid++;
+
+		// Gone past the end, loop around
+		if (nextPid > MAX_THREADS) {
+			nextPid = tidOffset;
+		}
+
+		firstIteration = 0;
+	}
+
+	// Should probably throw error here instead, but
+	// it's too much effort
+	assert(sosProcs[nextPid] == NULL);
+
+	return nextPid;
 }
 
 void process_prepare(Process *p) {
@@ -118,33 +193,40 @@ void process_prepare(Process *p) {
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
-	p->tid = sos_get_new_tid();
-	sos_procs[L4_ThreadNo(p->tid)] = p;
+	p->info.pid = getNextPid();
+	sosProcs[p->info.pid] = p;
 
 	// Open stdout
 	int dummy;
-	vfs_open(p->tid, STDOUT_FN, FM_WRITE, &dummy);
+	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE, &dummy);
 }
 
 L4_ThreadId_t process_run(Process *p, int asThread) {
 	L4_ThreadId_t tid;
-	process_dump(p);
+	if (verbose > 1) process_dump(p);
+
+	p->startedAt = time_stamp();
 
 	if (asThread == RUN_AS_THREAD) {
-		tid = sos_thread_new(p->tid, p->ip, p->sp);
+		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		tid = sos_task_new(L4_ThreadNo(p->tid), L4_Pager(), p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(L4_ThreadNo(p->tid), virtual_pager, p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
+	assert(L4_ThreadNo(tid) == p->info.pid);
 
 	return tid;
 }
 
+pid_t process_get_pid(Process *p) {
+	return p->info.pid;
+}
+
 L4_ThreadId_t process_get_tid(Process *p) {
-	return p->tid;
+	return L4_GlobalId(p->info.pid, 1);
 }
 
 PageTable *process_get_pagetable(Process *p) {
@@ -155,11 +237,120 @@ Region *process_get_regions(Process *p) {
 	return p->regions;
 }
 
-void process_set_prequest(Process *p, PagerRequest *pr) {
-	p->prequest = pr;
+static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
+	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
+		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
+			sosProcs[i]->waitingOn = WAIT_NOBODY;
+			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
+		}
+	}
 }
 
-PagerRequest *process_get_prequest(Process *p) {
-	return p->prequest;
+int process_kill(Process *p) {
+	printf("process_kill on %p\n", p);
+
+	if (p == NULL) {
+		return (-1);
+	} else {
+		printf("pid is %d\n", p->info.pid);
+	}
+
+	/*
+	 * Will need to:
+	 * 	- kill thread
+	 * 	- close all files
+	 * 	! free all frames allocted by the process
+	 * 	! free all swapped frames
+	 * 	- free page table
+	 * 	- free regions
+	 * 	- free up the pid for another process
+	 * 	- free the PCB
+	 * 	- wake up waiting processes
+	 *
+	 * Points marked with (!) are ones that haven't been
+	 * done yet.
+	 *
+	 * Won't need to:
+	 * 	- free the pager request (will happen by itself)
+	 * 	- worry about stray messages (sycall_reply is ok)
+	 */
+
+	// Kill all threads associated with the process
+	L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
+			L4_nilthread, L4_nilthread, 0, NULL);
+
+	// Close all files opened by it
+	int dummy;
+
+	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
+		vfs_close(process_get_tid(p), fd, &dummy);
+	}
+
+	// Free the used frames, page table, and regions
+	//frames_free(p->info.pid);
+	pagetable_free(p->pagetable);
+	region_free_all(p->regions);
+
+	// Freeing the PCB and setting to NULL is enough to
+	// free the pid as well
+	pid_t ghostPid = p->info.pid;
+	free(p);
+	sosProcs[ghostPid] = NULL;
+
+	// Wake all process waiting on this process (or any)
+	wakeAll(ghostPid, ghostPid);
+	wakeAll(WAIT_ANYBODY, ghostPid);
+
+	return 0;
+}
+
+int process_write_status(process_t *dest, int n) {
+	int count = 0;
+
+	// Firstly, update the size of sos
+	assert(sosProcs[L4_rootserverno] != NULL);
+	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
+
+	// Everything else has size dynamically updated, so just
+	// write them all out
+	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
+		if (sosProcs[i] != NULL) {
+			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
+			*dest = sosProcs[i]->info;
+			dest++;
+			count++;
+		}
+	}
+
+	return count;
+}
+
+process_t *process_get_info(Process *p) {
+	// If necessary, uptime stime here too
+	return &p->info;
+}
+
+VFile *process_get_files(Process *p) {
+	return p->files;
+}
+
+void process_wait_any(Process *waiter) {
+	waiter->waitingOn = WAIT_ANYBODY;
+}
+
+void process_wait_for(Process *waitFor, Process *waiter) {
+	waiter->waitingOn = process_get_pid(waitFor);
+}
+
+void process_add_rootserver(void) {
+	Process *rootserver = processAlloc();
+
+	rootserver->startedAt = time_stamp();
+	process_set_name(rootserver, "sos");
+
+	assert(rootserver->info.pid == L4_rootserverno);
+	sosProcs[L4_rootserverno] = rootserver;
+
+	if (verbose > 1) process_dump(rootserver);
 }
 

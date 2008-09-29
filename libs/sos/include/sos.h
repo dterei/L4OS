@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <l4/message.h>
 #include <l4/types.h>
 
 /* VFS Return Codes */
@@ -38,6 +39,7 @@ typedef enum {
 	SOS_CLOSE,
 	SOS_READ,
 	SOS_WRITE,
+	SOS_LSEEK,
 	SOS_GETDIRENT,
 	SOS_STAT,
 	SOS_REMOVE,
@@ -47,16 +49,10 @@ typedef enum {
 	SOS_PROCESS_STATUS,
 	SOS_PROCESS_WAIT,
 	SOS_TIME_STAMP,
-	SOS_SLEEP,
+	SOS_USLEEP,
+	SOS_MEMUSE,
 	SOS_SHARE_VM
 } syscall_t;
-
-/* Limits */
-#define MAX_ADDRSPACES 256
-#define MAX_THREADS 4096
-#define PROCESS_MAX_FILES 16
-#define MAX_IO_BUF 1024
-#define N_NAME 32
 
 /* file modes */
 #define FM_WRITE 1
@@ -88,6 +84,8 @@ typedef int fildes_t;
 extern fildes_t stdout_fd;
 extern fildes_t stdin_fd;
 
+#define N_NAME 32
+
 typedef struct {
 	pid_t     pid;
 	unsigned  size;  // in pages
@@ -98,6 +96,13 @@ typedef struct {
 
 /* Get the string representation of a syscall */
 char *syscall_show(syscall_t syscall);
+
+/* For handling syscalls */
+#define YES_REPLY 1
+#define NO_REPLY 0
+
+void syscall_prepare(L4_Msg_t *msg);
+L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg);
 
 /* Misc system calls */
 
@@ -155,6 +160,17 @@ int read(fildes_t file, char *buf, size_t nbyte);
  */
 int write(fildes_t file, const char *buf, size_t nbyte);
 
+/* Lseek sets the file position indicator to the specified position "pos".
+ * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
+ * to the start of the file, current position in the file or end of the file
+ * respectively.
+ *
+ * Note: SEEK_END not supported.
+ *
+ * Returns 0 on success and -1 on error.
+ */
+int lseek(fildes_t file, fpos_t pos, int whence);
+
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,
  * -1 if error (non-existent entry).
@@ -199,10 +215,12 @@ pid_t process_wait(pid_t pid);
  */
 long uptime(void);
 
-/* Sleeps for the specified number of milliseconds.
+/* Sleeps for the specified number of microseconds.
  */
-void sleep(int msec);
+void usleep(int msec);
 
+/* Get the number of frames in use by user processes */
+int memuse(void);
 
 /*************************************************************************/
 /*									 */

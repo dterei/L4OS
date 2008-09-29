@@ -24,6 +24,7 @@
 #include "network.h"
 #include "pager.h"
 #include "syscall.h"
+#include "process.h"
 #include "vfs.h"
 
 #define verbose 0
@@ -266,6 +267,9 @@ main (void)
 	irq_add(NSLU2_TIMER0_IRQ, timer_irq);
 
 	start_timer();
+
+	// Rootserver needs a PCB for opening files (e.g. the swap file)
+	process_add_rootserver();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

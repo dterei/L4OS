@@ -1,24 +1,31 @@
 #include <clock/clock.h>
 #include <sos/sos.h>
 
-#include "syscall.h"
-
+#include "constants.h"
+#include "frames.h"
 #include "l4.h"
 #include "libsos.h"
 #include "network.h"
-
 #include "pager.h"
-#include "frames.h"
+#include "process.h"
+#include "syscall.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 static int rval;
 
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
-	dprintf(1, "*** syscall_reply: replying to %d\n",
+	if (L4_IsThreadEqual(tid, L4_rootserver)) {
+		// FIXME this is a hacked up replacement for thread management
+		dprintf(1, "syscall_reply: rootserver -> virtual_pager\n");
+		assert(!L4_IsThreadEqual(virtual_pager, L4_nilthread));
+		tid = virtual_pager;
+	}
+
+	dprintf(2, "*** syscall_reply: replying to %d\n",
 			L4_ThreadNo(tid));
 
 	L4_CacheFlushAll();
@@ -48,10 +55,11 @@ int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf; (void) buf;
+	L4_Word_t word;
 
 	L4_CacheFlushAll();
 
-	dprintf(1, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
+	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
@@ -106,6 +114,13 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					&rval);
 			break;
 
+		case SOS_LSEEK:
+			vfs_lseek(tid,
+					(fildes_t) L4_MsgWord(msg, 0),
+					(fpos_t) L4_MsgWord(msg, 1),
+					(int) L4_MsgWord(msg, 2),
+					&rval);
+
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
 					(int) L4_MsgWord(msg, 0),
@@ -128,15 +143,41 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			syscall_reply(tid, rval);
 			break;
 
-		case SOS_SLEEP:
-			register_timer((uint64_t) L4_MsgWord(msg, 0) * 1000, tid);
+		case SOS_USLEEP:
+			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
+			break;
+
+		case SOS_PROCESS_DELETE:
+			rval = process_kill(process_lookup(L4_MsgWord(msg, 0)));
+			syscall_reply(tid, rval);
+			break;
+
+		case SOS_MY_ID:
+			rval = process_get_pid(process_lookup(L4_ThreadNo(tid)));
+			syscall_reply(tid, rval);
+			break;
+
+		case SOS_PROCESS_WAIT:
+			word = L4_MsgWord(msg, 0);
+			if (word == ((L4_Word_t) -1)) {
+				process_wait_any(process_lookup(L4_ThreadNo(tid)));
+			} else {
+				process_wait_for(process_lookup(word),
+						process_lookup(L4_ThreadNo(tid)));
+			}
+			break;
+
+		case SOS_PROCESS_STATUS:
+			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
+			syscall_reply(tid, rval);
+			break;
+
+		case SOS_MEMUSE:
+			rval = sos_memuse();
+			syscall_reply(tid, rval);
 			break;
 
 		case SOS_PROCESS_CREATE:
-		case SOS_PROCESS_DELETE:
-		case SOS_MY_ID:
-		case SOS_PROCESS_STATUS:
-		case SOS_PROCESS_WAIT:
 		case SOS_SHARE_VM:
 		default:
 			// Unknown system call, so we don't want to reply to this thread
