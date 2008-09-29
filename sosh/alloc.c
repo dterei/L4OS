@@ -5,7 +5,9 @@
 #include "alloc.h"
 #include "sosh.h"
 
-#define SIZE 4096
+// subtract 32 because each page wastes a pointer due to the
+// implementation of malloc
+#define SIZE (4096 - 32)
 
 int alloc(int argc, char **argv) {
 	int written;
