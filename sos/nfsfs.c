@@ -7,7 +7,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 4
 
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
