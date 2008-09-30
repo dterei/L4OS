@@ -7,6 +7,23 @@
 
 static stat_t sbuf;
 
+struct arg {
+	char *arg;
+	int set;
+};
+
+#define LINE_LEN 80
+#define ARG_COUNT 4
+
+#define ARG_A 0
+#define ARG_L 1
+
+static
+struct arg args[] = {
+	{"a", 0},
+	{"l", 0},
+};
+
 static void prstat(const char *name) {
 	printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
 			sbuf.st_type == ST_SPECIAL  ? 's' : '-',
@@ -17,43 +34,45 @@ static void prstat(const char *name) {
 }
 
 int ls(int argc, char **argv) {
-	int i, r, a = 0, statp = 1;
+	int i, r;
 	char buf[BUF_SIZ];
 
-	if (argc > 3) {
-		printf("usage: %s [-a] [file]\n", argv[0]);
+	if (argc > ARG_COUNT) {
+		printf("usage: %s [-a] [-l] [file]\n", argv[0]);
 		return 1;
 	}
 
-
-	if (argc >= 2) {
-		int cmp = strcmp(argv[1], "-a");
-		if (verbose > 1) {
-			printf("%s\n", argv[1]);
-			printf("cmp: %d\n", cmp);
-		}
-		if (cmp == 0) {
-			a = 1;
-			statp = 2;
-		}
-	}
-		
-	if (verbose > 1) {
-		printf("a = %d, statp = %d\n", a, statp);
+	//reset the args
+	for (int j = 0; j < sizeof(args) / sizeof(struct arg); j++) {
+		args[j].set = 0;
 	}
 
-	if (argc > statp) {
-		r = stat(argv[statp], &sbuf);
+	// Pass args
+	for (int j = 1; j < argc; j++) {
+		if (strncmp(argv[j], "-", 1) == 0) {
+			for (int j2 = 1; j2 < strlen(argv[j]); j2++) {
+				for (int j3 = 0; j3 < sizeof(args) / sizeof(struct arg); j3++) {
+					if (strncmp(&argv[j][j2], args[j3].arg, 1) == 0) {
+						args[j3].set = 1;
+					}
+				}
+			}
+		}
+	}
+
+	if (argc > 1 && (strncmp(argv[argc - 1], "-", 1) != 0)) {
+		r = stat(argv[argc - 1], &sbuf);
 
 		if (r < 0) {
-			printf("stat(%s) failed: %d\n", argv[statp], r);
+			printf("stat(%s) failed: %d\n", argv[argc - 1], r);
 			return 0;
 		}
 
-		prstat(argv[statp]);
+		prstat(argv[argc - 1]);
 		return 0;
 	}
 
+	int linec = 0;
 	for (i = 0;; i++) {
 		r = getdirent(i, buf, BUF_SIZ);
 
@@ -64,22 +83,28 @@ int ls(int argc, char **argv) {
 			break;
 		}
 
-#if 0
-		printf("dirent(%d): \"%s\"\n", i, buf);
-#endif
+		if (args[ARG_A].set == 1 || strncmp(buf, ".", 1) != 0) {
+			if (args[ARG_L].set == 1) {
+				r = stat(buf, &sbuf);
+				if (r < 0) {
+					printf("stat(%s) failed: %d\n", buf, r);
+					break;
+				}
 
-		if (a == 1 || strncmp(buf, ".", 1) != 0) {
-			r = stat(buf, &sbuf);
+				prstat(buf);
+			} else {
+				if (linec + strlen(buf) > LINE_LEN) {
+					printf("\n");
+				}
+				linec += printf("%s ", buf);
+			}
 		} else {
 			continue;
 		}
+	}
 
-		if (r < 0) {
-			printf("stat(%s) failed: %d\n", buf, r);
-			break;
-		}
-
-		prstat(buf);
+	if (args[ARG_L].set != 1) {
+		printf("\n");
 	}
 
 	return 0;
