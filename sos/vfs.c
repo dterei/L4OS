@@ -22,7 +22,7 @@
 /* This callback if rval is zero or greater will create a filehandler for the address space
  * specified by tid.
  */
-static void vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+static void vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int status);
 
 /* This callback will decrease the refcount for the file handler, if the vnode returned is
  * null, then the filehandler is also closed.
@@ -148,16 +148,14 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	// check can open more files
 	if (findNextFd(process_lookup(L4_ThreadNo(tid))) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
-		*rval = SOS_VFS_NOMORE;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
 
 	// check filename is valid
 	if (strlen(path) >= N_NAME) {
 		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
-		*rval = SOS_VFS_PATHINV;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_PATHINV);
 		return;
 	}
 
@@ -178,19 +176,18 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
  * specified by tid.
  */
 static
-void
-vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, *rval);
+int
+vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int status) {
+	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, status);
 
 	// open failed
-	if (*rval < 0 || self == NULL) {
-		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", *rval);
-		return;
+	if (status < 0 || self == NULL) {
+		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", status);
+		return status;
 	}
 
 	Process *p = process_lookup(L4_ThreadNo(tid));
-	fildes_t fd = findNextFd(p);
-	*rval = fd;
+	fildes fd = findNextFd(p);
 
 	// store file in per process table
 	VFile *files = process_get_files(p);
@@ -211,6 +208,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// update vnode refcount
 	self->refcount++;
+	return fd;
 }
 
 /* Close a file */

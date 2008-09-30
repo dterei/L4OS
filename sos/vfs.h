@@ -23,7 +23,7 @@ struct VNode_t {
 	// File System Calls
 	void (*open)(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-				const char *path, fmode_t mode, int *rval));
+				const char *path, fmode_t mode, int rval));
 
 	void (*close)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,

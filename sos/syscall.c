@@ -32,7 +32,6 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);
-	L4_MsgAppendWord(&msg, rval);
 	L4_MsgAppendWord(&msg, xval);
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
 	L4_MsgLoad(&msg);
