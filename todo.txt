@@ -8,6 +8,9 @@ instead of having each fs handle it.
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
 
+- Put the max write size buffer that can be used in a define that user space can
+use.
+
 - There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
 getting negative.
 
