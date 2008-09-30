@@ -188,7 +188,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	}
 
 	Process *p = process_lookup(L4_ThreadNo(tid));
-	fildes fd = findNextFd(p);
+	fildes_t fd = findNextFd(p);
 
 	// store file in per process table
 	VFile *files = process_get_files(p);

@@ -99,38 +99,27 @@ console_init(VNode sflist) {
 	return sflist;
 }
 
-static
-void
-open_finish(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval), int r) {
-	*rval = r;
-	open_done(tid, self, path, mode, rval);
-	syscall_reply(tid, *rval);
-}
-
 /* Open a console file */
 void
 console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval)) {
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
 	// make sure console exists
 	if (self == NULL) {
-		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOVNODE);
+		open_done(tid, self, mode, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	// make sure they passed in the right vnode
 	if (strcmp(self->path, path) != 0) {
-		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOVNODE);
+		open_done(tid, self, mode, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_CORVNODE);
+		open_done(tid, self, mode, SOS_VFS_CORVNODE);
 		return;
 	}
 
@@ -138,7 +127,7 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	if (mode & FM_READ) {
 		// check if reader slots full
 		if (cf->readers > cf->Max_Readers) {
-			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
+			open_done(tid, self, mode, SOS_VFS_NOMORE);
 			return;
 		} else {
 			cf->readers++;
@@ -152,14 +141,14 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 			if (mode & FM_READ) {
 				cf->readers--;
 			}
-			open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_NOMORE);
+			open_done(tid, self, mode, SOS_VFS_NOMORE);
 			return;
 		} else {
 			cf->writers++;
 		}
 	}
 
-	open_finish(tid, self, path, mode, rval, open_done, SOS_VFS_OK);
+	open_done(tid, self, mode, SOS_VFS_OK);
 }
 
 static
