@@ -268,7 +268,7 @@ int fremove(const char *path) {
  */
 pid_t process_create(const char *path) {
 	printf("process_create: system call not implemented.\n");
-	return 0;
+	return -1;
 }
 
 /* 

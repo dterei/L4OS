@@ -8,7 +8,7 @@
 #include "syscall.h"
 #include "constants.h"
 
-#define verbose 1
+#define verbose 0
 
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
@@ -624,6 +624,7 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	else {
 		cp_stats(rq->stat, attr);
 		*(rq->p.rval) = SOS_VFS_OK;
+		dprintf(1, "nfsfs_stat_cb: Copied fine, reply to %d, value %d\n", L4_ThreadNo(rq->p.tid), *(rq->p.rval));
 		syscall_reply(rq->p.tid, *(rq->p.rval));
 		remove_request((NFS_BaseRequest *) rq);
 	}

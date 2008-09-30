@@ -77,7 +77,7 @@ main(void)
 	char buf[BUF_SIZ];
 	char *argv[MAX_ARGS];
 	int i, r, done, found, new, argc;
-	char *bp, *p;
+	char *bp, *p = "";
 
 	in = open("console", FM_READ);
 	assert (in >= 0);
@@ -102,7 +102,7 @@ main(void)
 				done=1;
 				break;
 			}
-			bp[r] = 0;		/* terminate */
+			bp[r] = '\0';		/* terminate */
 			if (verbose > 1) {
 				printf("sosh: just read %s, %d", bp, r);
 				if (bp[r-1] != '\n') {
@@ -128,9 +128,6 @@ main(void)
 					p--;
 					r--;
 				} else if (*p == '\n') {    /* ^J */
-					if (verbose > 0) {
-						printf("%c",*p);
-					}
 					*p    = 0;
 					found = p>buf;
 					p     = buf;
@@ -152,6 +149,10 @@ main(void)
 
 		argc = 0;
 		p = buf;
+
+		if (verbose > 1) {
+			printf("Command (pre space filter): %s\n", p);
+		}
 
 		while (*p != '\0')
 		{
@@ -177,6 +178,10 @@ main(void)
 			continue;
 		}
 
+		if (verbose > 0) {
+			printf("Command (post space filter): %s\n", argv[0]);
+		}
+
 		found = 0;
 
 		for (i = 0; i < sizeof(sosh_commands) / sizeof(struct command); i++) {
@@ -189,12 +194,20 @@ main(void)
 
 		/* Didn't find a command */
 		if (found == 0) {
+			if (verbose > 1) {
+				printf("try to execute program: %s\n", argv[0]);
+			}
 			/* They might try to exec a program */
 			if (stat(argv[0], &sbuf) != 0) {
 				printf("Command \"%s\" not found\n", argv[0]);
 			} else if (!(sbuf.st_fmode & FM_EXEC)) {
 				printf("File \"%s\" not executable\n", argv[0]);
+			} else if (sbuf.st_type == ST_DIR) {
+				printf("File \"%s\" is a directory\n", argv[0]);
 			} else {
+				if (verbose > 1) {
+					printf("Type: %d, Mode: %d\n", sbuf.st_type, sbuf.st_fmode);
+				}
 				/* Execute the program */
 				argc = 2;
 				argv[1] = argv[0];
