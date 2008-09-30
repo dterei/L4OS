@@ -374,7 +374,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 /* Seek to a position in a file */
 void
 vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
-	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
+	dprintf(0, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
 
 	// get file
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -388,11 +388,13 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 
 	// make sure ok
 	if (p == NULL || vf == NULL || vnode == NULL) {
-		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
+		dprintf(0, "*** vfs_seek: invalid file handler: %d\n", file);
 		*rval = SOS_VFS_NOFILE;
 		syscall_reply(tid, *rval);
 		return;
 	}
+
+	dprintf(0, "vfs_seek: old fp %d\n", vf->fp);
 
 	if (whence == SEEK_SET) {
 		vf->fp = (L4_Word_t) pos;
@@ -401,6 +403,8 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 	} else if (whence == SEEK_END) {
 		vf->fp = vnode->vstat.st_size - pos;
 	}
+
+	dprintf(0, "vfs_seek: new fp %d\n", vf->fp);
 
 	*rval = SOS_VFS_OK;
 	syscall_reply(tid, *rval);
@@ -417,10 +421,6 @@ vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {
 /* Stat a file */
 void
 vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
-	/*
-	dprintf(1, "*** vfs_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
-			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
-	*/
 	dprintf(1, "*** vfs_stat: %s\n", path);
 	
 	// Check open vnodes

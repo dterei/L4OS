@@ -407,11 +407,11 @@ m5test_lseek(int argc, char *argv[])
 	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
 	/* SEEK_END */
-	//pos = 5;
-	//d = lseek(fp, pos, SEEK_END);
-	//printf("Seek'd to pos (%d), status (%d) using SEEK_END\n", pos, d);
-	//d = write(fp, "AAAA", 4);
-	//printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
+	pos = 7;
+	d = lseek(fp, pos, SEEK_END);
+	printf("Seek'd to pos (%d), status (%d) using SEEK_END\n", pos, d);
+	d = write(fp, "AAAA", 4);
+	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
 	time = uptime() - time;
 	close(fp);
