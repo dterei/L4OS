@@ -18,19 +18,20 @@
 #define IO_FILENAME "m5bench_ioband"
 #define SEEK_FILENAME "m5bench_seek";
 
-static void m5test_help(void);
-static void m5test_timer(void);
-static void m5test_createfiles(void);
-static void m5test_iobandwidth(void);
-static void m5test_iocopy(void);
-static void m5test_writeread(void);
-static void m5test_getdirent(void);
-static void m5test_stat(void);
-static void m5test_lseek(void);
+static void m5test_help(int argc, char *argv[]);
+static void m5test_timer(int argc, char *argv[]);
+static void m5test_createfiles(int argc, char *argv[]);
+static void m5test_iobandwidth(int argc, char *argv[]);
+static void m5test_iocopy(int argc, char *argv[]);
+static void m5test_writeread(int argc, char *argv[]);
+static void m5test_getdirent(int argc, char *argv[]);
+static void m5test_stat(int argc, char *argv[]);
+static void m5test_lseek(int argc, char *argv[]);
+static int  m5test_benchmark(int argc, char *argv[]);
 
 struct command {
 	char *name;
-	void (*command)(void);
+	void (*command)(int argc, char *argv[]);
 };
 
 static
@@ -60,23 +61,18 @@ m5bench(int argc, char **argv)
 	int found = 0;
 	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++) {
 		if (strcmp(argv[1], m5commands[i].name) == 0) {
-			m5commands[i].command();
-			found = 1;
-			break;
+			m5commands[i].command(argc, argv);
+			return 0;
 		}
 	}
 
-	if (found == 0)
-	{
-		m5test_help();
-	}
-
+	m5test_help();
 	return 0;
 }
 
 static
 void
-m5test_help(void)
+m5test_help(int argc, char *argv[])
 {
 	printf("Usage: m5bench [test]\n");
 	printf("\nTests: ");
@@ -149,7 +145,7 @@ m5test_benchmark(int argc, char *argv[])
 
 static
 void
-m5test_timer(void)
+m5test_timer(int argc, char *argv[])
 {
 	printf("M5 Test: timer started\n");
 	printf("sleeping for %d microseconds\n", TIMER_SLEEP);
@@ -164,7 +160,7 @@ m5test_timer(void)
 
 static
 void
-m5test_createfiles(void)
+m5test_createfiles(int argc, char *argv[])
 {
 	//XXX The following code crashes SOS
 	//char *filename = "a0";
@@ -220,7 +216,7 @@ m5test_createfiles(void)
 
 static
 void
-m5test_iobandwidth(void)
+m5test_iobandwidth(int argc, char *argv[])
 {
 	printf("M5 Test: iobandwidth started (kbytes %d)\n", IO_KBYTES);
 
@@ -287,21 +283,21 @@ m5test_iobandwidth(void)
 
 static
 void
-m5test_iocopy(void)
+m5test_iocopy(int argc, char *argv[])
 {
 
 }
 
 static
 void
-m5test_writeread(void)
+m5test_writeread(int argc, char *argv[])
 {
 
 }
 
 static
 void
-m5test_getdirent(void)
+m5test_getdirent(int argc, char *argv[])
 {
 	printf("M5 Test: getdirent started (loops %d)\n", DIR_LOOPS);
 
@@ -334,14 +330,14 @@ m5test_getdirent(void)
 
 static
 void
-m5test_stat(void)
+m5test_stat(int argc, char *argv[])
 {
 
 }
 
 static
 void
-m5test_lseek(void)
+m5test_lseek(int argc, char *argv[])
 {
 	printf("M5 Test: seek started\n");
 
