@@ -37,6 +37,9 @@ int seektest(int argc, char **argv) {
 	tmp = read(fd, buf2, 4 * SIZE);
 	printf("bytes read %d\n", tmp);
 
+	printf("closing file\n");
+	close(fd);
+
 	passed = 1;
 
 	printf("checking\n");
