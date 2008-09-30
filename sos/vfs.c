@@ -353,7 +353,7 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte, int *
 /* Handle the file pointer in the file handler, rval is set already by the fs layer
  * to the value that should be returned to the user, while nbyte is used to tell
  * the vfs layer how much to change the file pos pointer by. These may differ
- * for special file systems such as console where you never want to chang the
+ * for special file systems such as console where you never want to change the
  * file pos pointer.
  */
 static

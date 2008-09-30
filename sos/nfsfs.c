@@ -47,7 +47,6 @@ nfsfs_timeout_thread(void) {
 typedef struct {
 	VNode vnode;
 	struct cookie fh;
-	fattr_t attr;
 } NFS_File;
 
 /* Types of NFS request, used for continuations until callbacks */
@@ -271,6 +270,26 @@ get_request(uintptr_t token) {
 	return NULL;
 }
 
+/* Convert the NFS mode (xwr) to unix mode (rwx) */
+static fmode_t
+mode_nfs2unix(fmode_t mode) {
+	return
+		(((mode & 0x1) >> 0) << 2) |
+		(((mode & 0x4) >> 2) << 1) |
+		(((mode & 0x2) >> 1) << 0);
+}
+
+/* Copy the relavent entriees from attr to buf */
+static
+void
+cp_stats(stat_t *stat, fattr_t *attr) {
+	stat->st_type  = attr->type;
+	stat->st_fmode = mode_nfs2unix(attr->mode);
+	stat->st_size  = attr->size;
+	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
+	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+}
+
 /* NFS_LookUp Callback */
 static
 void 
@@ -287,7 +306,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	if (status == NFS_OK) {
 		NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
 		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
-		memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
+		cp_stats(&(rq->p.vnode->vstat), attr);
 		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->p.tid));
 		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
@@ -414,8 +433,6 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	}
 
 	if (status != NFS_OK) {
-		free((NFS_File *) rq->p.vnode->extra);
-		free(rq->p.vnode);
 		*(rq->p.rval) = SOS_VFS_ERROR;
 		rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, rq->p.rval);
 		syscall_reply(rq->p.tid, *(rq->p.rval));
@@ -423,10 +440,8 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 		return;
 	}
 
-	NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
-
-	memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
-	strncpy(rq->buf, data, bytes_read);
+	memcpy((void *) rq->buf, (void *) data, bytes_read);
+	cp_stats(&(rq->p.vnode->vstat), attr);
 	*(rq->p.rval) = bytes_read;
 
 	// call vfs to handle fp and anything else
@@ -477,14 +492,14 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 	}
 
 	if (status != NFS_OK) {
-		free((NFS_File *) rq->p.vnode->extra);
-		free(rq->p.vnode);
 		*(rq->p.rval) = SOS_VFS_ERROR;
 		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, rq->p.rval);
 		syscall_reply(rq->p.tid, *(rq->p.rval));
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
+
+	cp_stats(&(rq->p.vnode->vstat), attr);
 
 	// call vfs to handle fp and anything else
 	rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, (size_t) *(rq->p.rval), rq->p.rval);
@@ -582,26 +597,6 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ, getdirent_cb, rq->p.token);
 }
 
-/* Convert the NFS mode (xwr) to unix mode (rwx) */
-static fmode_t
-mode_nfs2unix(fmode_t mode) {
-	return
-		(((mode & 0x1) >> 0) << 2) |
-		(((mode & 0x4) >> 2) << 1) |
-		(((mode & 0x2) >> 1) << 0);
-}
-
-/* Copy the relavent entriees from attr to buf */
-static
-void
-cp_stats(stat_t *stat, fattr_t *attr) {
-	stat->st_type  = attr->type;
-	stat->st_fmode = mode_nfs2unix(attr->mode);
-	stat->st_size  = attr->size;
-	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
-	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
-}
-
 /* NFS Callback for NFS_Stat */
 static
 void 
@@ -645,7 +640,7 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 			return;
 		}
 
-		cp_stats(buf, &(nf->attr));
+		memcpy((void *) buf, (void *) &(self->vstat), sizeof(stat_t));
 		*rval = SOS_VFS_OK;
 		syscall_reply(tid, *rval);
 	}
