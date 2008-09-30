@@ -20,7 +20,7 @@
 #define DIR_LOOPS_DEFAULT 10
 
 #define IO_FILENAME ".m5bench_ioband"
-#define SEEK_FILENAME ".m5bench_seek";
+#define SEEK_FILENAME ".m5bench_seek"
 
 static void m5test_help(int argc, char *argv[]);
 static void m5test_timer(int argc, char *argv[]);
@@ -180,7 +180,7 @@ m5test_createfiles(int argc, char *argv[])
 	int files = CREATEFILES_DEFAULT;
 	
 	if (argc >= 3)
-	{ files = atoi(argv[2]);
+	{ files = atoi(argv[2]); }
 
 	if (argc > 3 || files <= 0)
 	{
@@ -273,8 +273,7 @@ m5test_iobandwidth(int argc, char *argv[])
 
 	
 	long dt = uptime();
-	printf("took %ld to write %d bytes (%d kb) to file.\n", dt - time, num_writ,
-			(int) ((((float) num_writ) /1024) + 0.5) );
+	printf("took %ld to write %d bytes (%d kb) to file.\n", dt - time, num_writ, num_writ/1024);
 
 	close(fp);
 	fp = open(IO_FILENAME, FM_READ);
@@ -308,7 +307,7 @@ m5test_iobandwidth(int argc, char *argv[])
 	}
 	else
 	{
-		printf("file removed: %s\n", filename);
+		printf("file removed: %s\n", IO_FILENAME);
 	}
 
 	printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
@@ -378,14 +377,14 @@ m5test_lseek(int argc, char *argv[])
 	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
 	/* SEEK_CUR */
-	int pos = 10;
+	pos = 10;
 	d = lseek(fp, pos, SEEK_CUR);
 	printf("Seek'd to pos (%d), status (%d) using SEEK_SET\n", pos, d);
 	d = write(fp, "AAAA", 4);
 	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
 	/* SEEK_END */
-	int pos = 4;
+	pos = 4;
 	d = lseek(fp, pos, SEEK_END);
 	printf("Seek'd to pos (%d), status (%d) using SEEK_END\n", pos, d);
 	d = write(fp, "AAAA", 4);
