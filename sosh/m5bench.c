@@ -305,7 +305,6 @@ m5test_iobandwidth(int argc, char *argv[])
 	{
 		printf("%s can't be removed!", IO_FILENAME);
 		printf("!!! M5 Benchmark ioband FAILED\n");
-		continue;
 	}
 	else
 	{
@@ -322,7 +321,7 @@ m5test_getdirent(int argc, char *argv[])
 	int loops = DIR_LOOPS_DEFAULT;
 
 	if (argc >= 3)
-	{ loops = argv[2]; }
+	{ loops = atoi(argv[2]); }
 
 	if (argc > 3 || loops <= 0)
 	{
