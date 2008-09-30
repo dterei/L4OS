@@ -1,5 +1,13 @@
-#ifndef _CONSTANTS_H_
-#define _CONSTANTS_H_
+#ifndef _CONSTANTS_H
+#define _CONSTANTS_H
+
+/* Include user space relevant globals, redefine them to have a more SOS
+ * descriptive name if applicable. Don't include this header in globals.h
+ * as then all constants will be exported to user space.
+ */
+#include <sos/globals.h>
+
+#define NFS_BUFSIZ IO_MAX_BUFFER
 
 #define PAGESIZE 4096
 

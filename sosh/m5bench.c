@@ -5,6 +5,7 @@
 #include <inttypes.h>
 
 #include <sos/sos.h>
+#include <sos/globals.h>
 
 #include "m5bench.h"
 #include "sosh.h"
@@ -29,6 +30,7 @@ static void m5test_iobandwidth(int argc, char *argv[]);
 static void m5test_getdirent(int argc, char *argv[]);
 static void m5test_lseek(int argc, char *argv[]);
 static void m5test_benchmark(int argc, char *argv[]);
+static void m5test_trycrash(int argc, char*argv[]);
 
 struct command {
 	char *name;
@@ -43,6 +45,7 @@ struct command m5commands[] = {
 	{"getdirent", m5test_getdirent},
 	{"seek", m5test_lseek},
 	{"benchmark", m5test_benchmark},
+	{"trycrash", m5test_trycrash},
 	{"help", m5test_help},
 	{"NULL", NULL}
 };
@@ -169,12 +172,26 @@ m5test_timer(int argc, char *argv[])
 
 static
 void
+m5test_trycrash(int argc, char*argv[])
+{
+	printf("Try to crash SOS\n");
+	printf("This should potentially crash sosh, but SOS should be fine\n");
+	printf("Add any know bugs to this test to check for future regressions\n");
+
+	printf("Test 1: Try to change memory in read only text section\n");
+	//XXX The following code crashes SOS, should just crash sosh
+	int i = 1;
+	char *filename = "a0";
+	filename[1] = '0' + i;
+	printf("Test 1: PASSED\n");
+
+	printf("trycrash PASSED\n");
+}
+
+static
+void
 m5test_createfiles(int argc, char *argv[])
 {
-	//XXX The following code crashes SOS
-	//char *filename = "a0";
-	//filename[1] = '0' + i;
-	
 	char filename[14];
 	fildes_t fp;
 	int files = CREATEFILES_DEFAULT;
@@ -251,9 +268,15 @@ m5test_iobandwidth(int argc, char *argv[])
 		return;
 	}
 
-	printf("M5 Test: iobandwidth started (kbytes %d)\n", kb);
+	if (bsize > IO_MAX_BUFFER)
+	{
+		printf("Specified buffer too big, use one less than  or equal to %d bytes\n", IO_MAX_BUFFER);
+		return;
+	}
 
-	/* 1 kb data block to writer out */
+	printf("M5 Test: iobandwidth started (kbytes %d) (buffer %d)\n", kb, bsize);
+
+	/* data block to writer out */
 	char *data = malloc(sizeof(char) * bsize);
 
 	fildes_t fp = open(IO_FILENAME, FM_WRITE);

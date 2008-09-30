@@ -83,6 +83,7 @@ typedef int fildes_t;
 extern fildes_t stdout_fd;
 extern fildes_t stdin_fd;
 
+/* Max size of a filename */
 #define N_NAME 32
 
 typedef struct {

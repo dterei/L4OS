@@ -6,6 +6,7 @@
 #include "libsos.h"
 #include "network.h"
 #include "syscall.h"
+#include "constants.h"
 
 #define verbose 1
 
@@ -31,7 +32,6 @@ nfsfs_timeout_thread(void) {
 
 
 /******** NFS FS ********/
-#define NFS_BUFSIZ 500 /* Keep this value in sync with UDP_PACKETSIZE */
 #define NULL_TOKEN ((uintptr_t) (-1))
 
 /*
