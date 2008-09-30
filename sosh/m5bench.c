@@ -10,24 +10,25 @@
 #include "sosh.h"
 #include "time.h"
 
-#define CREATE_LIMIT 10
-#define TIMER_SLEEP 1000000
-#define IO_KBYTES 4
-#define DIR_LOOPS 4
+#define CREATEFILES_DEFAULT 10
 
-#define IO_FILENAME "m5bench_ioband"
-#define SEEK_FILENAME "m5bench_seek";
+#define TIMER_SLEEP_DEFAULT 1000000
+
+#define IO_KBYTES_DEFAULT 4
+#define IO_BLOCK_DEFAULT 1024
+
+#define DIR_LOOPS_DEFAULT 10
+
+#define IO_FILENAME ".m5bench_ioband"
+#define SEEK_FILENAME ".m5bench_seek";
 
 static void m5test_help(int argc, char *argv[]);
 static void m5test_timer(int argc, char *argv[]);
 static void m5test_createfiles(int argc, char *argv[]);
 static void m5test_iobandwidth(int argc, char *argv[]);
-static void m5test_iocopy(int argc, char *argv[]);
-static void m5test_writeread(int argc, char *argv[]);
 static void m5test_getdirent(int argc, char *argv[]);
-static void m5test_stat(int argc, char *argv[]);
 static void m5test_lseek(int argc, char *argv[]);
-static int  m5test_benchmark(int argc, char *argv[]);
+static void m5test_benchmark(int argc, char *argv[]);
 
 struct command {
 	char *name;
@@ -39,10 +40,7 @@ struct command m5commands[] = {
 	{"timer", m5test_timer},
 	{"createfiles", m5test_createfiles},
 	{"ioband", m5test_iobandwidth},
-	{"iocopy", m5test_iocopy},
-	{"writeread", m5test_writeread},
 	{"getdirent", m5test_getdirent},
-	{"stat", m5test_stat},
 	{"seek", m5test_lseek},
 	{"benchmark", m5test_benchmark},
 	{"help", m5test_help},
@@ -83,7 +81,7 @@ m5test_help(int argc, char *argv[])
 }
 
 static
-int
+void
 m5test_benchmark(int argc, char *argv[])
 {
 	char *timeArgs[4];
@@ -139,19 +137,28 @@ m5test_benchmark(int argc, char *argv[])
 	timeArgs[2] = "32kb";
 	timeArgs[3] = "32kb.cp";
 	time(4, timeArgs);
-
-	return 0;
 }
 
 static
 void
 m5test_timer(int argc, char *argv[])
 {
+	long time = TIMER_SLEEP_DEFAULT;
+
+	if (argc == 3)
+	{ time = atoi(argv[2]); }
+
+	if (argc > 3 || time <= 0)
+	{
+		printf("Usage: m5bench timer [#microseconds]\n");
+		return;
+	}
+
 	printf("M5 Test: timer started\n");
-	printf("sleeping for %d microseconds\n", TIMER_SLEEP);
+	printf("sleeping for %d microseconds\n", time);
 	long time = uptime();
 
-	usleep(TIMER_SLEEP);
+	usleep(time);
 
 	time = uptime() - time;
 	printf("Slept for %ld microseconds\n", time);
@@ -168,11 +175,21 @@ m5test_createfiles(int argc, char *argv[])
 	
 	char filename[14];
 	fildes_t fp;
+	int files = CREATEFILES_DEFAULT;
+	
+	if (argc == 3)
+	{ files = atoi(argv[2]);
 
-	printf("M5 Test: createfiles started (files %d)\n", CREATE_LIMIT);
+	if (argc > 3 || files <= 0)
+	{
+		printf("Usage: m5bench createsfiles [#files]\n");
+		return;
+	}
+
+	printf("M5 Test: createfiles started (files %d)\n", files);
 
 	long time = uptime();
-	for (int i = 0; i < CREATE_LIMIT; i++)
+	for (int i = 0; i < files; i++)
 	{
 		sprintf(filename, "%s%d", "m5test_files_", i);
 		fp = open(filename, FM_WRITE);
@@ -218,17 +235,32 @@ static
 void
 m5test_iobandwidth(int argc, char *argv[])
 {
-	printf("M5 Test: iobandwidth started (kbytes %d)\n", IO_KBYTES);
+	int kb = IO_KBYTES_DEFAULT;
+	int bsize = IO_BLOCK_DEFAULT:
 
-	printf("writing %d kbytes to file.\n", IO_KBYTES);
+	if (argc == 3)
+	{ kb = atoi(argv[2]); }
+	if (argc == 4)
+	{ bsize = atoi(argv[3]); }
+
+	if (argc > 4 || kb <= 0 || bsize <= 0)
+	{
+		printf("Usage: m5bench ioband [#kbytes] [#buffer size (bytes)]\n");
+		return;
+	}
+
+	printf("M5 Test: iobandwidth started (kbytes %d)\n", kb);
+
+	/* 1 kb data block to writer out */
+	char *data = malloc(sizeof(char) * bsize);
 
 	fildes_t fp = open(IO_FILENAME, FM_WRITE);
 	long time = uptime();
 
 	int num_writ = 0;
-	for (int i = 0; i < IO_KBYTES*32; i++)
+	for (int i = 0; i < kb * 1024; i += bsize)
 	{
-		int d = write(fp, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 32);
+		int d = write(fp, data, bsize);
 		num_writ += d;
 		if (d < 0)
 		{
@@ -239,16 +271,16 @@ m5test_iobandwidth(int argc, char *argv[])
 
 	
 	long dt = uptime();
-	printf("took %ld to write %d kbytes to file.\n", dt - time, (int) ((((float) num_writ) /1024) + 0.5) );
+	printf("took %ld to write %d bytes (%d kb) to file.\n", dt - time, num_writ,
+			(int) ((((float) num_writ) /1024) + 0.5) );
 
 	close(fp);
 	fp = open(IO_FILENAME, FM_READ);
 
-	printf("reading %d kbytes from file.\n", IO_KBYTES);
+	printf("reading %d kbytes from file.\n", kb);
 
 	int c, num_read = 0;
-	char buf[1024];
-	while( (c = read( fp, buf, 1024) ) > 0 )
+	while( (c = read( fp, data, bsize) ) > 0 )
 	{
 		if (c > 0)
 		{
@@ -262,7 +294,7 @@ m5test_iobandwidth(int argc, char *argv[])
 	}
 
 	dt = uptime() - dt;
-	printf("took %ld to read %d kbytes from a file.\n", dt, num_read/1024);
+	printf("took %ld to read %d bytes (%d kb) from a file.\n", dt, num_read, num_read/1024);
 
 	time = uptime() - time;
 	close(fp);
@@ -283,28 +315,25 @@ m5test_iobandwidth(int argc, char *argv[])
 
 static
 void
-m5test_iocopy(int argc, char *argv[])
-{
-
-}
-
-static
-void
-m5test_writeread(int argc, char *argv[])
-{
-
-}
-
-static
-void
 m5test_getdirent(int argc, char *argv[])
 {
-	printf("M5 Test: getdirent started (loops %d)\n", DIR_LOOPS);
+	int loops = DIR_LOOPS_DEFAULT;
+
+	if (argc > 3)
+	{
+		printf("Usage: m5bench getdirent [#times]\n");
+		return;
+	}
+
+	if (argc == 3)
+	{ loops = argv[2]; }
+
+	printf("M5 Test: getdirent started (loops %d)\n", loops);
 
 	long time = uptime();
 	char buf[128];
 
-	for (int i = 0; i < DIR_LOOPS; i++)
+	for (int i = 0; i < loops; i++)
 	{
 		int j = 0;
 		while (1)
@@ -325,13 +354,6 @@ m5test_getdirent(int argc, char *argv[])
 
 	time = uptime() - time;
 	printf("M5 Test: getdirent Finished (took %ld microseconds)\n", time);
-
-}
-
-static
-void
-m5test_stat(int argc, char *argv[])
-{
 
 }
 
