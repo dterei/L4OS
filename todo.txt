@@ -49,3 +49,9 @@ freeing pager requests.
 - Bug in write either returning the wrong number of bytes or doing something
 wrong with the given number of bytes.  It's off by 1.  See sosh/memdump.c.
 
+- Hide swap file.  A nice way I can think of doing this is by adding it as a
+special file, making all the callbacks NULL except for open which is just a
+callback which returns SOS_VFS_NOFILE.
+
+- Swap file is getting (-2) return value all the time, need to investigate.
+
