@@ -14,12 +14,20 @@ int memdump(int argc, char **argv) {
 		return 1;
 	}
 
-	char *dump = (char*) atoi(argv[1]);
+	char *dump = (char*) (atoi(argv[1]) & ~(SIZE - 1));
+
+	if (dump == NULL) {
+		printf("must give in decimal form\n");
+		return 1;
+	} else {
+		printf("dumping %p\n", dump);
+	}
 
 	fildes_t out = open(argv[2], FM_WRITE);
 
 	for (int nWritten = 0; nWritten < SIZE; nWritten++) {
-		nWritten += write(out, dump + nWritten, BLOCK - 1);
+		nWritten += write(out, dump + nWritten, BLOCK);
+		nWritten--;
 		printf("memdump: writen %d bytes\n", nWritten);
 	}
 

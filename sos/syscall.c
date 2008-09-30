@@ -11,7 +11,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
 
 static int rval;
 
@@ -81,20 +81,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 		case SOS_MOREMEM:
 			syscall_reply(tid,
 					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
-			break;
-
-		case SOS_COPYIN:
-			copyIn(tid,
-					(void*) L4_MsgWord(msg, 0),
-					(size_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2));
-			break;
-
-		case SOS_COPYOUT:
-			copyOut(tid,
-					(void*) L4_MsgWord(msg, 0),
-					(size_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_OPEN:

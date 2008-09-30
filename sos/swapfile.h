@@ -10,6 +10,9 @@ extern fildes_t swapfile;
 // Initialise swapfile, including opening it
 void swapfile_init(void);
 
+void swapfile_open(void);
+void swapfile_close(void);
+
 // Allocate a new slow in the swapfile
 L4_Word_t swapslot_alloc(void);
 

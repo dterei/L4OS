@@ -39,6 +39,9 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_MEMUSE: return "SOS_MEMUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
+		case L4_PAGEFAULT: return "L4_PAGEFAULT";
+		case L4_INTERRUPT: return "L4_INTERRUPT";
+		case L4_EXCEPTION: return "L4_EXCEPTION";
 	}
 
 	return "UNRECOGNISED";

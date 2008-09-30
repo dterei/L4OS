@@ -401,6 +401,8 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 		vf->fp += pos;
 	} else if (whence == SEEK_END) {
 		vf->fp = vnode->vstat.st_size - pos;
+	} else {
+		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
 	}
 
 	*rval = SOS_VFS_OK;

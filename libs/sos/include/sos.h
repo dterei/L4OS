@@ -50,7 +50,10 @@ typedef enum {
 	SOS_USLEEP,
 	SOS_MEMUSE,
 	SOS_VPAGER,
-	SOS_SHARE_VM
+	SOS_SHARE_VM,
+	L4_PAGEFAULT = ((L4_Word_t) -2),
+	L4_INTERRUPT = ((L4_Word_t) -1),
+	L4_EXCEPTION = ((L4_Word_t) -5)
 } syscall_t;
 
 /* file modes */

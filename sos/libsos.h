@@ -18,10 +18,6 @@
 
 #include "constants.h"
 
-#define L4_PAGEFAULT	((L4_Word_t) -2)
-#define L4_INTERRUPT	((L4_Word_t) -1)
-#define L4_EXCEPTION ((L4_Word_t) -5)
-
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
 // Bootinfo required callbacks
