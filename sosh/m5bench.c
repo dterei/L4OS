@@ -52,19 +52,20 @@ m5bench(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		m5test_help();
+		m5test_help(argc, argv);
 		return 0;
 	}
 
-	int found = 0;
-	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++) {
-		if (strcmp(argv[1], m5commands[i].name) == 0) {
+	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++)
+	{
+		if (strcmp(argv[1], m5commands[i].name) == 0)
+		{
 			m5commands[i].command(argc, argv);
 			return 0;
 		}
 	}
 
-	m5test_help();
+	m5test_help(argc, argv);
 	return 0;
 }
 
@@ -74,7 +75,8 @@ m5test_help(int argc, char *argv[])
 {
 	printf("Usage: m5bench [test]\n");
 	printf("\nTests: ");
-	for (int i = 0; m5commands[i].command != NULL; i++) {
+	for (int i = 0; m5commands[i].command != NULL; i++)
+	{
 		printf(" %s", m5commands[i].name);
 	}
 	printf("\n");
@@ -143,10 +145,10 @@ static
 void
 m5test_timer(int argc, char *argv[])
 {
-	long time = TIMER_SLEEP_DEFAULT;
+	long sleep= TIMER_SLEEP_DEFAULT;
 
-	if (argc == 3)
-	{ time = atoi(argv[2]); }
+	if (argc >= 3)
+	{ sleep = atoi(argv[2]); }
 
 	if (argc > 3 || time <= 0)
 	{
@@ -155,10 +157,10 @@ m5test_timer(int argc, char *argv[])
 	}
 
 	printf("M5 Test: timer started\n");
-	printf("sleeping for %d microseconds\n", time);
+	printf("sleeping for %ld microseconds\n", sleep);
 	long time = uptime();
 
-	usleep(time);
+	usleep(sleep);
 
 	time = uptime() - time;
 	printf("Slept for %ld microseconds\n", time);
@@ -177,7 +179,7 @@ m5test_createfiles(int argc, char *argv[])
 	fildes_t fp;
 	int files = CREATEFILES_DEFAULT;
 	
-	if (argc == 3)
+	if (argc >= 3)
 	{ files = atoi(argv[2]);
 
 	if (argc > 3 || files <= 0)
@@ -236,11 +238,11 @@ void
 m5test_iobandwidth(int argc, char *argv[])
 {
 	int kb = IO_KBYTES_DEFAULT;
-	int bsize = IO_BLOCK_DEFAULT:
+	int bsize = IO_BLOCK_DEFAULT;
 
-	if (argc == 3)
+	if (argc >= 3)
 	{ kb = atoi(argv[2]); }
-	if (argc == 4)
+	if (argc >= 4)
 	{ bsize = atoi(argv[3]); }
 
 	if (argc > 4 || kb <= 0 || bsize <= 0)
@@ -319,14 +321,14 @@ m5test_getdirent(int argc, char *argv[])
 {
 	int loops = DIR_LOOPS_DEFAULT;
 
-	if (argc > 3)
+	if (argc >= 3)
+	{ loops = argv[2]; }
+
+	if (argc > 3 || loops <= 0)
 	{
 		printf("Usage: m5bench getdirent [#times]\n");
 		return;
 	}
-
-	if (argc == 3)
-	{ loops = argv[2]; }
 
 	printf("M5 Test: getdirent started (loops %d)\n", loops);
 
