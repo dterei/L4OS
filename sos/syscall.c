@@ -51,7 +51,7 @@ static L4_Word_t *buffer(L4_ThreadId_t tid) {
 	return (L4_Word_t*) pager_buffer(tid);
 }
 
-static char *word_align(char *s) {
+static char *wordAlign(char *s) {
 	unsigned int x = (unsigned int) s;
 	x--;
 	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
@@ -139,7 +139,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_STAT:
 			buf = pager_buffer(tid);
-			vfs_stat(tid, buf, (stat_t*) word_align(buf + strlen(buf) + 1), &rval);
+			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1), &rval);
 			break;
 
 		case SOS_REMOVE:

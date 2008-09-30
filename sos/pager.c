@@ -69,13 +69,13 @@ static char *copyInOutBuffer;
 
 // Page table structures
 // Each level of the page table is assumed to be of size PAGESIZE
-typedef struct PageTable2_t {
+typedef struct Pagetable2_t {
 	L4_Word_t pages[PAGEWORDS];
-} PageTable2;
+} Pagetable2;
 
-typedef struct PageTable1_t {
-	PageTable2 *pages2[PAGEWORDS];
-} PageTable1;
+typedef struct Pagetable1_t {
+	Pagetable2 *pages2[PAGEWORDS];
+} Pagetable1;
 
 // Region structure
 struct Region_t {
@@ -129,36 +129,36 @@ void region_free_all(Region *r) {
 	}
 }
 
-PageTable *pagetable_init(void) {
-	assert(sizeof(PageTable1) == PAGESIZE);
-	PageTable1 *pt = (PageTable1*) frame_alloc();
+Pagetable *pagetable_init(void) {
+	assert(sizeof(Pagetable1) == PAGESIZE);
+	Pagetable1 *pt = (Pagetable1*) frame_alloc();
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		pt->pages2[i] = NULL;
 	}
 
-	return (PageTable*) pt;
+	return (Pagetable*) pt;
 }
 
 static L4_Word_t*
-pageTableLookup(PageTable *pt, L4_Word_t addr) {
-	PageTable1 *level1 = (PageTable1*) pt;
+pagetableLookup(Pagetable *pt, L4_Word_t addr) {
+	Pagetable1 *level1 = (Pagetable1*) pt;
 
 	addr /= PAGESIZE;
 	int offset1 = addr / PAGEWORDS;
 	int offset2 = addr - (offset1 * PAGEWORDS);
 
 	if (level1 == NULL) {
-		dprintf(0, "!!! pageTableLookup: level1 is NULL!\n");
+		dprintf(0, "!!! pagetableLookup: level1 is NULL!\n");
 		return NULL;
 	} else if (level1->pages2 == NULL) {
-		dprintf(0, "!!! pageTableLookup: level1->pages2 is NULL!\n");
+		dprintf(0, "!!! pagetableLookup: level1->pages2 is NULL!\n");
 		return NULL;
 	}
 
 	if (level1->pages2[offset1] == NULL) {
-		assert(sizeof(PageTable2) == PAGESIZE);
-		level1->pages2[offset1] = (PageTable2*) frame_alloc();
+		assert(sizeof(Pagetable2) == PAGESIZE);
+		level1->pages2[offset1] = (Pagetable2*) frame_alloc();
 
 		for (int i = 0; i < PAGEWORDS; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
@@ -173,8 +173,8 @@ static void pagerFrameFree(L4_Word_t frame) {
 	allocLimit++;
 }
 
-void pagetable_free(PageTable *pt) {
-	PageTable1 *pt1 = (PageTable1*) pt;
+void pagetable_free(Pagetable *pt) {
+	Pagetable1 *pt1 = (Pagetable1*) pt;
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		if (pt1->pages2[i] != NULL) {
@@ -242,8 +242,8 @@ static FrameList *deleteFrameList(void) {
 
 	// Second-chance algorithm
 	while (found == NULL) {
-		L4_Word_t *vpage = pageTableLookup(process_get_pagetable(
-					allocHead->p), allocHead->page);
+		L4_Word_t *vpage = pagetableLookup(
+				process_get_pagetable(allocHead->p), allocHead->page);
 
 		dprintf(3, "*** deleteFrameList: p=%d page=%p frame=%p\n",
 				process_get_pid(allocHead->p), (void*) allocHead->page,
@@ -287,7 +287,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t vaddr) {
 		process_get_info(p)->size++;
 		allocLimit--;
 
-		L4_Word_t *entry = pageTableLookup(process_get_pagetable(p), vaddr);
+		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
 		*entry &= ~ADDRESS_MASK;
 		*entry |= frame;
 		addFrameList(p, vaddr);
@@ -422,7 +422,7 @@ static void pager(PagerRequest *pr) {
 
 	// Place in, or retrieve from, page table.
 	dprintf(3, "*** pager: finding entry\n");
-	L4_Word_t *entry = pageTableLookup(process_get_pagetable(pr->p), addr);
+	L4_Word_t *entry = pagetableLookup(process_get_pagetable(pr->p), addr);
 	L4_Word_t entryAddr = *entry & ADDRESS_MASK;
 
 	dprintf(3, "*** pager: entry %p found at %p\n", (void*) *entry, entry);
@@ -574,7 +574,7 @@ static void startSwapout(void) {
 	// to swap something out it has to be in SOS's pager buffer,
 	// since that is how the write system call works
 	FrameList *swapout = deleteFrameList();
-	L4_Word_t *entry = pageTableLookup(
+	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(swapout->p), swapout->page);
 
 	dprintf(1, "*** startSwapout: page %p from process %d deleted\n",
@@ -590,7 +590,7 @@ static void startSwapout(void) {
 	swapoutRequest.callback = NULL;
 	swapoutRequest.next = NULL;
 
-	L4_Word_t diskAddr = get_swapslot();
+	L4_Word_t diskAddr = swapslot_alloc();
 	assert(isPageAligned((void*) diskAddr));
 	dprintf(2, "*** startSwapout: swapslot is %p\n", (void*) diskAddr);
 
@@ -609,7 +609,7 @@ static void startSwapin(void) {
 	// kick-start the chain of NFS requests and callbacks by lseeking
 	// to the position in the swap file the page is (and this is found
 	// by ADDR_MASK since it doubles as physical and ondisk memory location)
-	L4_Word_t *entry = pageTableLookup(
+	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(requestsHead->p), requestsHead->addr);
 	lseekNonblocking(swapfile, *entry & ADDRESS_MASK, SEEK_SET);
 }
@@ -618,7 +618,7 @@ static void startRequest(void) {
 	dprintf(1, "*** startRequest\n");
 
 	assert(allocLimit == 0);
-	L4_Word_t *entry = pageTableLookup(
+	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(requestsHead->p), requestsHead->addr);
 
 	if (*entry & ONDISK_MASK) {
@@ -677,7 +677,7 @@ static void finishedSwapout(void) {
 	pagerFrameFree(swapoutRequest.addr);
 
 	// pager is now guaranteed to find a page
-	L4_Word_t *entry = pageTableLookup(
+	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(requestsHead->p), requestsHead->addr);
 	pager(requestsHead);
 
@@ -697,7 +697,7 @@ static void finishedSwapin(void) {
 	// the contents of the page will now be in SOS's pager buffer,
 	// which we need to clear as soon as possible since we might
 	// need to swapout (which also needs the buffer)
-	L4_Word_t *entry = pageTableLookup(
+	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(requestsHead->p), requestsHead->addr);
 
 	*entry &= ~ONDISK_MASK;
@@ -882,7 +882,7 @@ static void copyInContinue(PagerRequest *pr) {
 
 	// Assume it's already there - this function should only get
 	// called as a continutation from the pager, so no problem
-	char *src = (char*) (*pageTableLookup(
+	char *src = (char*) (*pagetableLookup(
 			process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
 
 	src += pr->addr & (PAGESIZE - 1);
@@ -939,7 +939,7 @@ static void copyOutContinue(PagerRequest *pr) {
 	dprintf(3, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
 			size, offset, src);
 
-	char *dest = (char*) (*pageTableLookup(
+	char *dest = (char*) (*pagetableLookup(
 				process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
 
 	dest += pr->addr & (PAGESIZE - 1);

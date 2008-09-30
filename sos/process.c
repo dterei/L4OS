@@ -19,7 +19,7 @@
 // The equivalent of a PCB
 struct Process_t {
 	process_t     info;
-	PageTable    *pagetable;
+	Pagetable    *pagetable;
 	Region       *regions;
 	void         *sp;
 	void         *ip;
@@ -230,7 +230,7 @@ L4_ThreadId_t process_get_tid(Process *p) {
 	return L4_GlobalId(p->info.pid, 1);
 }
 
-PageTable *process_get_pagetable(Process *p) {
+Pagetable *process_get_pagetable(Process *p) {
 	return p->pagetable;
 }
 

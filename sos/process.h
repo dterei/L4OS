@@ -41,7 +41,7 @@ pid_t process_get_pid(Process *p);
 L4_ThreadId_t process_get_tid(Process *p);
 
 // Get the page table of a process
-PageTable *process_get_pagetable(Process *p);
+Pagetable *process_get_pagetable(Process *p);
 
 // Get the regions of a process
 Region *process_get_regions(Process *p);

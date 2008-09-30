@@ -57,7 +57,7 @@ swapfile_init(void)
 }
 
 L4_Word_t
-get_swapslot(void)
+swapslot_alloc(void)
 {
 	if (SlotsFree <= 0)
 	{
@@ -72,7 +72,7 @@ get_swapslot(void)
 }
 
 int
-free_swapslot(L4_Word_t slot)
+swapslot_free(L4_Word_t slot)
 {
 	if (SlotsFree == SWAPSIZE || slot > PAGESIZE * (SWAPSIZE - 1))
 	{

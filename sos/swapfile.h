@@ -7,10 +7,13 @@
 
 extern fildes_t swapfile;
 
+// Initialise swapfile, including opening it
 void swapfile_init(void);
 
-L4_Word_t get_swapslot(void);
+// Allocate a new slow in the swapfile
+L4_Word_t swapslot_alloc(void);
 
-int free_swapslot(L4_Word_t slot);
+// Free an allocated slow in the swapfile
+int swapslot_free(L4_Word_t slot);
 
 #endif // _SWAPFILE_H
