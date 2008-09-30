@@ -112,10 +112,10 @@ app_env.Package("libs/sos")
 # tools that need to get loaded and run in your context.  Do that by calling
 # the Application function a number times in the app_env environment.
 userApps = [app_env.Package("sosh"),
-            app_env.Package("bin/hello3"),
-            app_env.Package("bin/hello4"),
-            app_env.Package("bin/waiter1"),
-            app_env.Package("bin/waiter2"),
+            #app_env.Package("bin/hello3"),
+            #app_env.Package("bin/hello4"),
+            #app_env.Package("bin/waiter1"),
+            #app_env.Package("bin/waiter2"),
             app_env.Package("bin/memcheck")]
 
 # Memory pools

@@ -49,6 +49,7 @@ typedef enum {
 	SOS_TIME_STAMP,
 	SOS_USLEEP,
 	SOS_MEMUSE,
+	SOS_VPAGER,
 	SOS_SHARE_VM
 } syscall_t;
 
@@ -100,7 +101,7 @@ char *syscall_show(syscall_t syscall);
 #define NO_REPLY 0
 
 void syscall_prepare(L4_Msg_t *msg);
-L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg);
+L4_Word_t syscall(L4_ThreadId_t, syscall_t s, int reply, L4_Msg_t *msg);
 
 /* Misc system calls */
 
@@ -219,6 +220,9 @@ void usleep(int msec);
 
 /* Get the number of frames in use by user processes */
 int memuse(void);
+
+/* Get the threadid of the virtual pager */
+L4_ThreadId_t vpager(void);
 
 /*************************************************************************/
 /*									 */

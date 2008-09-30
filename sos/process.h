@@ -10,7 +10,7 @@
 // The process data structure
 typedef struct Process_t Process;
 
-// Find a process
+// Find a process from a thread
 Process *process_lookup(L4_Word_t key);
 
 // Create a new process with a given name
@@ -67,5 +67,8 @@ void process_wait_for(Process *waitFor, Process *waiter);
 
 // Give the rootserver a PCB
 void process_add_rootserver(void);
+
+// Debug print a process
+void process_dump(Process *p);
 
 #endif // process.h

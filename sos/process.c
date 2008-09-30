@@ -41,6 +41,7 @@ static L4_Word_t nextPid;
 static L4_Word_t tidOffset;
 
 Process *process_lookup(L4_Word_t key) {
+	while (sosProcs[key] == NULL) key--;
 	return sosProcs[key];
 }
 
@@ -142,12 +143,9 @@ static void addBuiltinRegions(Process *p) {
 	p->sp = (void*) (base - (3 * sizeof(L4_Word_t)));
 }
 
-static void process_dump(Process *p) {
-	(void) process_dump;
-
-	printf("*** %s on %d\n", __FUNCTION__, p->info.pid);
+void process_dump(Process *p) {
+	printf("*** %s on %d at %p\n", __FUNCTION__, p->info.pid, p);
 	printf("*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
-	printf("*** %s: regions: %p\n", __FUNCTION__, p->regions);
 
 	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
 		printf("*** %s: region %p -> %p (%p)\n", __FUNCTION__,
@@ -195,6 +193,9 @@ void process_prepare(Process *p) {
 	// Register with the collection of PCBs
 	p->info.pid = getNextPid();
 	sosProcs[p->info.pid] = p;
+
+	// Necessary?
+	L4_CacheFlushAll();
 
 	// Open stdout
 	int dummy;
