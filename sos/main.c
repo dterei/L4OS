@@ -17,6 +17,7 @@
 #include <clock/nslu2.h>
 #include <sos/sos.h>
 
+#include "constants.h"
 #include "frames.h"
 #include "irq.h"
 #include "l4.h"
@@ -27,7 +28,7 @@
 #include "process.h"
 #include "vfs.h"
 
-#define verbose 0
+#define verbose 1
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
@@ -107,6 +108,12 @@ syscall_loop(void)
 		// At this point we have, probably, recieved an IPC
 		L4_MsgStore(tag, &msg); /* Get the tag */
 
+		/*
+		printf("tid is %p (%ld) - real tid %ld vs %ld\n",
+				(void*) tid.raw, L4_ThreadNo(tid),
+				tid.raw & 0xfff, L4_SpaceNo(L4_SenderSpace()));
+				*/
+
 		if (L4_IsNilThread(tid)) {
 			L4_Word_t notify_bits = L4_MsgWord(&msg, 0);
 			dprintf(2, "*** syscall_loop: async notify %lx\n", notify_bits);
@@ -137,26 +144,9 @@ syscall_loop(void)
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				/*
-				printf("virtual_pager exists, trying to send fake message\n");
-				if (!L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-					L4_Msg_t clear;
-					L4_MsgClear(&clear);
-					L4_Set_MsgLabel(&clear, L4_PAGEFAULT << 4);
-					L4_MsgLoad(&clear);
-					L4_Send(virtual_pager);
-				}
-				*/
-
 				sos_pager_handler(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
 				L4_Set_MsgTag(L4_Niltag);
 				break;
-
-				/*
-				pager(tid, &msg);
-				L4_Set_MsgTag(L4_Niltag);
-				break;
-				*/
 
 			case L4_INTERRUPT:
 				/* actually an IRQ lock/unlock message */
@@ -173,8 +163,7 @@ syscall_loop(void)
 
 			default:
 				// Turn the tid cap in to an actual tid
-				send = syscall_handle(tag, sos_sid2tid(L4_SenderSpace()), &msg);
-
+				send = syscall_handle(tag, sos_cap2tid(tid), &msg);
 		}
 	}
 }

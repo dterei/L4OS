@@ -18,15 +18,8 @@ static int rval;
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
-	if (L4_IsThreadEqual(tid, L4_rootserver)) {
-		// FIXME this is a hacked up replacement for thread management
-		dprintf(1, "syscall_reply: rootserver -> virtual_pager\n");
-		assert(!L4_IsThreadEqual(virtual_pager, L4_nilthread));
-		tid = virtual_pager;
-	}
-
-	dprintf(2, "*** syscall_reply: replying to %d\n",
-			L4_ThreadNo(tid));
+	assert(!L4_IsThreadEqual(tid, L4_rootserver));
+	L4_MsgTag_t tag;
 
 	L4_CacheFlushAll();
 
@@ -36,14 +29,28 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
 	L4_MsgLoad(&msg);
 
-	L4_Reply(tid);
+	if (L4_IsThreadEqual(tid, virtual_pager)) {
+		// this isn't a very nice way of doing it, but all calls to the pager
+		// need to be sent (since they are nonblocking).  ideally this will
+		// be set up by the caller not as a hack to syscall_reply.
+		dprintf(1, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
+		tag = L4_Send(tid);
+	} else {
+		dprintf(2, "*** syscall_reply: reply to %ld\n", L4_ThreadNo(tid));
+		tag = L4_Reply(tid);
+	}
+
+	if (L4_IpcFailed(tag)) {
+		dprintf(0, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
+		sos_print_error(L4_ErrorCode());
+	}
 }
 
 static L4_Word_t *buffer(L4_ThreadId_t tid) {
 	return (L4_Word_t*) pager_buffer(tid);
 }
 
-static char *word_align(char *s) {
+static char *wordAlign(char *s) {
 	unsigned int x = (unsigned int) s;
 	x--;
 	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
@@ -119,6 +126,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(fpos_t) L4_MsgWord(msg, 1),
 					(int) L4_MsgWord(msg, 2),
 					&rval);
+			break;
 
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
@@ -130,7 +138,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_STAT:
 			buf = pager_buffer(tid);
-			vfs_stat(tid, buf, (stat_t*) word_align(buf + strlen(buf) + 1), &rval);
+			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1), &rval);
 			break;
 
 		case SOS_REMOVE:
@@ -173,6 +181,11 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_MEMUSE:
 			rval = sos_memuse();
+			syscall_reply(tid, rval);
+			break;
+
+		case SOS_VPAGER:
+			rval = L4_ThreadNo(virtual_pager);
 			syscall_reply(tid, rval);
 			break;
 

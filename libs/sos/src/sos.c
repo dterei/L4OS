@@ -37,6 +37,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_MEMUSE: return "SOS_MEMUSE";
+		case SOS_VPAGER: return "SOS_VPAGER";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 	}
 
@@ -47,7 +48,7 @@ void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg) {
+L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
 	L4_MsgTag_t tag;
 	L4_Msg_t rMsg;
 
@@ -55,9 +56,9 @@ L4_Word_t syscall_run(syscall_t s, int reply, L4_Msg_t *msg) {
 	L4_MsgLoad(msg);
 
 	if (reply == YES_REPLY) {
-		tag = L4_Call(L4_rootserver);
+		tag = L4_Call(tid);
 	} else {
-		tag = L4_Send(L4_rootserver);
+		tag = L4_Send(tid);
 	}
 
 	L4_MsgStore(tag, &rMsg);
@@ -69,13 +70,13 @@ void kprint(char *str) {
 
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	syscall_run(SOS_KERNEL_PRINT, NO_REPLY, &msg);
+	syscall(L4_rootserver, SOS_KERNEL_PRINT, NO_REPLY, &msg);
 }
 
 void debug_flush(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	syscall_run(SOS_DEBUG_FLUSH, NO_REPLY, &msg);
+	syscall(L4_rootserver, SOS_DEBUG_FLUSH, NO_REPLY, &msg);
 }
 
 void thread_block(void) {
@@ -95,7 +96,7 @@ int moremem(uintptr_t *base, unsigned int nb) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
 
-	int rval = syscall_run(SOS_MOREMEM, YES_REPLY, &msg);
+	int rval = syscall(L4_rootserver, SOS_MOREMEM, YES_REPLY, &msg);
 
 	if (rval == 0) {
 		return 0; // no memory
@@ -113,7 +114,7 @@ void copyin(void *data, size_t size, int append) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
-	syscall_run(SOS_COPYIN, YES_REPLY, &msg);
+	syscall(vpager(), SOS_COPYIN, YES_REPLY, &msg);
 }
 
 void copyout(void *data, size_t size, int append) {
@@ -124,7 +125,7 @@ void copyout(void *data, size_t size, int append) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) size);
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
-	syscall_run(SOS_COPYOUT, YES_REPLY, &msg);
+	syscall(vpager(), SOS_COPYOUT, YES_REPLY, &msg);
 }
 
 fildes_t open(const char *path, fmode_t mode) {
@@ -135,7 +136,7 @@ fildes_t open(const char *path, fmode_t mode) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
 
-	return syscall_run(SOS_OPEN, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
 }
 
 int close(fildes_t file) {
@@ -144,7 +145,7 @@ int close(fildes_t file) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 
-	return syscall_run(SOS_CLOSE, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_CLOSE, YES_REPLY, &msg);
 }
 
 int read(fildes_t file, char *buf, size_t nbyte) {
@@ -154,7 +155,7 @@ int read(fildes_t file, char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	rval = syscall_run(SOS_READ, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_READ, YES_REPLY, &msg);
 
 	copyout(buf, nbyte, 0);
 
@@ -170,7 +171,7 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) file);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	return syscall_run(SOS_WRITE, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_WRITE, YES_REPLY, &msg);
 }
 
 /* Lseek sets the file position indicator to the specified position "pos".
@@ -191,7 +192,7 @@ int lseek(fildes_t file, fpos_t pos, int whence) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
 	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
 
-	rval = syscall_run(SOS_LSEEK, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_LSEEK, YES_REPLY, &msg);
 
 	return rval;
 }
@@ -209,7 +210,7 @@ int getdirent(int pos, char *name, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
-	rval = syscall_run(SOS_GETDIRENT, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_GETDIRENT, YES_REPLY, &msg);
 
 	copyout((void*) name, nbyte, 0);
 
@@ -228,7 +229,7 @@ int stat(const char *path, stat_t *buf) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
-	rval = syscall_run(SOS_STAT, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_STAT, YES_REPLY, &msg);
 
 	// The copyin could have left the position not word
 	// aligned however SOS will copy the stat info into
@@ -255,7 +256,7 @@ int fremove(const char *path) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
-	rval = syscall_run(SOS_REMOVE, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_REMOVE, YES_REPLY, &msg);
 
 	return rval;
 }
@@ -280,14 +281,14 @@ int process_delete(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pid);
 
-	return syscall_run(SOS_PROCESS_DELETE, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_PROCESS_DELETE, YES_REPLY, &msg);
 }
 
 /* Returns ID of caller's process. */
 pid_t my_id(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall_run(SOS_MY_ID, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_MY_ID, YES_REPLY, &msg);
 }
 
 /* 
@@ -300,7 +301,7 @@ int process_status(process_t *processes, unsigned max) {
 
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) max);
-	rval = syscall_run(SOS_PROCESS_STATUS, YES_REPLY, &msg);
+	rval = syscall(L4_rootserver, SOS_PROCESS_STATUS, YES_REPLY, &msg);
 
 	copyout(processes, rval * sizeof(process_t), 0);
 
@@ -317,14 +318,14 @@ pid_t process_wait(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, pid);
 
-	return syscall_run(SOS_PROCESS_WAIT, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_PROCESS_WAIT, YES_REPLY, &msg);
 }
 
 /* Returns time in microseconds since booting. */
 long uptime(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall_run(SOS_TIME_STAMP, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_TIME_STAMP, YES_REPLY, &msg);
 }
 
 /* Sleeps for the specified number of microseconds. */
@@ -333,14 +334,20 @@ void usleep(int usec) {
 
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) usec);
-	syscall_run(SOS_USLEEP, YES_REPLY, &msg);
+	syscall(L4_rootserver, SOS_USLEEP, YES_REPLY, &msg);
 }
 
 /* Get the number of frames in use by user processes */
 int memuse(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall_run(SOS_MEMUSE, YES_REPLY, &msg);
+	return syscall(L4_rootserver, SOS_MEMUSE, YES_REPLY, &msg);
+}
+
+L4_ThreadId_t vpager(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	return L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
 }
 
 /* 

@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "swapfile.h"
 
-#define verbose 3
+#define verbose 1
 
 #define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
@@ -35,7 +35,6 @@ void
 swapfile_init(void)
 {
 	L4_Msg_t msg;
-	int rval;
 
 	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
 	FileSlots = (L4_Word_t *) frame_alloc();
@@ -48,17 +47,23 @@ swapfile_init(void)
 		FileSlots[i] = j;
 	}
 
+	// remove existing swapfile
+	dprintf(2, "*** swapfile_init: deleting existing swap file\n");
+	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
+	syscall_prepare(&msg);
+	syscall(L4_rootserver, SOS_REMOVE, YES_REPLY, &msg); // might fail, who cares
+
 	// open swapfile
 	dprintf(2, "*** swapfile_init: opening swap file\n");
-	strcpy(pager_buffer(L4_rootserver), SWAPFILE_FN);
+	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) FM_READ | FM_WRITE );
-	rval = syscall_run(SOS_OPEN, YES_REPLY, &msg);
-	dprintf(2, "*** swapfile_init: opened swapfile, rval=%d\n", rval);
+	swapfile = syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
+	dprintf(2, "*** swapfile_init: opened swapfile, fd=%d\n", swapfile);
 }
 
 L4_Word_t
-get_swapslot(void)
+swapslot_alloc(void)
 {
 	if (SlotsFree <= 0)
 	{
@@ -73,7 +78,7 @@ get_swapslot(void)
 }
 
 int
-free_swapslot(L4_Word_t slot)
+swapslot_free(L4_Word_t slot)
 {
 	if (SlotsFree == SWAPSIZE || slot > PAGESIZE * (SWAPSIZE - 1))
 	{

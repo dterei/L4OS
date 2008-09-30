@@ -16,6 +16,8 @@
 #include <l4/thread.h>
 #include <bootinfo/bootinfo.h>
 
+#include "constants.h"
+
 #define L4_PAGEFAULT	((L4_Word_t) -2)
 #define L4_INTERRUPT	((L4_Word_t) -1)
 #define L4_EXCEPTION ((L4_Word_t) -5)
@@ -178,6 +180,10 @@ static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
 static inline L4_SpaceId_t sos_tid2sid(L4_ThreadId_t tid)
 {
 	return L4_SpaceId(L4_ThreadNo(tid));
+}
+
+static inline L4_ThreadId_t sos_cap2tid(L4_ThreadId_t tid) {
+	return L4_GlobalId(tid.raw & (MAX_THREADS - 1), 1);
 }
 
 //

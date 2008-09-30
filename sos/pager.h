@@ -6,7 +6,7 @@
 #include "l4.h"
 
 // Pager-related structures and data
-typedef struct PageTable1 PageTable;
+typedef struct Pagetable1 Pagetable;
 
 #define REGION_READ 0x4
 #define REGION_WRITE 0x2
@@ -35,8 +35,8 @@ void region_set_rights(Region *r, int rights);
 void region_append(Region *r, Region *toAppend);
 void region_free_all(Region *r);
 
-PageTable *pagetable_init(void);
-void pagetable_free(PageTable *pt);
+Pagetable *pagetable_init(void);
+void pagetable_free(Pagetable *pt);
 void frames_free(pid_t pid);
 
 void pager_init(void);
