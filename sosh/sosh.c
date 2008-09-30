@@ -31,6 +31,7 @@
 #include "segfault.h"
 #include "sleep.h"
 #include "sosh.h"
+#include "swaptest.h"
 #include "time.h"
 #include "top.h"
 #include "up.h"
@@ -66,6 +67,7 @@ struct command sosh_commands[] = {
 	{"pt_test", pt_test},
 	{"rm", rm},
 	{"segfault", segfault},
+	{"swaptest", swaptest},
 	{"sleep", sleep},
 	{"time", time},
 	{"top", top},

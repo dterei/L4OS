@@ -3,7 +3,7 @@ Import("*")
 addressing = env.WeaverAddressing(direct=True)
 weaver = env.WeaverIguanaProgram(addressing = addressing)
 
-sources=Split("alloc.c cat.c cp.c exec.c hex.c kecho.c ls.c kill.c m5bench.c memdump.c pid.c ps.c pt_test.c rm.c segfault.c sleep.c sosh.c time.c top.c up.c")
+sources=Split("alloc.c cat.c cp.c exec.c hex.c kecho.c ls.c kill.c m5bench.c memdump.c pid.c ps.c pt_test.c rm.c swaptest.c segfault.c sleep.c sosh.c time.c top.c up.c")
 obj = env.KengeProgram("sosh", source=sources, weaver=weaver, LIBS=["c", "l4", "sos"])
 
 Return("obj")

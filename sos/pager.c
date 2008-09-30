@@ -789,8 +789,6 @@ static void demandPager(int vfsRval) {
 		if (swapoutRequest.offset == PAGESIZE) {
 			// we finished the swapout so use the now-free frame
 			// as either a swapin target or a free frame
-			swapfile_close();
-			assert(swapfile == (-1));
 			finishedSwapout();
 		} else {
 			// still swapping out, continue the vfs write
@@ -825,8 +823,6 @@ static void demandPager(int vfsRval) {
 		if (requestsHead->offset == PAGESIZE) {
 			// we finished the swapin so we can now attempt to
 			// give the page to the process that needs it
-			swapfile_close();
-			assert(swapfile == (-1));
 			finishedSwapin();
 		} else {
 			// still swapping in

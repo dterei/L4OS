@@ -4,11 +4,11 @@
 
 #include "hex.h"
 
-#define PER_ROW 32
+#define MAX_ROW 32
 
 int hex(int argc, char **argv) {
 	int offset, size, width, r;
-	char *buf;
+	char buf[MAX_ROW];
 
 	if (argc < 4) {
 		printf("usage: %s file size offset [width]\n", argv[0]);
@@ -22,10 +22,8 @@ int hex(int argc, char **argv) {
 	if (argc == 5) {
 		width = atoi(argv[4]);
 	} else {
-		width = PER_ROW;
+		width = MAX_ROW;
 	}
-
-	buf = (char*) malloc(width);
 
 	lseek(f, offset, SEEK_SET);
 
