@@ -80,7 +80,7 @@ struct NFS_BaseRequest_t {
 typedef struct {
 	NFS_BaseRequest p;
 	fmode_t mode;
-	void (*open_done) (L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+	void (*open_done) (L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 } NFS_LookupRequest;
 
 /* Could combine read and write since are the same, but prefer separate for
