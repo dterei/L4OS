@@ -22,7 +22,7 @@
 /* This callback if rval is zero or greater will create a filehandler for the address space
  * specified by tid.
  */
-static void vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+static void vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 
 /* This callback will decrease the refcount for the file handler, if the vnode returned is
  * null, then the filehandler is also closed.
@@ -136,7 +136,7 @@ find_vnode(const char *path) {
  * a filesystem must be invoked to handle the call.
  */
 void
-vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
+vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
 			path, path, mode);
 	
@@ -148,16 +148,14 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	// check can open more files
 	if (findNextFd(process_lookup(L4_ThreadNo(tid))) < 0) {
 		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
-		*rval = SOS_VFS_NOMORE;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
 
 	// check filename is valid
 	if (strlen(path) >= N_NAME) {
 		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
-		*rval = SOS_VFS_PATHINV;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_PATHINV);
 		return;
 	}
 
@@ -167,10 +165,10 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	if (vnode == NULL) {
 		// Not an open file so open nfs file
 		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
-		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
+		nfsfs_open(tid, vnode, path, mode, vfs_open_done);
 	} else {
 		// Have vnode now so open
-		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+		vnode->open(tid, vnode, path, mode, vfs_open_done);
 	}
 }
 
@@ -179,18 +177,18 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
  */
 static
 void
-vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, *rval);
+vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
+	dprintf(1, "*** vfs_open_done: %d %p %d %d\n", L4_ThreadNo(tid), self, mode, status);
 
 	// open failed
-	if (*rval < 0 || self == NULL) {
-		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", *rval);
+	if (status != SOS_VFS_OK || self == NULL) {
+		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", status);
+		syscall_reply(tid, status);
 		return;
 	}
 
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	fildes_t fd = findNextFd(p);
-	*rval = fd;
 
 	// store file in per process table
 	VFile *files = process_get_files(p);
@@ -200,17 +198,18 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
-		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", path,
+		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", self->path,
 				self, self->next, self->previous, fd);
 
 		add_vnode(self);
 	} else {
-		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", path,
+		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", self->path,
 				self, self->next, self->previous, fd);
 	}
 
 	// update vnode refcount
 	self->refcount++;
+	syscall_reply(tid, fd);
 }
 
 /* Close a file */
@@ -375,7 +374,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 /* Seek to a position in a file */
 void
 vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
-	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
+	dprintf(0, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
 
 	// get file
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -389,11 +388,13 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 
 	// make sure ok
 	if (p == NULL || vf == NULL || vnode == NULL) {
-		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
+		dprintf(0, "*** vfs_seek: invalid file handler: %d\n", file);
 		*rval = SOS_VFS_NOFILE;
 		syscall_reply(tid, *rval);
 		return;
 	}
+
+	dprintf(0, "vfs_seek: old fp %d\n", vf->fp);
 
 	if (whence == SEEK_SET) {
 		vf->fp = (L4_Word_t) pos;
@@ -404,6 +405,8 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 	} else {
 		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
 	}
+
+	dprintf(0, "vfs_seek: new fp %d\n", vf->fp);
 
 	*rval = SOS_VFS_OK;
 	syscall_reply(tid, *rval);
@@ -420,10 +423,6 @@ vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval) {
 /* Stat a file */
 void
 vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval) {
-	/*
-	dprintf(1, "*** vfs_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
-			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
-	*/
 	dprintf(1, "*** vfs_stat: %s\n", path);
 	
 	// Check open vnodes

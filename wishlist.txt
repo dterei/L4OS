@@ -15,3 +15,11 @@ more system calls).  Like red.
 
 - Kernel VM 
 
+- Port a unix tool to our OS to prove its robustness. (e.g grep or something
+similar which should be complicated in function but not use to many system
+calls since we are not POSIX compliant).
+
+- Support multiple consoles.
+
+- support directories.
+

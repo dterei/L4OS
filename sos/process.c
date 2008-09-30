@@ -198,8 +198,7 @@ void process_prepare(Process *p) {
 	L4_CacheFlushAll();
 
 	// Open stdout
-	int dummy;
-	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE, &dummy);
+	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
 }
 
 L4_ThreadId_t process_run(Process *p, int asThread) {

@@ -1,5 +1,6 @@
 #include <sos/sos.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "ls.h"
 #include "sosh.h"
@@ -16,23 +17,40 @@ static void prstat(const char *name) {
 }
 
 int ls(int argc, char **argv) {
-	int i, r;
+	int i, r, a = 0, statp = 1;
 	char buf[BUF_SIZ];
 
-	if (argc > 2) {
-		printf("usage: %s [file]\n", argv[0]);
+	if (argc > 3) {
+		printf("usage: %s [-a] [file]\n", argv[0]);
 		return 1;
 	}
 
-	if (argc == 2) {
-		r = stat(argv[1], &sbuf);
+
+	if (argc >= 2) {
+		int cmp = strcmp(argv[1], "-a");
+		if (verbose > 1) {
+			printf("%s\n", argv[1]);
+			printf("cmp: %d\n", cmp);
+		}
+		if (cmp == 0) {
+			a = 1;
+			statp = 2;
+		}
+	}
+		
+	if (verbose > 1) {
+		printf("a = %d, statp = %d\n", a, statp);
+	}
+
+	if (argc > statp) {
+		r = stat(argv[statp], &sbuf);
 
 		if (r < 0) {
-			printf("stat(%s) failed: %d\n", argv[1], r);
+			printf("stat(%s) failed: %d\n", argv[statp], r);
 			return 0;
 		}
 
-		prstat(argv[1]);
+		prstat(argv[statp]);
 		return 0;
 	}
 
@@ -50,7 +68,11 @@ int ls(int argc, char **argv) {
 		printf("dirent(%d): \"%s\"\n", i, buf);
 #endif
 
-		r = stat(buf, &sbuf);
+		if (a == 1 || strncmp(buf, ".", 1) != 0) {
+			r = stat(buf, &sbuf);
+		} else {
+			continue;
+		}
 
 		if (r < 0) {
 			printf("stat(%s) failed: %d\n", buf, r);

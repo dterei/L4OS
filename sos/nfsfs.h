@@ -15,8 +15,7 @@ int nfsfs_init(void);
 
 /* Open a specified file using NFS */
 void nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval));
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status));
 
 /* Close a specified file previously opened with nfsfs_open */
 void nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,

@@ -6,8 +6,9 @@
 #include "libsos.h"
 #include "network.h"
 #include "syscall.h"
+#include "constants.h"
 
-#define verbose 1
+#define verbose 0
 
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
@@ -31,7 +32,6 @@ nfsfs_timeout_thread(void) {
 
 
 /******** NFS FS ********/
-#define NFS_BUFSIZ 500 /* Keep this value in sync with UDP_PACKETSIZE */
 #define NULL_TOKEN ((uintptr_t) (-1))
 
 /*
@@ -80,7 +80,7 @@ struct NFS_BaseRequest_t {
 typedef struct {
 	NFS_BaseRequest p;
 	fmode_t mode;
-	void (*open_done) (L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+	void (*open_done) (L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 } NFS_LookupRequest;
 
 /* Could combine read and write since are the same, but prefer separate for
@@ -289,9 +289,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
 		memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
 		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->p.tid));
-		*(rq->p.rval) = SOS_VFS_OK;
-		rq->open_done(rq->p.tid, rq->p.vnode, rq->p.vnode->path, rq->mode, rq->p.rval);
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 
@@ -309,11 +307,10 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		free((NFS_File *) rq->p.vnode->extra);
 		free(rq->p.vnode);
 		if (status == NFSERR_NOENT) {
-			*(rq->p.rval) = SOS_VFS_NOVNODE;
+			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_NOVNODE);
 		} else {
-			*(rq->p.rval) = SOS_VFS_ERROR;
+			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_ERROR);
 		}
-		syscall_reply(rq->p.tid, *(rq->p.rval));
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
@@ -322,15 +319,14 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 static
 void
 getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval)) {
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_getvnode: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	self = (VNode) malloc(sizeof(struct VNode_t));
 	if (self == NULL) {
 		dprintf(0, "!!! nfsfs_getvnode: Malloc Failed! cant create new vnode !!!\n");
-		*rval = SOS_VFS_NOMEM;
-		syscall_reply(tid, *rval);
+		open_done(tid, self, mode, SOS_VFS_NOMEM);
+		return;
 	}
 
 	strncpy(self->path, path, N_NAME);
@@ -352,7 +348,7 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->remove = nfsfs_remove;
 
 	NFS_LookupRequest *rq = (NFS_LookupRequest *)
-		create_request(RT_LOOKUP, self, tid, rval);
+		create_request(RT_LOOKUP, self, tid, NULL);
 
 	rq->mode = mode;
 	rq->open_done = open_done;
@@ -363,18 +359,15 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 /* Open a specified file using NFS */
 void
 nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval)) {
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	if (self == NULL) {
 		dprintf(2, "nfs_open: get new vnode\n");
-		getvnode(tid, self, path, mode, rval, open_done);
+		getvnode(tid, self, path, mode, open_done);
 	} else {
 		dprintf(2, "nfs_open: already open vnode, increase refcount\n\n");
-		*rval = SOS_VFS_OK;
-		open_done(tid, self, path, mode, rval);
-		syscall_reply(tid, *rval);
+		open_done(tid, self, mode, SOS_VFS_OK);
 	}
 };
 
@@ -631,6 +624,7 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	else {
 		cp_stats(rq->stat, attr);
 		*(rq->p.rval) = SOS_VFS_OK;
+		dprintf(1, "nfsfs_stat_cb: Copied fine, reply to %d, value %d\n", L4_ThreadNo(rq->p.tid), *(rq->p.rval));
 		syscall_reply(rq->p.tid, *(rq->p.rval));
 		remove_request((NFS_BaseRequest *) rq);
 	}

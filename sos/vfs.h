@@ -22,8 +22,7 @@ struct VNode_t {
 
 	// File System Calls
 	void (*open)(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-			int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-				const char *path, fmode_t mode, int *rval));
+			void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status));
 
 	void (*close)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 			int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
@@ -65,7 +64,7 @@ void vfiles_init(VFile *files);
 /* Open a file, in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call.
  */
-void vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval);
+void vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode);
 
 /* Close a file in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call, when refcount is zero, the file handler

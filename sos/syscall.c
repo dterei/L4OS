@@ -25,7 +25,6 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);
-	L4_MsgAppendWord(&msg, rval);
 	L4_MsgAppendWord(&msg, xval);
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
 	L4_MsgLoad(&msg);
@@ -84,7 +83,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_OPEN:
-			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0), &rval);
+			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0));
 			break;
 
 		case SOS_CLOSE:

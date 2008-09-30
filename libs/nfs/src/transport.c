@@ -14,6 +14,7 @@
 #include "transport.h"
 
 #include "libsos.h"
+#include "constants.h"
 
 // Needs to be called every 100ms by somebody
 extern void nfs_timeout(void);

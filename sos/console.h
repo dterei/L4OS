@@ -20,8 +20,7 @@ VNode console_init(VNode sf);
 
 /* Open a console file */
 void console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval));
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status));
 
 /* Close a console file */
 void console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
