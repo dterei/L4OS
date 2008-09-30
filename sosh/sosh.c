@@ -28,6 +28,7 @@
 #include "ps.h"
 #include "pt_test.h"
 #include "rm.h"
+#include "seektest.h"
 #include "segfault.h"
 #include "sleep.h"
 #include "sosh.h"
@@ -66,6 +67,7 @@ struct command sosh_commands[] = {
 	{"ps", ps},
 	{"pt_test", pt_test},
 	{"rm", rm},
+	{"seektest", seektest},
 	{"segfault", segfault},
 	{"swaptest", swaptest},
 	{"sleep", sleep},
