@@ -15,6 +15,9 @@
 #define IO_KBYTES 4
 #define DIR_LOOPS 4
 
+#define IO_FILENAME "m5bench_ioband"
+#define SEEK_FILENAME "m5bench_seek";
+
 static void m5test_help(void);
 static void m5test_timer(void);
 static void m5test_createfiles(void);
@@ -40,11 +43,53 @@ struct command m5commands[] = {
 	{"getdirent", m5test_getdirent},
 	{"stat", m5test_stat},
 	{"seek", m5test_lseek},
+	{"benchmark", m5test_benchmark},
 	{"help", m5test_help},
 	{"NULL", NULL}
 };
 
-static int benchmark(int argc, char *argv[]) {
+int
+m5bench(int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		m5test_help();
+		return 0;
+	}
+
+	int found = 0;
+	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++) {
+		if (strcmp(argv[1], m5commands[i].name) == 0) {
+			m5commands[i].command();
+			found = 1;
+			break;
+		}
+	}
+
+	if (found == 0)
+	{
+		m5test_help();
+	}
+
+	return 0;
+}
+
+static
+void
+m5test_help(void)
+{
+	printf("Usage: m5bench [test]\n");
+	printf("\nTests: ");
+	for (int i = 0; m5commands[i].command != NULL; i++) {
+		printf(" %s", m5commands[i].name);
+	}
+	printf("\n");
+}
+
+static
+int
+m5test_benchmark(int argc, char *argv[])
+{
 	char *timeArgs[4];
 	printf("*** TESTING READ PERFORMANCE\n");
 
@@ -102,46 +147,6 @@ static int benchmark(int argc, char *argv[]) {
 	return 0;
 }
 
-int
-m5bench(int argc, char **argv)
-{
-	if (argc < 2)
-	{
-		m5test_help();
-		return 0;
-	}
-
-	int found = 0;
-	for (int i = 0; i < sizeof(m5commands) / sizeof(struct command); i++) {
-		if (strcmp(argv[1], m5commands[i].name) == 0) {
-			m5commands[i].command();
-			found = 1;
-			break;
-		}
-	}
-
-	if (found == 0)
-	{
-		m5test_help();
-	}
-
-	(void) benchmark;
-
-	return 0;
-}
-
-static
-void
-m5test_help(void)
-{
-	printf("Usage: m5bench [test]\n");
-	printf("\nTests: ");
-	for (int i = 0; m5commands[i].command != NULL; i++) {
-		printf(" %s", m5commands[i].name);
-	}
-	printf("\n");
-}
-
 static
 void
 m5test_timer(void)
@@ -196,6 +201,17 @@ m5test_createfiles(void)
 		{
 			printf("file closed: %s\n", filename);
 		}
+
+		if (fremove(filename) < 0)
+		{
+			printf("%s can't be removed!", filename);
+			printf("!!! M5 Benchmark createfiles FAILED\n");
+			continue;
+		}
+		else
+		{
+			printf("file removed: %s\n", filename);
+		}
 	}
 
 	time = uptime() - time;
@@ -210,7 +226,7 @@ m5test_iobandwidth(void)
 
 	printf("writing %d kbytes to file.\n", IO_KBYTES);
 
-	fildes_t fp = open("m5bench_ioband", FM_WRITE);
+	fildes_t fp = open(IO_FILENAME, FM_WRITE);
 	long time = uptime();
 
 	int num_writ = 0;
@@ -227,10 +243,10 @@ m5test_iobandwidth(void)
 
 	
 	long dt = uptime();
-	printf("took %ld to write %d kbytes to file.\n", dt - time, num_writ/1024);
+	printf("took %ld to write %d kbytes to file.\n", dt - time, (int) ((((float) num_writ) /1024) + 0.5) );
 
 	close(fp);
-	fp = open("m5bench_ioband", FM_READ);
+	fp = open(IO_FILENAME, FM_READ);
 
 	printf("reading %d kbytes from file.\n", IO_KBYTES);
 
@@ -254,6 +270,18 @@ m5test_iobandwidth(void)
 
 	time = uptime() - time;
 	close(fp);
+
+	if (fremove(IO_FILENAME) < 0)
+	{
+		printf("%s can't be removed!", IO_FILENAME);
+		printf("!!! M5 Benchmark ioband FAILED\n");
+		continue;
+	}
+	else
+	{
+		printf("file removed: %s\n", filename);
+	}
+
 	printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
 }
 
@@ -315,22 +343,34 @@ static
 void
 m5test_lseek(void)
 {
-	static char *file = "m5bench_seek";
-
 	printf("M5 Test: seek started\n");
 
-	fildes_t fp = open(file, FM_WRITE);
+	fildes_t fp = open(SEEK_FILENAME, FM_WRITE);
 	long time = uptime();
 
 	int d = write(fp, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 32);
-	printf("Wrote %d bytes to file (%s)\n", d, file);
+	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
+	/* SEEK_SET */
 	int pos = 0;
 	d = lseek(fp, pos, SEEK_SET);
 	printf("Seek'd to pos (%d), status (%d) using SEEK_SET\n", pos, d);
-
 	d = write(fp, "AAAA", 4);
-	printf("Wrote %d bytes to file (%s)\n", d, file);
+	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
+
+	/* SEEK_CUR */
+	int pos = 10;
+	d = lseek(fp, pos, SEEK_CUR);
+	printf("Seek'd to pos (%d), status (%d) using SEEK_SET\n", pos, d);
+	d = write(fp, "AAAA", 4);
+	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
+
+	/* SEEK_END */
+	int pos = 4;
+	d = lseek(fp, pos, SEEK_END);
+	printf("Seek'd to pos (%d), status (%d) using SEEK_END\n", pos, d);
+	d = write(fp, "AAAA", 4);
+	printf("Wrote %d bytes to file (%s)\n", d, SEEK_FILENAME);
 
 	printf("M5 Test: seek finished (took %ld microseconds)\n", time);
 	close(fp);
