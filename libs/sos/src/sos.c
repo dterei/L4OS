@@ -115,7 +115,6 @@ void copyin(void *data, size_t size, int append) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
 	syscall(vpager(), SOS_COPYIN, YES_REPLY, &msg);
-	//syscall(L4_rootserver, SOS_COPYIN, YES_REPLY, &msg);
 }
 
 void copyout(void *data, size_t size, int append) {
@@ -127,7 +126,6 @@ void copyout(void *data, size_t size, int append) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) append);
 
 	syscall(vpager(), SOS_COPYOUT, YES_REPLY, &msg);
-	//syscall(L4_rootserver, SOS_COPYOUT, YES_REPLY, &msg);
 }
 
 fildes_t open(const char *path, fmode_t mode) {

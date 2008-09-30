@@ -47,6 +47,12 @@ swapfile_init(void)
 		FileSlots[i] = j;
 	}
 
+	// remove existing swapfile
+	dprintf(2, "*** swapfile_init: deleting existing swap file\n");
+	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
+	syscall_prepare(&msg);
+	syscall(L4_rootserver, SOS_REMOVE, YES_REPLY, &msg); // might fail, who cares
+
 	// open swapfile
 	dprintf(2, "*** swapfile_init: opening swap file\n");
 	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
