@@ -18,6 +18,7 @@
 #include "commands.h"
 #include "cp.h"
 #include "exec.h"
+#include "hex.h"
 #include "kecho.h"
 #include "kill.h"
 #include "ls.h"
@@ -54,6 +55,7 @@ struct command sosh_commands[] = {
 	{"dir", ls},
 	{"exec", exec},
 	{"help", help},
+	{"hex", hex},
 	{"ls", ls},
 	{"kecho", kecho},
 	{"kill", kill},
@@ -202,8 +204,8 @@ main(void)
 				printf("Command \"%s\" not found\n", argv[0]);
 			} else if (!(sbuf.st_fmode & FM_EXEC)) {
 				printf("File \"%s\" not executable\n", argv[0]);
-			} else if (sbuf.st_type == ST_DIR) {
-				printf("File \"%s\" is a directory\n", argv[0]);
+			//} else if (sbuf.st_type == ST_DIR) {
+			//	printf("File \"%s\" is a directory\n", argv[0]);
 			} else {
 				if (verbose > 1) {
 					printf("Type: %d, Mode: %d\n", sbuf.st_type, sbuf.st_fmode);
