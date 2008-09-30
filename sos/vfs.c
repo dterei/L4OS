@@ -22,7 +22,7 @@
 /* This callback if rval is zero or greater will create a filehandler for the address space
  * specified by tid.
  */
-static void vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int status);
+static void vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 
 /* This callback will decrease the refcount for the file handler, if the vnode returned is
  * null, then the filehandler is also closed.
@@ -136,7 +136,7 @@ find_vnode(const char *path) {
  * a filesystem must be invoked to handle the call.
  */
 void
-vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
+vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
 			path, path, mode);
 	
@@ -165,10 +165,10 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	if (vnode == NULL) {
 		// Not an open file so open nfs file
 		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
-		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
+		nfsfs_open(tid, vnode, path, mode, vfs_open_done);
 	} else {
 		// Have vnode now so open
-		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+		vnode->open(tid, vnode, path, mode, vfs_open_done);
 	}
 }
 
@@ -176,14 +176,15 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
  * specified by tid.
  */
 static
-int
-vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int status) {
-	dprintf(1, "*** vfs_open_done: %d %p (%s) %d %d\n", L4_ThreadNo(tid), path, path, mode, status);
+void
+vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
+	dprintf(1, "*** vfs_open_done: %d %p %d %d\n", L4_ThreadNo(tid), self, mode, status);
 
 	// open failed
-	if (status < 0 || self == NULL) {
+	if (status != SOS_VFS_OK || self == NULL) {
 		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", status);
-		return status;
+		syscall_reply(tid, status);
+		return;
 	}
 
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -197,18 +198,18 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int
 
 	// update global vnode list if not already on it
 	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
-		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", path,
+		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", self->path,
 				self, self->next, self->previous, fd);
 
 		add_vnode(self);
 	} else {
-		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", path,
+		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", self->path,
 				self, self->next, self->previous, fd);
 	}
 
 	// update vnode refcount
 	self->refcount++;
-	return fd;
+	syscall_reply(tid, fd);
 }
 
 /* Close a file */
