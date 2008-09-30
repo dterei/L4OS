@@ -164,13 +164,39 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode, int *rval) {
 	// Check open vnodes (special files are stored here)
 	vnode = find_vnode(path);
 
+	// Not an open file so open nfs file
 	if (vnode == NULL) {
-		// Not an open file so open nfs file
 		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, rval, vfs_open_done);
-	} else {
-		// Have vnode now so open
-		vnode->open(tid, vnode, path, mode, rval, vfs_open_done);
+	}
+	// Open file, so handle in just vfs layer
+	else {
+		// open file for reading
+		if (mode & FM_READ) {
+			// check if reader slots full
+			if (vnode->readers > vnode->Max_Readers) {
+				*rval = SOS_VFS_READFULL;
+				syscall_reply(tid, *rval);
+				return;
+			} else {
+				vnode->readers++;
+			}
+		}
+
+		// open file for writing
+		if (mode & FM_WRITE) {
+			// check if writers slots full
+			if (vnode->writers > vnode->Max_Writers) {
+				if (mode & FM_READ) {
+					vnode->readers--;
+				}
+				*rval = SOS_VFS_WRITEFULL;
+				syscall_reply(tid, *rval);
+				return;
+			} else {
+				vnode->writers++;
+			}
+		}
 	}
 }
 
