@@ -3,12 +3,13 @@
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
 instead of having each fs handle it.
-
-- There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
-getting negative.
+(Undecided, changes live in vfs-exp branch)
 
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval value in syscall.
+
+- There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
+getting negative.
 
 - syscall_reply should check that the thread still exists (either through the
 PCB or through L4, need to think about that one).  There is also the problem in
@@ -52,6 +53,4 @@ wrong with the given number of bytes.  It's off by 1.  See sosh/memdump.c.
 - Hide swap file.  A nice way I can think of doing this is by adding it as a
 special file, making all the callbacks NULL except for open which is just a
 callback which returns SOS_VFS_NOFILE.
-
-- Swap file is getting (-2) return value all the time, need to investigate.
 
