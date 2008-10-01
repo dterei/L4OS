@@ -37,6 +37,9 @@
 #include "top.h"
 #include "up.h"
 
+static stat_t sbuf;
+fildes_t in;
+
 static int
 help(int argc, char *argv[])
 {
@@ -46,9 +49,6 @@ help(int argc, char *argv[])
 	}
 	return 0;
 }
-
-static fildes_t in;
-static stat_t sbuf;
 
 struct command sosh_commands[] = {
 	{"alloc", alloc},
