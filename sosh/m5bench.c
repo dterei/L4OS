@@ -271,7 +271,11 @@ m5test_iobandwidth(int argc, char *argv[])
 	if (bsize > IO_MAX_BUFFER)
 	{
 		printf("Specified buffer too big, use one less than  or equal to %d bytes\n", IO_MAX_BUFFER);
-		return;
+		printf("Continue anyway [n]: ");
+		char c = 'n';
+		if (read(in, &c, 1) < 0 || (c != 'y' && c != 'Y')) {
+			return;
+		}
 	}
 
 	printf("M5 Test: iobandwidth started (kbytes %d) (buffer %d)\n", kb, bsize);
@@ -297,6 +301,7 @@ m5test_iobandwidth(int argc, char *argv[])
 	
 	long dt = uptime();
 	printf("took %ld to write %d bytes (%d kb) to file.\n", dt - time, num_writ, num_writ/1024);
+	printf("Speed: %ld bytes/s\n", num_writ / ((dt - time) / 1000000));
 
 	close(fp);
 	fp = open(IO_FILENAME, FM_READ);
