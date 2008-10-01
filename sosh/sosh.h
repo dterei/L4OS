@@ -9,6 +9,4 @@
 
 #define verbose 0
 
-extern fildes_t in;
-
 #endif // sos/sosh.h
