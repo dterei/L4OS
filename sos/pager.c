@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 3
+#define verbose 4
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
@@ -303,11 +303,8 @@ static FrameList *deleteFrameList(void) {
 
 			// unmap (so if it's referenced again the pager will get
 			// called and the refbit will be reset)
-			//
-			// commented out for now because it changes the behaviour,
-			// but whether or not the refbits are updated should make
-			// no difference to correctness
-			//removeMapping(process_get_sid(allocHead->p), allocHead->page);
+			// (un)comment to expose a different bug
+			removeMapping(process_get_sid(allocHead->p), allocHead->page);
 
 			// and move to back
 			if (allocHead->next != NULL) {
@@ -622,8 +619,6 @@ static void startSwapout(void) {
 			(void*) *entry, process_get_pid(swapout->p));
 	free(swapout);
 
-	//if (verbose > 2) memdump((char*) (*entry & ADDRESS_MASK), PAGESIZE);
-
 	// set up the swapout
 	swapoutRequest.p = swapout->p;
 	swapoutRequest.addr = *entry & ADDRESS_MASK;
@@ -638,6 +633,8 @@ static void startSwapout(void) {
 	*entry |= ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
 	*entry |= diskAddr;
+
+	removeMapping(process_get_sid(swapout->p), swapout->page);
 
 	// kick-start with an lseek, the pager message handler loop
 	// will start writing from then on
@@ -729,6 +726,8 @@ static void finishedSwapout(void) {
 
 	if (pinnedFrame != 0) {
 		// there is contents we need to copy across
+		dprintf(2, "*** finishedSwapout: pinned frame is %p\n", pinnedFrame);
+
 		memcpy((char*) (*entry & ADDRESS_MASK), (void*) pinnedFrame, PAGESIZE);
 		frame_free(pinnedFrame);
 		pinnedFrame = 0;
@@ -929,11 +928,11 @@ char *pager_buffer(L4_ThreadId_t tid) {
 }
 
 static void copyInContinue(PagerRequest *pr) {
-	dprintf(2, "*** copyInContinue pr=%p process=%p pid=%d addr=%p\n",
-			pr, pr->p, process_get_pid(pr->p), (void*) pr->addr);
+	dprintf(2, "*** copyInContinue pr=%p pid=%d addr=%p\n",
+			pr, process_get_pid(pr->p), (void*) pr->addr);
 
 	// Data about the copyin operation.
-	int threadNum = L4_ThreadNo(process_get_tid(pr->p));
+	int threadNum = process_get_pid(pr->p);
 
 	L4_Word_t size = LO_HALF(copyInOutData[threadNum]);
 	L4_Word_t offset = HI_HALF(copyInOutData[threadNum]);
@@ -957,7 +956,7 @@ static void copyInContinue(PagerRequest *pr) {
 	dprintf(4, "*** copyInContinue contents: ");
 
 	while ((offset < size) && (offset < MAX_IO_BUF)) {
-		dprintf(4, "0x%02x ", *src & 0x000000ff);
+		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
 		*dest = *src;
 
 		dest++;
@@ -970,8 +969,10 @@ static void copyInContinue(PagerRequest *pr) {
 	dprintf(4, "\n");
 	copyInOutData[threadNum] = size | (offset << 16);
 
+	assert(offset < MAX_IO_BUF); // for testing purposes
+
 	// Reached end - either we finished the copy, or we reached a boundary
-	if (offset >= size) {
+	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		dprintf(3, "*** copyInContinue: finished\n");
@@ -996,11 +997,11 @@ static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 }
 
 static void copyOutContinue(PagerRequest *pr) {
-	dprintf(3, "*** copyOutContinue pr=%p process=%p tid=%ld addr=%p\n",
-			pr, pr->p, process_get_tid(pr->p), (void*) pr->addr);
+	dprintf(3, "*** copyOutContinue pr=%p pid=%ld addr=%p\n",
+			pr, process_get_pid(pr->p), (void*) pr->addr);
 
 	// Data about the copyout operation.
-	int threadNum = L4_ThreadNo(process_get_tid(pr->p));
+	int threadNum = process_get_pid(pr->p);
 
 	L4_Word_t size = LO_HALF(copyInOutData[threadNum]);
 	L4_Word_t offset = HI_HALF(copyInOutData[threadNum]);
@@ -1016,7 +1017,10 @@ static void copyOutContinue(PagerRequest *pr) {
 	dest += pr->addr & (PAGESIZE - 1);
 	dprintf(3, "*** copyOutContinue: dest=%p\n", dest);
 
+	dprintf(4, "*** copyInContinue contents: ");
+
 	while ((offset < size) && (offset < MAX_IO_BUF)) {
+		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
 		*dest = *src;
 		dest++;
 		src++;
@@ -1025,14 +1029,19 @@ static void copyOutContinue(PagerRequest *pr) {
 		if (isPageAligned(dest)) break; // continue from next page boundary
 	}
 
+	dprintf(4, "\n");
 	copyInOutData[threadNum] = size | (offset << 16);
+
+	assert(offset < MAX_IO_BUF); // for testing purposes
 
 	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
+		dprintf(3, "*** copyOutContinue: finished\n");
 		syscall_reply(replyTo, 0);
 	} else {
 		pr->addr = (L4_Word_t) dest;
+		dprintf(3, "*** copyOutContinue: continuing\n");
 		pager(pr);
 	}
 }
