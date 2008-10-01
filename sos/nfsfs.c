@@ -466,9 +466,9 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		return;
 	}
 
-	if (nbyte >= NFS_BUFSIZ) {
+	if (nbyte > NFS_BUFSIZ) {
 		dprintf(1, "tried to read too much data at once: %d\n", nbyte);
-		nbyte = NFS_BUFSIZ - 1;
+		nbyte = NFS_BUFSIZ;
 	}
 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid, rval);
@@ -524,10 +524,10 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		return;
 	}
 
-	if (nbyte >= NFS_BUFSIZ) {
+	if (nbyte > NFS_BUFSIZ) {
 		dprintf(1, "!!! nfsfs_write: request too large! (tid %d) (file %d) (size %d) (max %d)!\n",
 				L4_ThreadNo(tid), file, nbyte, NFS_BUFSIZ);
-		nbyte = NFS_BUFSIZ - 1;
+		nbyte = NFS_BUFSIZ;
 	}
 
 	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid, rval);
