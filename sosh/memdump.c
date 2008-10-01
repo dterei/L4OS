@@ -25,9 +25,10 @@ int memdump(int argc, char **argv) {
 
 	fildes_t out = open(argv[2], FM_WRITE);
 
-	for (int nWritten = 0; nWritten < SIZE; nWritten++) {
+	int nWritten = 0;
+
+	while (nWritten < SIZE) {
 		nWritten += write(out, dump + nWritten, BLOCK);
-		nWritten--;
 		printf("memdump: writen %d bytes\n", nWritten);
 	}
 

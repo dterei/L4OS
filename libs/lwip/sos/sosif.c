@@ -96,7 +96,7 @@
 #include <ixp_osal/IxOsal.h>
 #include <ixp400_xscale_sw/IxQueueAssignments.h>
 
-#define verbose 1
+#define verbose 0
 
 /* Define those to better describe your network interface. */
 #define IFNAME0 'e'

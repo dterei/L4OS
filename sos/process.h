@@ -40,6 +40,9 @@ pid_t process_get_pid(Process *p);
 // Get the threadid of a process
 L4_ThreadId_t process_get_tid(Process *p);
 
+// Get the spaceid of a process
+L4_SpaceId_t process_get_sid(Process *p);
+
 // Get the page table of a process
 Pagetable *process_get_pagetable(Process *p);
 
