@@ -53,7 +53,6 @@ void syscall_prepare(L4_Msg_t *msg) {
 
 L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
 	L4_MsgTag_t tag;
-	L4_Msg_t rMsg;
 
 	L4_Set_MsgLabel(msg, s << MAGIC_THAT_MAKES_LABELS_WORK);
 	L4_MsgLoad(msg);
@@ -64,8 +63,8 @@ L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
 		tag = L4_Send(tid);
 	}
 
-	L4_MsgStore(tag, &rMsg);
-	return L4_MsgWord(&rMsg, 0);
+	L4_MsgStore(tag, msg);
+	return L4_MsgWord(msg, 0);
 }
 
 void kprint(char *str) {
@@ -325,10 +324,14 @@ pid_t process_wait(pid_t pid) {
 }
 
 /* Returns time in microseconds since booting. */
-long uptime(void) {
+uint64_t uptime(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall(L4_rootserver, SOS_TIME_STAMP, YES_REPLY, &msg);
+
+	uint64_t time = syscall(L4_rootserver, SOS_TIME_STAMP, YES_REPLY, &msg);
+	uint64_t hi = L4_MsgWord(&msg, 1);
+	time += hi << 32;
+	return time;
 }
 
 /* Sleeps for the specified number of microseconds. */

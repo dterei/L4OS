@@ -5,15 +5,15 @@
 
 int up(int argc, char **argv)
 {
-	long us = uptime();
-	long us2 = us;
-	long secs = us / 1000000;
-	long mins = secs / 60;
+	uint64_t us = uptime();
+	uint64_t us2 = us;
+	uint64_t secs = us / 1000000;
+	uint64_t mins = secs / 60;
 
 	us2 -= 1000 * secs;
 	secs -= 60 * mins;
 
-	printf("up %ld mins %ld secs %lu us (total %lu)\n", mins, secs, us2, us);
+	printf("up %llu mins %llu secs %llu us (total %llu)\n", mins, secs, us2, us);
 	return 0;
 }
 

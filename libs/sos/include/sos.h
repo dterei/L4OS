@@ -216,7 +216,7 @@ pid_t process_wait(pid_t pid);
 
 /* Returns time in microseconds since booting.
  */
-long uptime(void);
+uint64_t uptime(void);
 
 /* Sleeps for the specified number of microseconds.
  */

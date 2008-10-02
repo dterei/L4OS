@@ -6,9 +6,6 @@ instead of having each fs handle it.
 - Get rid of rval as an argument to every single fs-related function, and fix
 the hack that is the global rval in syscall.
 
-- There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
-getting negative.
-
 - syscall_reply should check that the thread still exists (either through the
 PCB or through L4, need to think about that one).  There is also the problem in
 the point below this (deal with processes being replaced with another one)
@@ -53,4 +50,7 @@ callback which returns SOS_VFS_NOFILE.  Oh and hmm there will also need to be
 some way to prevent it from showing up in dirent.  Maybe just hide all hidden
 files, Unix-style.  That's not really a hack (and we could even argue it's a
 policy) but it's pretty restrictive.
+
+- Clean up old code not used anymore, static arrays for malloc, timer.c and queue.h                                                                                                                            
+which is replaced by our proper driver... ect.
 

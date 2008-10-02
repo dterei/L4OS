@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 0
+#define verbose 1
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size

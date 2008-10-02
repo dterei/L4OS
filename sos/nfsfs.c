@@ -8,7 +8,7 @@
 #include "syscall.h"
 #include "constants.h"
 
-#define verbose 0
+#define verbose 1
 
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
