@@ -8,7 +8,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 4
+#define verbose 0
 
 /* The VFS Layer uses callbacks of its own.
  * They are used so that once the FS layer has finished it operations, it can notify

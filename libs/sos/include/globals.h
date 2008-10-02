@@ -4,6 +4,6 @@
 #define _GLOBALS_H
 
 /* Max buffer size for write and read */
-#define IO_MAX_BUFFER 1024
+#define IO_MAX_BUFFER 1280
 
 #endif // sos/globals.h

@@ -51,7 +51,7 @@ struct command m5commands[] = {
 	{"consoleread", m5test_console_read},
 	{"consolewrite", m5test_console_write},
 	{"help", m5test_help},
-	{"NULL", NULL}
+	{"NULL", NULL},
 };
 
 int
@@ -392,6 +392,7 @@ m5test_iobandwidth(int argc, char *argv[])
 		}
 
 		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
+	}
 }
 
 static
