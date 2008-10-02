@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include <clock/clock.h>
 #include <sos/sos.h>
 
@@ -18,6 +20,12 @@ static int rval;
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 {
+	syscall_reply_m(tid, 1, xval);
+}
+
+void
+syscall_reply_m(L4_ThreadId_t tid, int count, ...)
+{
 	assert(!L4_IsThreadEqual(tid, L4_rootserver));
 	L4_MsgTag_t tag;
 
@@ -25,8 +33,17 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);
-	L4_MsgAppendWord(&msg, xval);
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
+
+	va_list va;
+	va_start(va, count);
+	L4_Word_t w;
+	for (int i = 0; i < count; i++) {
+		w = va_arg(va, L4_Word_t);
+		L4_MsgAppendWord(&msg, w);
+	}
+	va_end(va);
+
 	L4_MsgLoad(&msg);
 
 	int send = L4_IsThreadEqual(tid, virtual_pager);
@@ -136,7 +153,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_TIME_STAMP:
 			rval = (L4_Word_t) time_stamp();
-			syscall_reply(tid, rval);
+			word = (L4_Word_t) (time_stamp() >> 32);
+			syscall_reply_m(tid, 2, rval, word);
 			break;
 
 		case SOS_USLEEP:

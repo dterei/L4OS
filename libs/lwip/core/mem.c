@@ -182,79 +182,79 @@ mem_malloc2(mem_size_t size)
 void *
 mem_malloc(mem_size_t size)
 {
-  mem_size_t ptr, ptr2;
-  struct mem *mem, *mem2;
+	mem_size_t ptr, ptr2;
+	struct mem *mem, *mem2;
 
-  if(size == 0) {
-	 DEBUGF(MEM_DEBUG, ("size == 0!\n"));
-    return NULL;
-  }
+	if(size == 0) {
+		DEBUGF(MEM_DEBUG, ("size == 0!\n"));
+		return NULL;
+	}
 
-  /* Expand the size of the allocated memory region so that we can
-     adjust for alignment. */
-  if((size % MEM_ALIGNMENT) != 0) {
-    size += MEM_ALIGNMENT - ((size + SIZEOF_STRUCT_MEM) % MEM_ALIGNMENT);
-  }
-  
-  if(size > MEM_SIZE) {
-	 DEBUGF(MEM_DEBUG, ("size (%d) > MEM_SIZE (%d)\n", size, MEM_SIZE));
-    return NULL;
-  }
-  
-/*  sys_sem_wait(mem_sem); */
+	/* Expand the size of the allocated memory region so that we can
+		adjust for alignment. */
+	if((size % MEM_ALIGNMENT) != 0) {
+		size += MEM_ALIGNMENT - ((size + SIZEOF_STRUCT_MEM) % MEM_ALIGNMENT);
+	}
 
-  for(ptr = (u8_t *)lfree - ram; ptr < MEM_SIZE; ptr = ((struct mem *)&ram[ptr])->next) {
-	 DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
-    mem = (struct mem *)&ram[ptr];
-    if(!mem->used &&
-       mem->next - (ptr + SIZEOF_STRUCT_MEM) >= size + SIZEOF_STRUCT_MEM) {
-      ptr2 = ptr + SIZEOF_STRUCT_MEM + size;
-      mem2 = (struct mem *)&ram[ptr2];
+	if(size > MEM_SIZE) {
+		DEBUGF(MEM_DEBUG, ("size (%d) > MEM_SIZE (%d)\n", size, MEM_SIZE));
+		return NULL;
+	}
 
-      mem2->prev = ptr;      
-      mem2->next = mem->next;
-      mem->next = ptr2;      
-      if(mem2->next != MEM_SIZE) {
-        ((struct mem *)&ram[mem2->next])->prev = ptr2;
-      }
-      
-      mem2->used = 0;      
-      mem->used = 1;
+	/*  sys_sem_wait(mem_sem); */
+
+	for (ptr = (u8_t *)lfree - ram; ptr < MEM_SIZE; ptr = ((struct mem *)&ram[ptr])->next) {
+		DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
+		mem = (struct mem *)&ram[ptr];
+		if(!mem->used &&
+				mem->next - (ptr + SIZEOF_STRUCT_MEM) >= size + SIZEOF_STRUCT_MEM) {
+			ptr2 = ptr + SIZEOF_STRUCT_MEM + size;
+			mem2 = (struct mem *)&ram[ptr2];
+
+			mem2->prev = ptr;      
+			mem2->next = mem->next;
+			mem->next = ptr2;      
+			if(mem2->next != MEM_SIZE) {
+				((struct mem *)&ram[mem2->next])->prev = ptr2;
+			}
+
+			mem2->used = 0;      
+			mem->used = 1;
 #ifdef MEM_STATS
-      stats.mem.used += size;
-      /*      if(stats.mem.max < stats.mem.used) {
-        stats.mem.max = stats.mem.used;
-	} */
-      if(stats.mem.max < ptr2) {
-        stats.mem.max = ptr2;
-      }      
+			stats.mem.used += size;
+			/*      if(stats.mem.max < stats.mem.used) {
+					  stats.mem.max = stats.mem.used;
+					  } */
+			if(stats.mem.max < ptr2) {
+				stats.mem.max = ptr2;
+			}      
 #ifdef MEM_PERF
-      mem_perf_output();
+			mem_perf_output();
 #endif /* MEM_PERF */  
 #endif /* MEM_STATS */
 
-      if(mem == lfree) {
-	/* Find next free block after mem */
-        while(lfree->used && lfree != ram_end) {
-	  lfree = (struct mem *)&ram[lfree->next];
-        }
-        ASSERT("mem_malloc: !lfree->used", !lfree->used);
-      }
-/*      sys_sem_signal(mem_sem); */
-      ASSERT("mem_malloc: allocated memory not above ram_end.",
-	     (uptr_t)mem + SIZEOF_STRUCT_MEM + size <= (uptr_t)ram_end);
-      ASSERT("mem_malloc: allocated memory properly aligned.",
-	     ((uptr_t) mem + SIZEOF_STRUCT_MEM) % MEM_ALIGNMENT == 0);
-      return (u8_t *)mem + SIZEOF_STRUCT_MEM;
-    }    
-  }
-  DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
-  DEBUGF(MEM_DEBUG, ("mem_malloc: could not allocate %d bytes\n", (int)size));
+			if(mem == lfree) {
+				/* Find next free block after mem */
+				while(lfree->used && lfree != ram_end) {
+					lfree = (struct mem *)&ram[lfree->next];
+				}
+				ASSERT("mem_malloc: !lfree->used", !lfree->used);
+			}
+			/*      sys_sem_signal(mem_sem); */
+			ASSERT("mem_malloc: allocated memory not above ram_end.",
+					(uptr_t)mem + SIZEOF_STRUCT_MEM + size <= (uptr_t)ram_end);
+			ASSERT("mem_malloc: allocated memory properly aligned.",
+					((uptr_t) mem + SIZEOF_STRUCT_MEM) % MEM_ALIGNMENT == 0);
+			return (u8_t *)mem + SIZEOF_STRUCT_MEM;
+		}    
+	}
+	DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
+	DEBUGF(MEM_DEBUG, ("mem_malloc: could not allocate %d bytes\n", (int)size));
 #ifdef MEM_STATS
-  ++stats.mem.err;
+	++stats.mem.err;
 #endif /* MEM_STATS */  
-/*  sys_sem_signal(mem_sem); */
-  return NULL;
+	/*  sys_sem_signal(mem_sem); */
+	return NULL;
 }
 /*-----------------------------------------------------------------------------------*/
 void

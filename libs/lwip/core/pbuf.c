@@ -277,11 +277,13 @@ pbuf_alloc(pbuf_layer l, u16_t size, pbuf_flag flag)
 		case PBUF_RAM:
 			/* If pbuf is to be allocated in RAM, allocate memory for it. */
 			p = mem_malloc(MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset));
-			//printf("Size of struct: %d, size: %d, offset: %d, aligned: %d\n",
-			//		sizeof(struct pbuf), size, offset,
-			//		MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset));
+
+			DEBUGF(PBUF_DEBUG, ("Size of struct: %d, size: %d, offset: %d, aligned: %d\n",
+						sizeof(struct pbuf), size, offset,
+						MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset)));
+
 			if(p == NULL) {
-				printf("P == NULL!\n");
+				DEBUGF(PBUF_DEBUG, ("P == NULL!\n"));
 				return NULL;
 			}
 			/* Set up internal structure of the pbuf. */

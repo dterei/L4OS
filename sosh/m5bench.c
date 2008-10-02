@@ -380,8 +380,6 @@ m5test_iobandwidth(int argc, char *argv[])
 
 		free(data);
 
-		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", dtw + dtr);
-
 		if (data_ok)
 		{
 			printf("Data OK\n");
@@ -391,7 +389,8 @@ m5test_iobandwidth(int argc, char *argv[])
 			printf("Data CORRUPT\n");
 		}
 
-		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
+		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", dtw + dtr);
+
 	}
 }
 
