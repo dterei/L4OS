@@ -186,6 +186,7 @@ mem_malloc(mem_size_t size)
   struct mem *mem, *mem2;
 
   if(size == 0) {
+	 DEBUGF(MEM_DEBUG, ("size == 0!\n"));
     return NULL;
   }
 
@@ -196,12 +197,14 @@ mem_malloc(mem_size_t size)
   }
   
   if(size > MEM_SIZE) {
+	 DEBUGF(MEM_DEBUG, ("size (%d) > MEM_SIZE (%d)\n", size, MEM_SIZE));
     return NULL;
   }
   
 /*  sys_sem_wait(mem_sem); */
 
   for(ptr = (u8_t *)lfree - ram; ptr < MEM_SIZE; ptr = ((struct mem *)&ram[ptr])->next) {
+	 DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
     mem = (struct mem *)&ram[ptr];
     if(!mem->used &&
        mem->next - (ptr + SIZEOF_STRUCT_MEM) >= size + SIZEOF_STRUCT_MEM) {
@@ -245,6 +248,7 @@ mem_malloc(mem_size_t size)
       return (u8_t *)mem + SIZEOF_STRUCT_MEM;
     }    
   }
+  DEBUGF(MEM_DEBUG, ("ptr = %u, lfree = %p, ram = %p, MEM_SIZE = %d\n", ptr, lfree, ram, MEM_SIZE));
   DEBUGF(MEM_DEBUG, ("mem_malloc: could not allocate %d bytes\n", (int)size));
 #ifdef MEM_STATS
   ++stats.mem.err;

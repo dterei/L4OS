@@ -199,128 +199,132 @@ pbuf_pool_free(struct pbuf *p)
 struct pbuf *
 pbuf_alloc(pbuf_layer l, u16_t size, pbuf_flag flag)
 {
-  struct pbuf *p, *q, *r;
-  u16_t offset;
-  s32_t rsize;
+	struct pbuf *p, *q, *r;
+	u16_t offset;
+	s32_t rsize;
 
-  offset = 0;
-  switch(l) {
-  case PBUF_TRANSPORT:
-    offset += PBUF_TRANSPORT_HLEN;
-    /* FALLTHROUGH */
-  case PBUF_IP:
-    offset += PBUF_IP_HLEN;
-    offset += PBUF_LINK_HLEN;
-    /* FALLTHROUGH */
-  case PBUF_LINK:
-    break;
-  case PBUF_RAW:
-    break;
-  default:
-    ASSERT("pbuf_alloc: bad pbuf layer", 0);
-    return NULL;
-  }
+	offset = 0;
+	switch(l) {
+		case PBUF_TRANSPORT:
+			offset += PBUF_TRANSPORT_HLEN;
+			/* FALLTHROUGH */
+		case PBUF_IP:
+			offset += PBUF_IP_HLEN;
+			offset += PBUF_LINK_HLEN;
+			/* FALLTHROUGH */
+		case PBUF_LINK:
+			break;
+		case PBUF_RAW:
+			break;
+		default:
+			ASSERT("pbuf_alloc: bad pbuf layer", 0);
+			return NULL;
+	}
 
-  switch(flag) {
-  case PBUF_POOL:
-    /* Allocate head of pbuf chain into p. */
-    p = pbuf_pool_alloc();
-    if(p == NULL) {
+	switch(flag) {
+		case PBUF_POOL:
+			/* Allocate head of pbuf chain into p. */
+			p = pbuf_pool_alloc();
+			if(p == NULL) {
 #ifdef PBUF_STATS
-      ++stats.pbuf.err;
+				++stats.pbuf.err;
 #endif /* PBUF_STATS */
-      return NULL;
-    }
-    p->next = NULL;
-    
-    /* Set the payload pointer so that it points offset bytes into
-       pbuf data memory. */
-    p->headers = MEM_ALIGN((void *)((u8_t *)p + (sizeof(struct pbuf))));
-    p->payload = MEM_ALIGN((void *)((u8_t *)p + (sizeof(struct pbuf)) + offset));
+				return NULL;
+			}
+			p->next = NULL;
 
-    /* The total length of the pbuf is the requested size. */
-    p->tot_len = size;
+			/* Set the payload pointer so that it points offset bytes into
+				pbuf data memory. */
+			p->headers = MEM_ALIGN((void *)((u8_t *)p + (sizeof(struct pbuf))));
+			p->payload = MEM_ALIGN((void *)((u8_t *)p + (sizeof(struct pbuf)) + offset));
 
-    /* Set the length of the first pbuf is the chain. */
-    p->len = size > PBUF_POOL_BUFSIZE - offset? PBUF_POOL_BUFSIZE - offset: size;
+			/* The total length of the pbuf is the requested size. */
+			p->tot_len = size;
 
-    p->flags = PBUF_FLAG_POOL;
+			/* Set the length of the first pbuf is the chain. */
+			p->len = size > PBUF_POOL_BUFSIZE - offset? PBUF_POOL_BUFSIZE - offset: size;
 
-    /* Allocate the tail of the pbuf chain. */
-    r = p;
-    rsize = size - p->len;
-    while(rsize > 0) {      
-      q = pbuf_pool_alloc();
-      if(q == NULL) {
-	DEBUGF(PBUF_DEBUG, ("pbuf_alloc: Out of pbufs in pool,\n"));
+			p->flags = PBUF_FLAG_POOL;
+
+			/* Allocate the tail of the pbuf chain. */
+			r = p;
+			rsize = size - p->len;
+			while(rsize > 0) {      
+				q = pbuf_pool_alloc();
+				if(q == NULL) {
+					DEBUGF(PBUF_DEBUG, ("pbuf_alloc: Out of pbufs in pool,\n"));
 #ifdef PBUF_STATS
-        ++stats.pbuf.err;
+					++stats.pbuf.err;
 #endif /* PBUF_STATS */
-        pbuf_pool_free(p);
-        return NULL;
-      }
-      q->next = NULL;
-      r->next = q;
-      q->len = rsize > PBUF_POOL_BUFSIZE? PBUF_POOL_BUFSIZE: rsize;
-      q->flags = PBUF_FLAG_POOL;
-      q->payload = q->headers = (void *)((u8_t *)q + sizeof(struct pbuf));
-      r = q;
-      q->ref = 1;
-      q = q->next;
-      rsize -= PBUF_POOL_BUFSIZE;
-    }
-    r->next = NULL;
+					pbuf_pool_free(p);
+					return NULL;
+				}
+				q->next = NULL;
+				r->next = q;
+				q->len = rsize > PBUF_POOL_BUFSIZE? PBUF_POOL_BUFSIZE: rsize;
+				q->flags = PBUF_FLAG_POOL;
+				q->payload = q->headers = (void *)((u8_t *)q + sizeof(struct pbuf));
+				r = q;
+				q->ref = 1;
+				q = q->next;
+				rsize -= PBUF_POOL_BUFSIZE;
+			}
+			r->next = NULL;
 
-    ASSERT("pbuf_alloc: pbuf->payload properly aligned",
-	   ((uptr_t)p->payload % MEM_ALIGNMENT) == 0);
-    break;
-  case PBUF_RAM:
-    /* If pbuf is to be allocated in RAM, allocate memory for it. */
-    p = mem_malloc(MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset));
-    if(p == NULL) {
-      return NULL;
-    }
-    /* Set up internal structure of the pbuf. */
-    p->headers = MEM_ALIGN((void *)((u8_t *)p + sizeof(struct pbuf)));
-    p->payload = MEM_ALIGN((void *)((u8_t *)p + sizeof(struct pbuf) + offset));
-    p->len = p->tot_len = size;
-    p->next = NULL;
-    p->flags = PBUF_FLAG_RAM;
+			ASSERT("pbuf_alloc: pbuf->payload properly aligned",
+					((uptr_t)p->payload % MEM_ALIGNMENT) == 0);
+			break;
+		case PBUF_RAM:
+			/* If pbuf is to be allocated in RAM, allocate memory for it. */
+			p = mem_malloc(MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset));
+			printf("Size of struct: %d, size: %d, offset: %d, aligned: %d\n",
+					sizeof(struct pbuf), size, offset,
+					MEM_ALIGN_SIZE(sizeof(struct pbuf) + size + offset));
+			if(p == NULL) {
+				printf("P == NULL!\n");
+				return NULL;
+			}
+			/* Set up internal structure of the pbuf. */
+			p->headers = MEM_ALIGN((void *)((u8_t *)p + sizeof(struct pbuf)));
+			p->payload = MEM_ALIGN((void *)((u8_t *)p + sizeof(struct pbuf) + offset));
+			p->len = p->tot_len = size;
+			p->next = NULL;
+			p->flags = PBUF_FLAG_RAM;
 
-    ASSERT("pbuf_alloc: pbuf->payload properly aligned",
-	   ((uptr_t)p->payload % MEM_ALIGNMENT) == 0);
-    break;
-  case PBUF_ROM:
-    /* If the pbuf should point to ROM, we only need to allocate
-       memory for the pbuf structure. */
-    p = memp_mallocp(MEMP_PBUF);
-    if(p == NULL) {
-      return NULL;
-    }
-    p->payload = p->headers = NULL;
-    p->len = p->tot_len = size;
-    p->next = NULL;
-    p->flags = PBUF_FLAG_ROM;
-    break;
-  case PBUF_EXT:
-    /* If the pbuf should point to EXT, we only need to allocate
-       memory for the pbuf structure. */
-    p = memp_mallocp(MEMP_PBUF);
-    if(p == NULL) {
-      return NULL;
-    }
-    p->payload = p->headers = NULL;
-    p->len = p->tot_len = size;
-    p->next = NULL;
-    p->flags = PBUF_FLAG_EXT;
-    p->free = NULL; /* calling code should set this field! */
-    break;
-  default:
-    ASSERT("pbuf_alloc: erroneous flag", 0);
-    return NULL;
-  }
-  p->ref = 1;
-  return p;
+			ASSERT("pbuf_alloc: pbuf->payload properly aligned",
+					((uptr_t)p->payload % MEM_ALIGNMENT) == 0);
+			break;
+		case PBUF_ROM:
+			/* If the pbuf should point to ROM, we only need to allocate
+				memory for the pbuf structure. */
+			p = memp_mallocp(MEMP_PBUF);
+			if(p == NULL) {
+				return NULL;
+			}
+			p->payload = p->headers = NULL;
+			p->len = p->tot_len = size;
+			p->next = NULL;
+			p->flags = PBUF_FLAG_ROM;
+			break;
+		case PBUF_EXT:
+			/* If the pbuf should point to EXT, we only need to allocate
+				memory for the pbuf structure. */
+			p = memp_mallocp(MEMP_PBUF);
+			if(p == NULL) {
+				return NULL;
+			}
+			p->payload = p->headers = NULL;
+			p->len = p->tot_len = size;
+			p->next = NULL;
+			p->flags = PBUF_FLAG_EXT;
+			p->free = NULL; /* calling code should set this field! */
+			break;
+		default:
+			ASSERT("pbuf_alloc: erroneous flag", 0);
+			return NULL;
+	}
+	p->ref = 1;
+	return p;
 }
 /*-----------------------------------------------------------------------------------*/
 /* pbuf_refresh():

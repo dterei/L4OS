@@ -256,15 +256,18 @@ m5test_iobandwidth(int argc, char *argv[])
 {
 	int kb = IO_KBYTES_DEFAULT;
 	int bsize = IO_BLOCK_DEFAULT;
+	int loops = 1;
 
 	if (argc >= 3)
 	{ kb = atoi(argv[2]); }
 	if (argc >= 4)
 	{ bsize = atoi(argv[3]); }
+	if (argc >= 5)
+	{ loops = atoi(argv[4]); }
 
-	if (argc > 4 || kb <= 0 || bsize <= 0)
+	if (argc > 5 || kb <= 0 || bsize <= 0 || loops <= 0)
 	{
-		printf("Usage: m5bench ioband [#kbytes] [#buffer size (bytes)]\n");
+		printf("Usage: m5bench ioband [#kbytes] [#buffer size (bytes)] [#times]\n");
 		return;
 	}
 
@@ -278,67 +281,90 @@ m5test_iobandwidth(int argc, char *argv[])
 		}
 	}
 
-	printf("M5 Test: iobandwidth started (kbytes %d) (buffer %d)\n", kb, bsize);
-
-	/* data block to writer out */
-	char *data = malloc(sizeof(char) * bsize);
-
-	fildes_t fp = open(IO_FILENAME, FM_WRITE);
-	long time = uptime();
-
-	int num_writ = 0;
-	for (int i = 0; i < kb * 1024; i += bsize)
+	for (int lp = 0; lp < loops; lp++)
 	{
-		int d = write(fp, data, bsize);
-		num_writ += d;
-		if (d < 0)
+
+		printf("M5 Test: iobandwidth started (kbytes %d) (buffer %d) (loop %d)\n", kb, bsize, lp);
+
+		/* data block to writer out */
+		char *data = malloc(sizeof(char) * bsize);
+
+		fildes_t fp = open(IO_FILENAME, FM_WRITE);
+		long time = uptime();
+
+		int num_writ = 0;
+		for (int i = 0; i < kb * 1024; i += bsize)
 		{
-			printf("test failed!\n");
-			return;
+			int d = write(fp, data, bsize);
+			num_writ += d;
+			if (d < 0)
+			{
+				printf("test failed!\n");
+				return;
+			}
 		}
-	}
 
-	
-	long dt = uptime();
-	printf("took %ld to write %d bytes (%d kb) to file.\n", dt - time, num_writ, num_writ/1024);
-	printf("Speed: %ld bytes/s\n", num_writ / ((dt - time) / 1000000));
+		
+		long dtw = uptime() - time;
+		printf("took %ld to write %d bytes (%d kb) to file.\n", dtw, num_writ, num_writ/1024);
 
-	close(fp);
-	fp = open(IO_FILENAME, FM_READ);
+		/* Slightly convulouted way of calucalating kb/s as no fp on xscale */
+		long t2 = dtw / 10000;
+		if (t2 != 0) {
+			long speed = num_writ / t2;
+			speed *= 100;
+			speed /= 1024;
+			printf("Speed: %ld kb/s\n", speed);
+		}
 
-	printf("reading %d kbytes from file.\n", kb);
+		close(fp);
+		fp = open(IO_FILENAME, FM_READ);
 
-	int c, num_read = 0;
-	while( (c = read( fp, data, bsize) ) > 0 )
-	{
-		if (c > 0)
+		printf("reading %d kbytes from file.\n", kb);
+
+		time = uptime();
+		int c, num_read = 0;
+		while( (c = read( fp, data, bsize) ) > 0 )
 		{
-			num_read += c;
+			if (c > 0)
+			{
+				num_read += c;
+			}
 		}
+
+		if( c < 0 )
+		{
+			printf( "error on read\n" );
+		}
+
+		long dtr = uptime() - time;
+		printf("took %ld to read %d bytes (%d kb) from a file.\n", dtr, num_read, num_read/1024);
+
+		/* Slightly convulouted way of calucalating kb/s as no fp on xscale */
+		t2 = dtr / 10000;
+		if (t2 != 0) {
+			long speed = num_read / t2;
+			speed *= 100;
+			speed /= 1024;
+			printf("Speed: %ld kb/s\n", speed);
+		}
+
+		close(fp);
+
+		if (fremove(IO_FILENAME) < 0)
+		{
+			printf("%s can't be removed!", IO_FILENAME);
+			printf("!!! M5 Benchmark ioband FAILED\n");
+		}
+		else
+		{
+			printf("file removed: %s\n", IO_FILENAME);
+		}
+
+		free(data);
+
+		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", dtw + dtr);
 	}
-
-	if( c < 0 )
-	{
-		printf( "error on read\n" );
-	}
-
-	dt = uptime() - dt;
-	printf("took %ld to read %d bytes (%d kb) from a file.\n", dt, num_read, num_read/1024);
-
-	time = uptime() - time;
-	close(fp);
-
-	if (fremove(IO_FILENAME) < 0)
-	{
-		printf("%s can't be removed!", IO_FILENAME);
-		printf("!!! M5 Benchmark ioband FAILED\n");
-	}
-	else
-	{
-		printf("file removed: %s\n", IO_FILENAME);
-	}
-
-	printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
 }
 
 static

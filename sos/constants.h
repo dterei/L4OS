@@ -8,6 +8,7 @@
 #include <sos/globals.h>
 
 #define NFS_BUFSIZ IO_MAX_BUFFER
+#define NFS_BUFSIZ2 1100
 
 #define PAGESIZE 4096
 

@@ -78,7 +78,7 @@
 #define INET_DEBUG	0
 #define IP_DEBUG	0
 #define IP_REASS_DEBUG	0
-#define MEM_DEBUG	0
+#define MEM_DEBUG	1
 #define MEMP_DEBUG	0
 #define SYS_DEBUG	0
 #define TCP_DEBUG	0
