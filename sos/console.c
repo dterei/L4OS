@@ -6,7 +6,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 4
+#define verbose 1
 
 // How many consoles we have
 #define NUM_CONSOLES 1

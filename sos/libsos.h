@@ -20,6 +20,12 @@
 
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
+#define please(expr)\
+	if (!(expr)) {\
+		printf("%s line %d failed: ", __FUNCTION__, __LINE__);\
+		sos_print_error(L4_ErrorCode());\
+	}\
+
 // Bootinfo required callbacks
 bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,

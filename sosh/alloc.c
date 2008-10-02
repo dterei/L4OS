@@ -9,12 +9,22 @@
 // implementation of malloc
 #define SIZE (4096 - 32)
 
+/*
+static int blah = 0;
+static int dead = 0x00000420;
+*/
+static char sbuf[128];
+
 int alloc(int argc, char **argv) {
 	int written;
 	char *buf = (char*) malloc(SIZE);
 
-	printf("memory allocated at %p (%u)\n", buf, (unsigned int) buf);
-	
+	sprintf(sbuf, "---> memory for %s allocated at %p (%u)\n",
+			argv[1], buf, (unsigned int) buf);
+	kprint(sbuf);
+
+	printf(sbuf);
+
 	written = 0;
 
 	for (int i = 1; i < argc; i++) {
@@ -31,6 +41,6 @@ int alloc(int argc, char **argv) {
 		buf[i] = 0;
 	}
 
-	return 0;
+	return ((int) buf);
 }
 

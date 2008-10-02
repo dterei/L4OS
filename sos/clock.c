@@ -9,12 +9,6 @@
 #include "libsos.h"
 #include "syscall.h"
 
-#define maybe(expr)\
-	if (!(expr)) {\
-		printf("!!! failed %s:%d\n", __FUNCTION__, __LINE__);\
-		sos_print_error(L4_ErrorCode());\
-	}\
-
 #define verbose 1
 #define TIMER_STACK_SIZE PAGESIZE
 
@@ -76,13 +70,13 @@ int start_timer(void) {
 	ts_overflow = 0;
 
 	L4_LoadMR(0, NSLU2_TIMESTAMP_IRQ);
-	maybe(L4_RegisterInterrupt(L4_rootserver, SOS_IRQ_NOTIFY_BIT, 0, 0));
+	please(L4_RegisterInterrupt(L4_rootserver, SOS_IRQ_NOTIFY_BIT, 0, 0));
 
 	// Enable timestamp overflow interrupt
 	*OST_STS |= CLEAR_TIM0;
 
 	L4_LoadMR(0, NSLU2_TIMER0_IRQ);
-	maybe(L4_RegisterInterrupt(L4_rootserver, SOS_IRQ_NOTIFY_BIT, 0, 0));
+	please(L4_RegisterInterrupt(L4_rootserver, SOS_IRQ_NOTIFY_BIT, 0, 0));
 
 	return CLOCK_R_OK;
 }

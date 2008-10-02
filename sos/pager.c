@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 0
+#define verbose 1
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
@@ -90,6 +90,18 @@ struct Region_t {
 	struct Region_t *next;
 };
 
+static void pagerReply(L4_ThreadId_t tid) {
+	L4_Msg_t msg;
+	L4_MsgClear(&msg);
+	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
+	L4_MsgLoad(&msg);
+
+	if (L4_IpcFailed(L4_Reply(tid))) {
+		dprintf(0, "!!! pagerReply to %ld failed: ", L4_ThreadNo(tid));
+		sos_print_error(L4_ErrorCode());
+	}
+}
+
 static void memdump(char *addr, int size) {
 	(void) memdump;
 	int perRow = 32;
@@ -157,6 +169,7 @@ Pagetable *pagetable_init(void) {
 
 static L4_Word_t*
 pagetableLookup(Pagetable *pt, L4_Word_t addr) {
+	assert((addr & ~PAGEALIGN) == 0);
 	Pagetable1 *level1 = (Pagetable1*) pt;
 
 	addr /= PAGESIZE;
@@ -184,6 +197,7 @@ pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 }
 
 static void pagerFrameFree(L4_Word_t frame) {
+	assert((frame & ~PAGEALIGN) == 0);
 	frame_free(frame);
 	allocLimit++;
 }
@@ -231,32 +245,60 @@ static L4_Word_t *allocFrames(int n) {
 	return (L4_Word_t*) frame;
 }
 
-static int addMapping(L4_SpaceId_t sid, L4_Word_t virt, L4_Word_t phys,
+static int mapPage(L4_SpaceId_t sid, L4_Word_t virt, L4_Word_t phys,
 		int rights) {
 	L4_Fpage_t fpage = L4_Fpage(virt, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
 	L4_PhysDesc_t ppage = L4_PhysDesc(phys, L4_DefaultMemory);
 
 	int result = L4_MapFpage(sid, fpage, ppage);
+	please(result);
+	return result;
+}
+
+static int unmapPage(L4_SpaceId_t sid, L4_Word_t virt) {
+	assert((virt & ~PAGEALIGN) == 0);
+
+	L4_Fpage_t fpage = L4_Fpage(virt, PAGESIZE);
+	int result = L4_UnmapFpage(sid, fpage);
+
 	if (!result) {
-		dprintf(0, "!!! addMapping failed: ");
+		dprintf(0, "!!! unmapPage failed: ");
 		sos_print_error(L4_ErrorCode());
 	}
 
 	return result;
 }
 
-static int removeMapping(L4_SpaceId_t sid, L4_Word_t virt) {
-	(void) removeMapping;
-	L4_Fpage_t fpage = L4_Fpage(virt, PAGESIZE);
-	int result = L4_UnmapFpage(sid, fpage);
+static void prepareDataIn(Process *p, L4_Word_t vaddr) {
+	// Prepare for some data from a user program to be fiddled with
+	// by the pager.  This involves flushing the user programs cache on
+	// this address, and invalidating our own cache.
+	vaddr &= PAGEALIGN;
+	L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
+	L4_Word_t frame = *entry & ADDRESS_MASK;
 
-	if (!result) {
-		dprintf(0, "!!! removeMapping failed: ");
-		sos_print_error(L4_ErrorCode());
-	}
+	dprintf(2, "*** prepareDataIn: p=%d vaddr=%p frame=%p\n",
+			process_get_pid(p), (void*) vaddr, (void*) frame);
 
-	return result;
+	please(L4_CacheFlushRange(process_get_sid(p), vaddr, vaddr + PAGESIZE));
+	please(L4_CacheFlushRangeInvalidate(L4_rootspace, frame, frame + PAGESIZE));
+}
+
+static void prepareDataOut(Process *p, L4_Word_t vaddr) {
+	// Prepare from some data that has been changed in here to be reflected
+	// on the user space.  This involves flushing our own cache, then
+	// invalidating the user's cache on the address.
+	vaddr &= PAGEALIGN;
+	L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
+	L4_Word_t frame = *entry & ADDRESS_MASK;
+
+	dprintf(2, "*** prepareDataOut: p=%d vaddr=%p frame=%p\n",
+			process_get_pid(p), (void*) vaddr, (void*) frame);
+
+	please(L4_CacheFlushRange(L4_rootspace, frame, frame + PAGESIZE));
+	please(L4_CacheFlushRangeInvalidate(
+				process_get_sid(p), vaddr, vaddr + PAGESIZE));
 }
 
 static void addFrameList(Process *p, L4_Word_t page) {
@@ -304,7 +346,7 @@ static FrameList *deleteFrameList(void) {
 			// unmap (so if it's referenced again the pager will get
 			// called and the refbit will be reset)
 			// (un)comment to expose a different bug
-			removeMapping(process_get_sid(allocHead->p), allocHead->page);
+			unmapPage(process_get_sid(allocHead->p), allocHead->page);
 
 			// and move to back
 			if (allocHead->next != NULL) {
@@ -332,12 +374,15 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t vaddr) {
 	} else {
 		frame = frame_alloc();
 		dprintf(1, "*** pagerFrameAlloc: allocated frame %p\n", frame);
+
 		process_get_info(p)->size++;
 		allocLimit--;
 
 		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
 		*entry &= ~ADDRESS_MASK;
 		*entry |= frame;
+		// TODO cache magic?
+
 		addFrameList(p, vaddr);
 	}
 
@@ -439,18 +484,17 @@ static PagerRequest *newPagerRequest(
 }
 
 static void pagerContinue(PagerRequest *pr) {
-	dprintf(2, "*** pagerContinue: replying to %ld\n",
-			L4_ThreadNo(process_get_tid(pr->p)));
+	dprintf(2, "*** pagerContinue: replying to %d\n", process_get_pid(pr->p));
 
 	L4_ThreadId_t replyTo = process_get_tid(pr->p);
 	free(pr);
-	syscall_reply(replyTo, 0);
+	pagerReply(replyTo);
 }
 
 static void pager(PagerRequest *pr) {
-	L4_Word_t frame;
-	int mapKernelToo = 0;
 	L4_Word_t addr = pr->addr & PAGEALIGN;
+	L4_Word_t frame;
+	L4_Word_t *entry;
 
 	dprintf(2, "*** pager: fault on ss=%d, addr=%p (%p)\n",
 			L4_SpaceNo(L4_SenderSpace()), pr->addr, addr);
@@ -468,9 +512,8 @@ static void pager(PagerRequest *pr) {
 
 	// Place in, or retrieve from, page table.
 	dprintf(3, "*** pager: finding entry\n");
-	L4_Word_t *entry = pagetableLookup(process_get_pagetable(pr->p), addr);
-	L4_Word_t entryAddr = *entry & ADDRESS_MASK;
-
+	entry = pagetableLookup(process_get_pagetable(pr->p), addr);
+	frame = *entry & ADDRESS_MASK;
 	dprintf(3, "*** pager: entry %p found at %p\n", (void*) *entry, entry);
 
 	if (*entry & ONDISK_MASK) {
@@ -478,44 +521,40 @@ static void pager(PagerRequest *pr) {
 		dprintf(2, "*** pager: page is on disk\n");
 		queueRequest(pr);
 		return;
-	} else if (entryAddr != 0) {
+	} else if ((frame & ADDRESS_MASK) != 0) {
 		// Already appears in page table as a frame, just got unmapped
 		dprintf(3, "*** pager: got unmapped\n");
 	} else if (r->mapDirectly) {
 		// Wants to be mapped directly (code/data probably).
-		// In this case the kernel doesn't know about it from the
-		// frame table, so map it 1:1 in the kernel too.
 		dprintf(3, "*** pager: mapping directly\n");
-		entryAddr = *entry = addr;
-		mapKernelToo = 1;
+		frame = addr;
+		*entry = addr;
 	} else {
 		// Didn't appear in frame table so we need to allocate a new one.
 		// However there are potentially no free frames.
 		dprintf(3, "*** pager: allocating frame\n");
 
-		entryAddr = pagerFrameAlloc(pr->p, addr);
-		assert((entryAddr & ~ADDRESS_MASK) == 0); // no flags set
+		frame = pagerFrameAlloc(pr->p, addr);
+		assert((frame & ~ADDRESS_MASK) == 0); // no flags set
 
-		if (entryAddr == 0) {
-			// No free frames
+		if (frame == 0) {
 			dprintf(2, "*** pager: no free frames\n");
 			queueRequest(pr);
 			return;
-		} else {
-			// We're fine
 		}
 	}
 
 	*entry |= REFBIT_MASK;
-	frame = entryAddr;
 
-	dprintf(3, "*** pager: mapping vaddr=%p pid=%ld frame=%p rights=%d\n",
+	dprintf(3, "*** pager: mapping vaddr=%p pid=%d frame=%p rights=%d\n",
 			(void*) addr, process_get_pid(pr->p), (void*) frame, r->rights);
 
-	addMapping(process_get_sid(pr->p), addr, frame, r->rights);
-	if (mapKernelToo) addMapping(L4_rootspace, addr, frame, r->rights);
+	mapPage(process_get_sid(pr->p), addr, frame, r->rights);
+	prepareDataOut(pr->p, addr);
+	//please(L4_CacheFlushRangeInvalidate(process_get_sid(pr->p),
+	//				addr, addr + PAGESIZE));
 
-	dprintf(3, "*** pager: finished, waking faulter\n");
+	dprintf(3, "*** pager: finished, running callback\n");
 	pr->callback(pr);
 }
 
@@ -601,44 +640,54 @@ static void startSwapout(void) {
 	dprintf(1, "*** startSwapout\n");
 	assert(swapoutRequest.p == NULL);
 
-	// to swap something out it has to be in SOS's pager buffer,
-	// since that is how the write system call works
+	// Choose the next page to swap out
 	FrameList *swapout = deleteFrameList();
 	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(swapout->p), swapout->page);
+	L4_Word_t frame = *entry & ADDRESS_MASK;
 
-	dprintf(2, "*** startSwapout: page=%p addr=%p for pid=%d was %p\n",
+	// Make sure the frame reflects what is stored in the frame
+	assert((swapout->page & ~PAGEALIGN) == 0);
+	prepareDataIn(swapout->p, swapout->page);
+
+	//please(L4_CacheFlushRange(process_get_sid(swapout->p),
+	//		swapout->page, swapout->page + PAGESIZE));
+
+	// Tell L4 that the page is no longer backed
+	unmapPage(process_get_sid(swapout->p), swapout->page & ADDRESS_MASK);
+
+	// Our own mapping is no longer valid
+	//please(L4_CacheFlushRangeInvalidate(L4_rootspace,
+	//			frame, frame + PAGESIZE));
+
+	dprintf(1, "*** startSwapout: page=%p addr=%p for pid=%d was %p\n",
 			(void*) swapout->page,
 			(void*) (swapout->page & ADDRESS_MASK),
 			process_get_pid(swapout->p),
-			(void*) (*entry & ADDRESS_MASK));
+			(void*) frame);
 
-	memdump((char*) (*entry & ADDRESS_MASK), PAGESIZE);
+	if (verbose > 2) memdump((char*) frame, PAGESIZE);
 
-	dprintf(1, "*** startSwapout: page %p from process %d deleted\n",
-			(void*) *entry, process_get_pid(swapout->p));
-	free(swapout);
-
-	// set up the swapout
+	// Set up the swapout
 	swapoutRequest.p = swapout->p;
-	swapoutRequest.addr = *entry & ADDRESS_MASK;
+	swapoutRequest.addr = frame;
 	swapoutRequest.offset = 0;
 	swapoutRequest.callback = NULL;
 	swapoutRequest.next = NULL;
 
+	// Set up where on disk to put the page
 	L4_Word_t diskAddr = swapslot_alloc();
-	assert(isPageAligned((void*) diskAddr));
-	dprintf(2, "*** startSwapout: swapslot is %p\n", (void*) diskAddr);
+	assert((diskAddr & ~PAGEALIGN) == 0);
+	dprintf(1, "*** startSwapout: swapslot is 0x%08lx\n", diskAddr);
 
 	*entry |= ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
 	*entry |= diskAddr;
 
-	removeMapping(process_get_sid(swapout->p), swapout->page);
-
-	// kick-start with an lseek, the pager message handler loop
+	// Kick-start with an lseek, the pager message handler loop
 	// will start writing from then on
 	lseekNonblocking(swapfile, diskAddr, SEEK_SET);
+	free(swapout);
 }
 
 static void startSwapin(void) {
@@ -652,7 +701,8 @@ static void startSwapin(void) {
 	// to the position in the swap file the page is (and this is found
 	// by ADDR_MASK since it doubles as physical and ondisk memory location)
 	L4_Word_t *entry = pagetableLookup(
-			process_get_pagetable(requestsHead->p), requestsHead->addr);
+			process_get_pagetable(requestsHead->p),
+			requestsHead->addr & PAGEALIGN);
 
 	lseekNonblocking(swapfile, *entry & ADDRESS_MASK, SEEK_SET);
 }
@@ -660,9 +710,13 @@ static void startSwapin(void) {
 static void startRequest(void) {
 	dprintf(1, "*** startRequest\n");
 
+	// this is called when a frame is needed, either to back a page that is
+	// on disk, or just because a process has started using a page for the
+	// first time
 	assert(allocLimit == 0);
 	L4_Word_t *entry = pagetableLookup(
-			process_get_pagetable(requestsHead->p), requestsHead->addr);
+			process_get_pagetable(requestsHead->p),
+			requestsHead->addr & PAGEALIGN);
 
 	if (*entry & ONDISK_MASK) {
 		// need to swap the entry in first
@@ -682,12 +736,13 @@ static void dequeueRequest(void) {
 
 	tmp = requestsHead;
 	requestsHead = requestsHead->next;
-	//free(tmp);
+	//free(tmp); // why does this crash?
 
 	if (requestsHead == NULL) {
 		dprintf(1, "*** dequeueRequest: no more items\n");
 		requestsLast = NULL;
 	} else {
+		assert(requestsLast != NULL);
 		dprintf(1, "*** dequeueRequest: more items\n");
 		startRequest();
 	}
@@ -698,9 +753,10 @@ static void queueRequest(PagerRequest *pr) {
 			process_get_pid(pr->p), pr->addr);
 
 	if (requestsLast != NULL) {
-		assert(requestsLast != NULL);
+		assert(requestsHead != NULL);
 		dprintf(1, "*** queueRequest: adding to queue\n");
 		requestsLast->next = pr;
+		requestsLast = pr;
 	} else {
 		assert(requestsHead == NULL);
 		dprintf(1, "*** queueRequest: starting new queue\n");
@@ -710,36 +766,59 @@ static void queueRequest(PagerRequest *pr) {
 	}
 }
 
+static void memzero(char *addr, L4_Word_t size) {
+	for (int i = 0; i < size; i++) {
+		addr[i] = 0x00;
+	}
+}
+
 static void finishedSwapout(void) {
 	dprintf(1, "*** finishedSwapout\n");
 
-	// either the swapout was just for a free frame, or it was for
+	// Either the swapout was just for a free frame, or it was for
 	// a frame with existing contents (in which case there would be
-	// a pinned frame with the contents we need)
-	// in either case we now have a frame we can free
+	// a pinned frame with the contents we need) - in either case we
+	// now have a frame we can free
 	pagerFrameFree(swapoutRequest.addr);
 
 	// pager is now guaranteed to find a page
-	L4_Word_t *entry = pagetableLookup(
-			process_get_pagetable(requestsHead->p), requestsHead->addr);
+	// XXX having this here might be the cause of all our troubles
+	// XXX it does it's own cache stuff (prepareDataOut)
 	pager(requestsHead);
+
+	int addr = requestsHead->addr & PAGEALIGN;
+	L4_Word_t *entry = pagetableLookup(
+			process_get_pagetable(requestsHead->p), addr);
+	L4_Word_t frame = *entry & ADDRESS_MASK;
 
 	if (pinnedFrame != 0) {
 		// there is contents we need to copy across
 		dprintf(2, "*** finishedSwapout: pinned frame is %p\n", pinnedFrame);
-
-		memcpy((char*) (*entry & ADDRESS_MASK), (void*) pinnedFrame, PAGESIZE);
+		memcpy((char*) frame, (void*) pinnedFrame, PAGESIZE);
 		frame_free(pinnedFrame);
 		pinnedFrame = 0;
+	} else {
+		// zero the frame for debugging, but it may be a good idea anyway
+		dprintf(2, "*** zeroing frame %p\n", (void*) frame);
+		memzero((char*) frame, PAGESIZE);
 	}
 
-	dprintf(2, " *** finishedSwapout: page=%p addr=%p for pid=%d now %p\n",
+	prepareDataOut(requestsHead->p, requestsHead->addr);
+
+	// Make sure the rootserver's changes are reflected on the frame
+	//please(L4_CacheFlushRange(L4_rootspace, frame, frame + PAGESIZE));
+
+	// The user's mapping is no longer valid
+	//please(L4_CacheFlushRangeInvalidate(process_get_sid(requestsHead->p),
+	//		addr, addr + PAGESIZE));
+
+	dprintf(2, "*** finishedSwapout: page=%p addr=%p for pid=%d now %p\n",
 			(void*) requestsHead->addr,
 			(void*) (requestsHead->addr & ADDRESS_MASK),
-			process_get_pid(swapoutRequest.p),
-			(void*) (*entry & ADDRESS_MASK));
+			process_get_pid(requestsHead->p),
+			(void*) frame);
 
-	memdump((char*) (*entry & ADDRESS_MASK), PAGESIZE);
+	if (verbose > 2) memdump((char*) frame, PAGESIZE);
 
 	swapoutRequest.p = NULL;
 	dequeueRequest();
@@ -748,30 +827,40 @@ static void finishedSwapout(void) {
 static void finishedSwapin(void) {
 	dprintf(1, "*** finishedSwapin\n");
 
-	// the contents of the page is in the pinned frame, which 
-	// incidentally we do need to free
+	// Either there is a frame free which we can immediately copy
+	// the fresh page in to, or there isn't in which case we need
+	// to swap something out first
+	int addr = requestsHead->addr & PAGEALIGN;
 	L4_Word_t *entry = pagetableLookup(
-			process_get_pagetable(requestsHead->p), requestsHead->addr);
+			process_get_pagetable(requestsHead->p), addr);
 
-	// entry is also no longer on disk
+	// In either case the page is no longer on disk
 	*entry &= ~ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
 
 	if (allocLimit > 0) {
-		// pager is guaranteed to find a page
+		// Pager is guaranteed to find a page
 		pager(requestsHead);
+		L4_Word_t frame = *entry & ADDRESS_MASK;
 
-		// copy data from pinned frame to newly allocated frame
-		memcpy(
-				(void*) (*entry & ADDRESS_MASK),
-				(void*) pinnedFrame,
-				PAGESIZE);
+		// Copy data from pinned frame to newly allocated frame
+		memcpy((void*) frame, (void*) pinnedFrame, PAGESIZE);
+
+		// Fix caches
+		prepareDataOut(requestsHead->p, addr);
+
+		// Make sure our changes are reflected
+		//please(L4_CacheFlushRange(L4_rootspace, frame, frame + PAGESIZE));
+
+		// The user's mapping is no longer valid
+		//please(L4_CacheFlushRangeInvalidate(process_get_sid(requestsHead->p),
+		//			addr, addr + PAGESIZE));
 
 		frames_free(pinnedFrame);
 		pinnedFrame = 0;
 		dequeueRequest();
 	} else {
-		// need to swap something out before being able to continue.
+		// Need to swap something out before being able to continue -
 		// the swapout process will deal with the pinned frame etc
 		startSwapout();
 	}
@@ -787,11 +876,11 @@ static void demandPager(int vfsRval) {
 		assert(swapoutRequest.offset <= PAGESIZE);
 
 		if (swapoutRequest.offset == PAGESIZE) {
-			// we finished the swapout so use the now-free frame
+			// We finished the swapout so use the now-free frame
 			// as either a swapin target or a free frame
 			finishedSwapout();
 		} else {
-			// still swapping out, continue the vfs write
+			// Still swapping out, continue the vfs write
 			memcpy(
 					pager_buffer(virtual_pager),
 					((char*) swapoutRequest.addr) + swapoutRequest.offset,
@@ -860,7 +949,7 @@ static void virtualPagerHandler(void) {
 
 	for (;;) {
 		tag = L4_Wait(&tid);
-		L4_CacheFlushAll(); // FIXME this is a bad idea
+		//L4_CacheFlushAll();
 
 		tid = sos_cap2tid(tid);
 		p = process_lookup(L4_ThreadNo(tid));
@@ -897,6 +986,12 @@ static void virtualPagerHandler(void) {
 				}
 				break;
 
+			case L4_EXCEPTION:
+				dprintf(0, "exception: ip=%lx, sp=%lx\ncpsr=%lx\nexception=%lx, cause=%lx\n\n",
+						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1), L4_MsgWord(&msg, 2),
+						L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
+				break;
+
 			default:
 				dprintf(0, "!!! virtualPagerHandler: unhandled %s from %d\n",
 						syscall_show(TAG_SYSLAB(tag)), L4_SpaceNo(L4_SenderSpace()));
@@ -911,6 +1006,10 @@ void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 	dprintf(3, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
 			addr, ip, L4_SpaceNo(L4_SenderSpace()));
 	addr &= PAGEALIGN;
+
+	if (addr == 0) {
+		printf("Segmentation fault in sos_pager_handler\n");
+	}
 
 	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
@@ -944,17 +1043,16 @@ static void copyInContinue(PagerRequest *pr) {
 
 	// Assume it's already there - this function should only get
 	// called as a continutation from the pager, so no problem
-	char *src = (char*) (*pagetableLookup(
-			process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
+	char *src = (char*) (*pagetableLookup(process_get_pagetable(pr->p),
+			(pr->addr & PAGEALIGN)) & ADDRESS_MASK);
 	dprintf(3, "*** copyInContinue: frame=%p\n", src);
 
-	src += pr->addr & (PAGESIZE - 1);
+	src += pr->addr & ~PAGEALIGN;
 	dprintf(3, "*** copyInContinue: src=%p\n", src);
 
 	// Start the copy - if we reach a page boundary then pause computation
 	// since we can assume that it goes out to disk and waits a long time
 	dprintf(4, "*** copyInContinue contents: ");
-
 	while ((offset < size) && (offset < MAX_IO_BUF)) {
 		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
 		*dest = *src;
@@ -965,10 +1063,9 @@ static void copyInContinue(PagerRequest *pr) {
 
 		if (isPageAligned(src)) break; // continue from next page boundary
 	}
-
 	dprintf(4, "\n");
-	copyInOutData[threadNum] = size | (offset << 16);
 
+	copyInOutData[threadNum] = size | (offset << 16);
 	assert(offset < MAX_IO_BUF); // for testing purposes
 
 	// Reached end - either we finished the copy, or we reached a boundary
@@ -976,7 +1073,7 @@ static void copyInContinue(PagerRequest *pr) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		dprintf(3, "*** copyInContinue: finished\n");
-		syscall_reply(replyTo, 0);
+		pagerReply(replyTo);
 	} else {
 		pr->addr = (L4_Word_t) src;
 		dprintf(3, "*** copyInContinue: continuing\n");
@@ -987,13 +1084,11 @@ static void copyInContinue(PagerRequest *pr) {
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(3, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
+	Process *p = process_lookup(L4_ThreadNo(tid));
 
+	prepareDataIn(p, (L4_Word_t) src);
 	copyInPrepare(tid, src, size, append);
-
-	pager(newPagerRequest(
-				process_lookup(L4_ThreadNo(tid)),
-				(L4_Word_t) src,
-				copyInContinue));
+	pager(newPagerRequest(p, (L4_Word_t) src, copyInContinue));
 }
 
 static void copyOutContinue(PagerRequest *pr) {
@@ -1011,14 +1106,13 @@ static void copyOutContinue(PagerRequest *pr) {
 	dprintf(3, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
 			size, offset, src);
 
-	char *dest = (char*) (*pagetableLookup(
-				process_get_pagetable(pr->p), pr->addr) & ADDRESS_MASK);
+	char *dest = (char*) (*pagetableLookup(process_get_pagetable(pr->p),
+				(pr->addr & PAGEALIGN)) & ADDRESS_MASK);
 
-	dest += pr->addr & (PAGESIZE - 1);
+	dest += pr->addr & ~PAGEALIGN;
 	dprintf(3, "*** copyOutContinue: dest=%p\n", dest);
 
-	dprintf(4, "*** copyInContinue contents: ");
-
+	dprintf(4, "*** copyOutContinue contents: ");
 	while ((offset < size) && (offset < MAX_IO_BUF)) {
 		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
 		*dest = *src;
@@ -1034,11 +1128,13 @@ static void copyOutContinue(PagerRequest *pr) {
 
 	assert(offset < MAX_IO_BUF); // for testing purposes
 
+	prepareDataOut(pr->p, pr->addr);
+
 	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
 		L4_ThreadId_t replyTo = process_get_tid(pr->p);
 		free(pr);
 		dprintf(3, "*** copyOutContinue: finished\n");
-		syscall_reply(replyTo, 0);
+		pagerReply(replyTo);
 	} else {
 		pr->addr = (L4_Word_t) dest;
 		dprintf(3, "*** copyOutContinue: continuing\n");
