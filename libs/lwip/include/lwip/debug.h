@@ -35,6 +35,7 @@
 #ifndef __LWIP_DEBUG_H__
 #define __LWIP_DEBUG_H__
 
+#undef LWIP_DEBUG
 #ifdef LWIP_DEBUG
 
 #include <stdio.h>
