@@ -31,6 +31,8 @@ static void m5test_getdirent(int argc, char *argv[]);
 static void m5test_lseek(int argc, char *argv[]);
 static void m5test_benchmark(int argc, char *argv[]);
 static void m5test_trycrash(int argc, char*argv[]);
+static void m5test_console_read(int argc, char *argv[]);
+static void m5test_console_write(int argc, char *argv[]);
 
 struct command {
 	char *name;
@@ -46,6 +48,8 @@ struct command m5commands[] = {
 	{"seek", m5test_lseek},
 	{"benchmark", m5test_benchmark},
 	{"trycrash", m5test_trycrash},
+	{"consoleread", m5test_console_read},
+	{"consolewrite", m5test_console_write},
 	{"help", m5test_help},
 	{"NULL", NULL}
 };
@@ -276,18 +280,21 @@ m5test_iobandwidth(int argc, char *argv[])
 		printf("Specified buffer too big, use one less than  or equal to %d bytes\n", IO_MAX_BUFFER);
 		printf("Continue anyway [n]: ");
 		char c = 'n';
-		if (read(in, &c, 1) < 0 || (c != 'y' && c != 'Y')) {
+		if (read(in, &c, 1) <= 0 || (c != 'y' && c != 'Y')) {
 			return;
 		}
 	}
 
 	for (int lp = 0; lp < loops; lp++)
 	{
-
 		printf("M5 Test: iobandwidth started (kbytes %d) (buffer %d) (loop %d)\n", kb, bsize, lp);
 
 		/* data block to writer out */
 		char *data = malloc(sizeof(char) * bsize);
+		for (int i = 0; i < bsize; i++)
+		{
+			data[i] = (char) i;
+		}
 
 		fildes_t fp = open(IO_FILENAME, FM_WRITE);
 		long time = uptime();
@@ -304,7 +311,6 @@ m5test_iobandwidth(int argc, char *argv[])
 			}
 		}
 
-		
 		long dtw = uptime() - time;
 		printf("took %ld to write %d bytes (%d kb) to file.\n", dtw, num_writ, num_writ/1024);
 
@@ -330,11 +336,10 @@ m5test_iobandwidth(int argc, char *argv[])
 			{
 				num_read += c;
 			}
-		}
-
-		if( c < 0 )
-		{
-			printf( "error on read\n" );
+			else
+			{
+				printf( "error on read\n" );
+			}
 		}
 
 		long dtr = uptime() - time;
@@ -361,10 +366,32 @@ m5test_iobandwidth(int argc, char *argv[])
 			printf("file removed: %s\n", IO_FILENAME);
 		}
 
+		printf("checking integrity of data\n");
+
+		int data_ok = 1;
+		for (int i = 0; i < bsize; i++)
+		{
+			if (data[i] != (char) i)
+			{
+				printf("Error: %d : %c != %c\n", i, data[i], (char) i);
+				data_ok = 0;
+			}
+		}
+
 		free(data);
 
 		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", dtw + dtr);
-	}
+
+		if (data_ok)
+		{
+			printf("Data OK\n");
+		}
+		else
+		{
+			printf("Data CORRUPT\n");
+		}
+
+		printf("M5 Test: iobandwidth Finished (took %ld microseconds)\n", time);
 }
 
 static
@@ -448,5 +475,72 @@ m5test_lseek(int argc, char *argv[])
 	close(fp);
 
 	printf("M5 Test: seek finished (took %ld microseconds)\n", time);
+}
+
+static
+void
+m5test_console_read(int argc, char *argv[])
+{
+	char buf[BUF_SIZ];
+
+	printf("M5 Test: console read\n");
+	printf("Enter a read in buffer size [4]: ");
+
+	int bs = 4;
+	int r;
+	if ((r = read(in, buf, BUF_SIZ)) > 0 && buf[0] != '\n') {
+		buf[r] = '\0';
+		bs = atoi(buf);
+		if (bs <= 0) {
+			printf("Invalid buffer size!\n");
+			return;
+		}
+	}
+
+	char *buf2 = malloc(sizeof(char) * bs);
+
+	printf("Enter a string to read into buffer of size %d: ", bs);
+	r = read(in, buf2, bs);
+	printf("Read %d bytes\n", r);
+	if (r > 0)
+	{
+		printf("Entered string: /");
+		/* Use loop so as to avoid having to null terminate string.
+		 * The supplied printf doesnt seem to support specifiying
+		 * the string width so cant do it that way.
+		 */
+		for (int i = 0; i < r; i++) {
+			printf("%c", buf2[i]);
+		}
+		printf("/\n");
+	}
+
+	free(buf2);
+}
+
+static
+void
+m5test_console_write(int argc, char *argv[])
+{
+	printf("M5 Test: console write\n");
+	int bsize = 0, wsize = 0;
+	if (argc != 4 || (bsize = atoi(argv[2])) <= 0 || (wsize = atoi(argv[3])) <= 0)
+	{
+		printf("Usage: m5bench consolewrite [#buffer] [#towrite]\n");
+		return;
+	}
+
+	char *buf = malloc(sizeof(char) * bsize);
+	for (int i = 0; i < bsize; i++)
+	{
+		buf[i] = 'A';
+	}
+
+	printf("Write %d length buffer as %d length buffer\n", bsize, wsize);
+
+	int r = write(stdout_fd, buf, wsize);
+	printf("\nWrote %d bytes\n", r);
+
+	free(buf);
 }
 

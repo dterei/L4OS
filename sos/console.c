@@ -6,7 +6,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 4
 
 // How many consoles we have
 #define NUM_CONSOLES 1
@@ -220,20 +220,23 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	// make sure console exists
 	if (self == NULL) {
 		*rval = SOS_VFS_NOVNODE;
+		syscall_reply(tid, *rval);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
 		*rval = SOS_VFS_CORVNODE;
+		syscall_reply(tid, *rval);
 		return;
 	}
 
 	// XXX for some reason this causes a page fault
-	//if (L4_IsNilThread(cf->reader.tid)) {
-		//*rval = SOS_VFS_ERROR;
-		//return;
-	//}
+	if (!L4_IsNilThread(cf->reader.tid)) {
+		*rval = SOS_VFS_ERROR;
+		syscall_reply(tid, *rval);
+		return;
+	}
 
 	// store read request
 	cf->reader.tid = tid;
@@ -268,7 +271,7 @@ console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nby
 		int *rval) {
 	dprintf(1, "*** console_getdirent: %d, %s, %d\n", pos, name, nbyte);
 
-	dprintf(0, "***console_getdirent: Not implemented for console fs\n");
+	dprintf(0, "!!! console_getdirent: Not implemented for console fs\n");
 
    *rval = SOS_VFS_NOTIMP;
 	syscall_reply(tid, *rval);
@@ -280,7 +283,7 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *
 	dprintf(1, "*** console_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
 			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
 
-	dprintf(0, "***console_stat: Not implemented for console fs\n");
+	dprintf(0, "!!! console_stat: Not implemented for console fs\n");
 
    *rval = SOS_VFS_NOTIMP;
 	syscall_reply(tid, *rval);
@@ -291,7 +294,7 @@ void
 console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval) {
 	dprintf(1, "*** console_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 
-	dprintf(0, "***console_remove: Not implemented for console fs\n");
+	dprintf(0, "!!! console_remove: Not implemented for console fs\n");
 
 	*rval = SOS_VFS_NOTIMP;
 	syscall_reply(tid, *rval);
@@ -310,8 +313,6 @@ serial_read_callback(struct serial *serial, char c) {
 		return;
 	}
 
-	dprintf(2, "*** serial_read_callback: %c, send to %p\n", c, (rq->tid).raw);
-
 	// add data to buffer
 	if (rq->rbyte < rq->nbyte) {
 		rq->buf[rq->rbyte] = c;
@@ -322,10 +323,7 @@ serial_read_callback(struct serial *serial, char c) {
 	if (c == '\n' || rq->rbyte >= rq->nbyte) {
 		*(rq->rval) = rq->rbyte;
 
-		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
-				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
-
-		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %s\n, len = %d",
+		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %p\n, len = %d",
 				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
 
 		rq->read_done(rq->tid, NULL, rq->file, 0, rq->buf, 0, rq->rval);
@@ -340,6 +338,6 @@ serial_read_callback(struct serial *serial, char c) {
 		rq->rbyte = 0;
 	}
 
-	dprintf(2, "*** serial read: buf = %s\n", rq->buf);
+	dprintf(2, "*** serial read: buf = %p\n", rq->buf);
 }
 
