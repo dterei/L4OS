@@ -29,7 +29,9 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
 	L4_MsgLoad(&msg);
 
-	if (L4_IsThreadEqual(tid, virtual_pager)) {
+	int send = L4_IsThreadEqual(tid, virtual_pager);
+
+	if (send) {
 		// this isn't a very nice way of doing it, but all calls to the pager
 		// need to be sent (since they are nonblocking).  ideally this will
 		// be set up by the caller not as a hack to syscall_reply.
@@ -41,7 +43,8 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 	}
 
 	if (L4_IpcFailed(tag)) {
-		dprintf(0, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
+		dprintf(0, "!!! syscall_reply (%s) to %ld failed: ",
+				send ? "send" : "reply", L4_ThreadNo(tid));
 		sos_print_error(L4_ErrorCode());
 	}
 }

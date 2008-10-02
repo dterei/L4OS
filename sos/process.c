@@ -229,6 +229,10 @@ L4_ThreadId_t process_get_tid(Process *p) {
 	return L4_GlobalId(p->info.pid, 1);
 }
 
+L4_SpaceId_t process_get_sid(Process *p) {
+	return L4_SpaceId(process_get_pid(p));
+}
+
 Pagetable *process_get_pagetable(Process *p) {
 	return p->pagetable;
 }

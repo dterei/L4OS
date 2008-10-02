@@ -13,12 +13,12 @@ int swaptest(int argc, char **argv) {
 	char *newArgv[5];
 
 	// These will be put in memory as usual
-	printf("allocating 12345 and 67890\n");
-
+	printf("allocating 12345\n");
 	newArgv[0] = "alloc";
 	newArgv[1] = "12345";
 	alloc(2, newArgv);
 
+	printf("allocating 67890\n");
 	newArgv[1] = "67890";
 	alloc(2, newArgv);
 
@@ -35,7 +35,6 @@ int swaptest(int argc, char **argv) {
 	// This should contain the 12345 on the 3rd line.
 	// The first two lines (32 bytes) are internal malloc bookkeeping
 	printf("First 32 bytes of the second-swapped page:\n");
-
 	newArgv[0] = "hex";
 	newArgv[1] = ".swap";
 	newArgv[2] = "48";
@@ -45,20 +44,17 @@ int swaptest(int argc, char **argv) {
 
 	// Need to remove while the write/close bug exists
 	printf("removing copied swap file\n");
-
 	newArgv[0] = "rm";
 	newArgv[1] = "swap";
 	rm(2, newArgv);
 
 	printf("copying swap file\n");
-
 	newArgv[0] = "cp";
 	newArgv[1] = ".swap";
 	newArgv[2] = "swap";
 	cp(3, newArgv);
 
 	printf("Same section of the copied page:\n");
-
 	newArgv[0] = "hex";
 	newArgv[1] = "swap";
 	newArgv[2] = "48";

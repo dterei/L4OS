@@ -6,7 +6,7 @@ instead of having each fs handle it.
 (Undecided, changes live in vfs-exp branch)
 
 - Get rid of rval as an argument to every single fs-related function, and fix
-the hack that is the global rval value in syscall.
+the hack that is the global rval in syscall.
 
 - There is a bug in uptime somewhere... perhaps with sosh actually.  But it's
 getting negative.
@@ -15,6 +15,8 @@ getting negative.
 PCB or through L4, need to think about that one).  There is also the problem in
 the point below this (deal with processes being replaced with another one)
 which interestingly the last AOS lecture was on.  Hah funny how that happens.
+At the moment it just errors which is ok, but not very helpful (because there
+are other, strange reasons that syscall_reply is failing).
 
 - All callbacks will now have to deal with a process no longer existing.  There
 is also the odd possibility that a process will have been deleted and a new one
@@ -41,16 +43,11 @@ what we already have) to use events.  It also would be easier to implement it
 at the VFS level so may as well do it there.  I.e. VFS read and write (and who
 knows maybe more?) requests get put on a queue and executed sequentially.
 
-- Email Kevin and Gernot about how to hand in M6.
-
 - Finish M6.
 
 - Fill in the missing bits from M7 we couldn't do due to not having a working
 M6 - freeing allocated frames, freeing allocated slots in the swap file, and
 freeing pager requests.
-
-- Bug in write either returning the wrong number of bytes or doing something
-wrong with the given number of bytes.  It's off by 1.  See sosh/memdump.c.
 
 - Hide swap file.  A nice way I can think of doing this is by adding it as a
 special file, making all the callbacks NULL except for open which is just a
