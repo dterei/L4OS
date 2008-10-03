@@ -113,6 +113,10 @@ class toolchain:
         self.dict["_CC_COM_FLAGS"] = []
         self.dict["_CCFLAGS"] =  "$_CC_DEBUG $CC_STD_FLAGS $_CC_WARNINGS $CC_PLAT_FLAGS $_CC_OPTIMISATIONS  $CCFLAGS -DNFS_DIR=\\\"%s\\\"" % (nfsdir,)
 
+        if 'NO_DEBUG' in os.environ:
+            print('Warning: compiling with assertions turned OFF')
+            self.dict["_CCFLAGS"] += ' -DNDEBUG'
+
         self.dict["CC_PLAT_FLAGS"] = "${_platform(TOOLTYPE, 'c_flags')}"
 
         self.dict["CC_OPTIMISATIONPREFIX"] = "-O"
