@@ -167,8 +167,7 @@ Pagetable *pagetable_init(void) {
 	return (Pagetable*) pt;
 }
 
-static L4_Word_t*
-pagetableLookup(Pagetable *pt, L4_Word_t addr) {
+static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 	assert((addr & ~PAGEALIGN) == 0);
 	Pagetable1 *level1 = (Pagetable1*) pt;
 
@@ -454,8 +453,7 @@ int sos_memuse(void) {
 	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
-static Region*
-findRegion(Region *regions, L4_Word_t addr) {
+static Region* findRegion(Region *regions, L4_Word_t addr) {
 	Region *r;
 
 	for (r = regions; r != NULL; r = r->next) {
@@ -919,8 +917,7 @@ static void demandPager(int vfsRval) {
 	}
 }
 
-void
-pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
+void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 	// There is actually a magic fpage that we can use to unmap
 	// the whole address space - and I assume we're meant to
 	// unmap it from the sender space.
