@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 2
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
@@ -413,7 +413,6 @@ void pager_init(void) {
 	// Start pager, but wait until it has actually started before
 	// trying to assign virtual_pager to anything
 	dprintf(1, "*** pager_init: about to run pager\n");
-	virtual_pager = process_get_tid(pager);
 	process_run(pager, RUN_AS_THREAD);
 }
 
@@ -928,6 +927,7 @@ void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 }
 
 static void virtualPagerHandler(void) {
+	virtual_pager = sos_my_tid();
 	dprintf(1, "*** virtualPagerHandler: started, tid %ld\n",
 			L4_ThreadNo(virtual_pager));
 

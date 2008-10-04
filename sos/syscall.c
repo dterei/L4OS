@@ -52,7 +52,7 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 		// this isn't a very nice way of doing it, but all calls to the pager
 		// need to be sent (since they are nonblocking).  ideally this will
 		// be set up by the caller not as a hack to syscall_reply.
-		dprintf(1, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
+		dprintf(2, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
 		tag = L4_Send(tid);
 	} else {
 		dprintf(2, "*** syscall_reply: reply to %ld\n", L4_ThreadNo(tid));
@@ -60,7 +60,7 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 	}
 
 	if (L4_IpcFailed(tag)) {
-		dprintf(0, "!!! syscall_reply (%s) to %ld failed: ",
+		dprintf(1, "!!! syscall_reply (%s) to %ld failed: ",
 				send ? "send" : "reply", L4_ThreadNo(tid));
 		sos_print_error(L4_ErrorCode());
 	}
