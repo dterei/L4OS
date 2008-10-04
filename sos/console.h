@@ -24,8 +24,7 @@ void console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 
 /* Close a console file */
 void console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval));
+		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status));
 
 /* Read from a console file */
 void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,

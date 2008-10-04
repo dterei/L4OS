@@ -395,15 +395,12 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
  */
 void
 nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval)) {
+		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 
 	if (self == NULL) {
 		dprintf(0, "!!! nfsfs_close: Trying to close null file!\n");
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
-		close_done(tid, self, file, mode, rval);
+		close_done(tid, self, file, mode, SOS_VFS_NOFILE);
 		return;
 	}
 
@@ -415,9 +412,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		self = NULL;
 	}
 
-	*rval = SOS_VFS_OK;
-	syscall_reply(tid, *rval);
-	close_done(tid, self, file, mode, rval);
+	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
 
 /* NFS callback for nfs_read */

@@ -8,7 +8,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 /* The VFS Layer uses callbacks of its own.
  * They are used so that once the FS layer has finished it operations, it can notify
@@ -27,7 +27,7 @@ static void vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int statu
 /* This callback will decrease the refcount for the file handler, if the vnode returned is
  * null, then the filehandler is also closed.
  */
-static void vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *rval);
+static void vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status);
 
 /* Handle the file pointer in the file handler */
 static void vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
@@ -147,14 +147,14 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// check can open more files
 	if (findNextFd(process_lookup(L4_ThreadNo(tid))) < 0) {
-		dprintf(0, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
+		dprintf(1, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
 
 	// check filename is valid
 	if (strlen(path) >= N_NAME) {
-		dprintf(0, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
+		dprintf(1, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
 		syscall_reply(tid, SOS_VFS_PATHINV);
 		return;
 	}
@@ -214,7 +214,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 
 /* Close a file */
 void
-vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
+vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 	
 	//TODO: Move closing a vnode to the vfs layer (for refcount stuff anyway).
@@ -227,14 +227,14 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
 	VNode vnode =vf->vnode;
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_close: invalid file handler: %d\n", file);
-		*rval = SOS_VFS_NOFILE;
+		syscall_reply(tid, SOS_VFS_NOFILE);
 		return;
 	}
 
 	// vnode close function is responsible for freeing the node if appropriate
 	// so don't access after a close without checking its not null
 	// try closing vnode;
-	vnode->close(tid, vnode, file, vf->fmode, rval, vfs_close_done);
+	vnode->close(tid, vnode, file, vf->fmode, vfs_close_done);
 }
 
 /* This callback will decrease the refcount for the file handler, if the vnode returned is
@@ -242,10 +242,15 @@ vfs_close(L4_ThreadId_t tid, fildes_t file, int *rval) {
  */
 static
 void
-vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *rval) {
-	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, *rval);
+vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status) {
+	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, status);
 
-	if (*rval != 0) return;
+	// close failed
+	if (status != SOS_VFS_OK) {
+		dprintf(1, "*** vfs_close_done: can't close file: error code %d\n", status);
+		syscall_reply(tid, status);
+		return;
+	}
 
 	// get file & vnode
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -263,10 +268,12 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int *
 		free(vnode);
 	} else if (vnode == NULL) {
 		dprintf(0, "!!! vfs_close_done: Error closing vnode, already NULL (%d %d, %p, %p, %d)!!!\n",
-				L4_ThreadNo(tid), file, self, vnode, *rval);
+				L4_ThreadNo(tid), file, self, vnode, status);
 	} else {
 		vnode->refcount--;
 	}
+
+	syscall_reply(tid, status);
 }
 
 /* Read from a file */

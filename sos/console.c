@@ -151,34 +151,21 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	open_done(tid, self, mode, SOS_VFS_OK);
 }
 
-static
-void
-console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval), int r) {
-	dprintf(1, "*** console_open_done (%d)\n", *rval);
-
-	*rval = r;
-	close_done(tid, self, file, mode, rval);
-	syscall_reply(tid, *rval);
-}
-
 /* Close a console file */
 void
 console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval)) {
+		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status)) {
 	dprintf(1, "*** console_close: %d\n", file);
 
 	// make sure console exists
 	if (self == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_NOVNODE);
+		close_done(tid, self, file, mode, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_CORVNODE);
+		close_done(tid, self, file, mode, SOS_VFS_CORVNODE);
 		return;
 	}
 
@@ -207,7 +194,7 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		self = NULL;
 	}
 
-	console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_OK);
+	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
 
 /* Read from a console file */
