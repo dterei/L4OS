@@ -4,6 +4,7 @@
 #include "pager.h"
 #include "vfs.h"
 
+#define NIL_PID (-1)
 #define RUN_AS_PROCESS 0
 #define RUN_AS_THREAD 1
 

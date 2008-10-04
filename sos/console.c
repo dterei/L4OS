@@ -21,9 +21,8 @@ typedef struct {
 	char *buf;
 	size_t nbyte;
 	size_t rbyte;
-	int *rval;
 	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval);
+		char *buf, size_t nbyte, int status);
 } Console_ReadRequest;
 
 // struct for storing info about a console file
@@ -151,34 +150,21 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	open_done(tid, self, mode, SOS_VFS_OK);
 }
 
-static
-void
-console_close_finish(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval), int r) {
-	dprintf(1, "*** console_open_done (%d)\n", *rval);
-
-	*rval = r;
-	close_done(tid, self, file, mode, rval);
-	syscall_reply(tid, *rval);
-}
-
 /* Close a console file */
 void
 console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval)) {
+		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status)) {
 	dprintf(1, "*** console_close: %d\n", file);
 
 	// make sure console exists
 	if (self == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_NOVNODE);
+		close_done(tid, self, file, mode, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_CORVNODE);
+		close_done(tid, self, file, mode, SOS_VFS_CORVNODE);
 		return;
 	}
 
@@ -194,7 +180,6 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	if (L4_IsThreadEqual(cf->reader.tid, tid)) {
 		cf->reader.tid = L4_nilthread;
 		cf->reader.buf = NULL;
-		cf->reader.rval = NULL;
 		cf->reader.nbyte = 0;
 		cf->reader.rbyte = 0;
 	}
@@ -207,34 +192,30 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		self = NULL;
 	}
 
-	console_close_finish(tid, self, file, mode, rval, close_done, SOS_VFS_OK);
+	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
 
 /* Read from a console file */
 void
 console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval)) {
+		char *buf, size_t nbyte, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_read: %d, %p, %d from %p\n", file, buf, nbyte, tid.raw);
 
 	// make sure console exists
 	if (self == NULL) {
-		*rval = SOS_VFS_NOVNODE;
-		syscall_reply(tid, *rval);
+		read_done(tid, self, file, pos, buf, 0, SOS_VFS_NOVNODE);
 		return;
 	}
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
-		*rval = SOS_VFS_CORVNODE;
-		syscall_reply(tid, *rval);
+		read_done(tid, self, file, pos, buf, 0, SOS_VFS_CORVNODE);
 		return;
 	}
 
-	// XXX for some reason this causes a page fault
 	if (!L4_IsNilThread(cf->reader.tid)) {
-		*rval = SOS_VFS_ERROR;
-		syscall_reply(tid, *rval);
+		read_done(tid, self, file, pos, buf, 0, SOS_VFS_ERROR);
 		return;
 	}
 
@@ -244,25 +225,21 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	cf->reader.buf = buf;
 	cf->reader.nbyte = nbyte;
 	cf->reader.rbyte = 0;
-	cf->reader.rval = rval;
 	cf->reader.read_done = read_done;
-	*rval = SOS_VFS_OK;
 }
 
 /* Write to a console file */
 void
 console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-			const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
-				VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
-				int *rval)) {
+			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
+				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
 	// because it doesn't like a const
 	// XXX Need to make sure we don't block up sos too long.
 	// either use a thread just for writes or continuations.
-	*rval = network_sendstring_char(nbyte, (char *) buf);
-	write_done(tid, self, file, offset, buf, 0, rval);
-	syscall_reply(tid, *rval);
+	int status = network_sendstring_char(nbyte, (char *) buf);
+	write_done(tid, self, file, offset, buf, 0, status);
 }
 
 /* Get a directory listing */
@@ -321,18 +298,14 @@ serial_read_callback(struct serial *serial, char c) {
 
 	// if new line or buffer full, return
 	if (c == '\n' || rq->rbyte >= rq->nbyte) {
-		*(rq->rval) = rq->rbyte;
-
 		dprintf(2, "*** serial_read_callback: send tid = %d, buf = %p\n, len = %d",
-				L4_ThreadNo(rq->tid), rq->buf, *(rq->rval));
+				L4_ThreadNo(rq->tid), rq->buf, rq->rbyte);
 
-		rq->read_done(rq->tid, NULL, rq->file, 0, rq->buf, 0, rq->rval);
-		syscall_reply(rq->tid, *(rq->rval));
+		rq->read_done(rq->tid, NULL, rq->file, 0, rq->buf, 0, rq->rbyte);
 
 		// remove request now its done
 		rq->tid = L4_nilthread;
 		rq->file = (fildes_t) (-1);
-		rq->rval = NULL;
 		rq->buf = NULL;
 		rq->nbyte = 0;
 		rq->rbyte = 0;

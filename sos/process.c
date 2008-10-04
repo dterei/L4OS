@@ -222,22 +222,27 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 }
 
 pid_t process_get_pid(Process *p) {
+	if (p == NULL) return NIL_PID;
 	return p->info.pid;
 }
 
 L4_ThreadId_t process_get_tid(Process *p) {
+	if (p == NULL) return L4_nilthread;
 	return L4_GlobalId(p->info.pid, 1);
 }
 
 L4_SpaceId_t process_get_sid(Process *p) {
+	if (p == NULL) return L4_nilspace;
 	return L4_SpaceId(process_get_pid(p));
 }
 
 Pagetable *process_get_pagetable(Process *p) {
+	if (p == NULL) return NULL;
 	return p->pagetable;
 }
 
 Region *process_get_regions(Process *p) {
+	if (p == NULL) return NULL;
 	return p->regions;
 }
 
@@ -284,10 +289,17 @@ int process_kill(Process *p) {
 			L4_nilthread, L4_nilthread, 0, NULL);
 
 	// Close all files opened by it
-	int dummy;
-
-	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
-		vfs_close(process_get_tid(p), fd, &dummy);
+	VFile *pfiles = process_get_files(p);
+	if (pfiles == NULL) {
+		dprintf(0, "!!! Process we are trying to kill has NULL open file table (%d)\n",
+				process_get_pid(p));
+	} else {
+		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
+			if (pfiles[fd].vnode != NULL) {
+				vfs_close(process_get_tid(p), fd);
+			}
+		}
+				
 	}
 
 	// Free the used frames, page table, and regions
@@ -331,10 +343,12 @@ int process_write_status(process_t *dest, int n) {
 
 process_t *process_get_info(Process *p) {
 	// If necessary, uptime stime here too
+	if (p == NULL) return NULL;
 	return &p->info;
 }
 
 VFile *process_get_files(Process *p) {
+	if (p == NULL) return NULL;
 	return p->files;
 }
 
