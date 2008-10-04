@@ -195,7 +195,7 @@ void process_prepare(Process *p) {
 	sosProcs[p->info.pid] = p;
 
 	// Necessary?
-	L4_CacheFlushAll();
+	//L4_CacheFlushAll();
 
 	// Open stdout
 	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);

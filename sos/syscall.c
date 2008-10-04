@@ -83,7 +83,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 	char *buf; (void) buf;
 	L4_Word_t word;
 
-	L4_CacheFlushAll();
+	//L4_CacheFlushAll();
 
 	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 

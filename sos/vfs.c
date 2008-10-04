@@ -374,7 +374,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 /* Seek to a position in a file */
 void
 vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
-	dprintf(0, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
+	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", L4_ThreadNo(tid), file, pos, whence);
 
 	// get file
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -394,7 +394,7 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 		return;
 	}
 
-	dprintf(0, "vfs_seek: old fp %d\n", vf->fp);
+	dprintf(1, "vfs_seek: old fp %d\n", vf->fp);
 
 	if (whence == SEEK_SET) {
 		vf->fp = (L4_Word_t) pos;
@@ -406,7 +406,7 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval) {
 		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
 	}
 
-	dprintf(0, "vfs_seek: new fp %d\n", vf->fp);
+	dprintf(1, "vfs_seek: new fp %d\n", vf->fp);
 
 	*rval = SOS_VFS_OK;
 	syscall_reply(tid, *rval);

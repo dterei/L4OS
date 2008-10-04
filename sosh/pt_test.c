@@ -7,7 +7,7 @@
 #include "pt_test.h"
 #include "sosh.h"
 
-#define NUM_SLOTS 4096
+#define NUM_SLOTS 128
 #define SLOTSIZE 196
 #define STACKSIZE 512
 
@@ -20,24 +20,32 @@ int pt_test(int argc, char **argv) {
 
 	// Test heap
 
-	printf("testing heap\n");
+	printf("allocating heap: ");
 
 	buf = (test_t**) malloc(NUM_SLOTS * sizeof(test_t*));
 
 	for (i = 0; i < NUM_SLOTS; i++) {
 		buf[i] = (test_t*) malloc(SLOTSIZE * sizeof(test_t));
 
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+		}
+
 		for (j = 0; j < SLOTSIZE; j++) {
 			buf[i][j] = i*i + j;
 		}
 	}
 
-	printf("done test\n");
+	printf("\ntesting heap: ");
 
 	// Do in two rounds in case memory is going crazy
 
 	for (i = 0; i < NUM_SLOTS; i++) {
 		passed = 1;
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+		}
 
 		for (j = 0; j < SLOTSIZE; j++) {
 			if (buf[i][j] != i*i + j) {
@@ -46,9 +54,9 @@ int pt_test(int argc, char **argv) {
 				passed = 0;
 			}
 		}
-
-		//if (passed) printf("test passed for i=%d\n", i);
 	}
+
+	printf("\n done\n");
 
 	// Test stack
 
