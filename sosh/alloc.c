@@ -22,7 +22,16 @@ int alloc(int argc, char **argv) {
 	sprintf(sbuf, "---> memory for %s allocated at %p (%u)\n",
 			argv[1], buf, (unsigned int) buf);
 	kprint(sbuf);
+	printf(sbuf);
 
+	sprintf(sbuf, "---> memory for %s physically at %p\n",
+			argv[1], (void*) memloc((L4_Word_t) buf));
+	kprint(sbuf);
+	printf(sbuf);
+
+	sprintf(sbuf, "---> stack (%p) is at %p\n",
+			&buf, (void*) memloc((L4_Word_t) &buf));
+	kprint(sbuf);
 	printf(sbuf);
 
 	written = 0;

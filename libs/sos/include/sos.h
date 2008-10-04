@@ -50,6 +50,7 @@ typedef enum {
 	SOS_USLEEP,
 	SOS_MEMUSE,
 	SOS_VPAGER,
+	SOS_MEMLOC,
 	SOS_SHARE_VM,
 	L4_PAGEFAULT = ((L4_Word_t) -2),
 	L4_INTERRUPT = ((L4_Word_t) -1),
@@ -104,7 +105,14 @@ char *syscall_show(syscall_t syscall);
 #define YES_REPLY 1
 #define NO_REPLY 0
 
+/* Prepare for a syscall to be made */
 void syscall_prepare(L4_Msg_t *msg);
+
+/* Make a syscall, with nRvals return value placed in rvals */
+void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
+		L4_Word_t *rvals, int nRvals, L4_Msg_t &msg);
+
+/* An interface to syscall_generic that returns a single value */
 L4_Word_t syscall(L4_ThreadId_t, syscall_t s, int reply, L4_Msg_t *msg);
 
 /* Misc system calls */
@@ -224,6 +232,9 @@ void usleep(int msec);
 
 /* Get the number of frames in use by user processes */
 int memuse(void);
+
+/* Look up the process' page table for a given virtual address */
+L4_Word_t memloc(L4_Word_t addr);
 
 /* Get the threadid of the virtual pager */
 L4_ThreadId_t vpager(void);

@@ -6,7 +6,7 @@
 #include "sosh.h"
 
 #define SIZE 4096
-#define BLOCK 256
+#define BLOCK 512
 
 int memdump(int argc, char **argv) {
 	if (argc < 3) {
@@ -25,7 +25,9 @@ int memdump(int argc, char **argv) {
 
 	fildes_t out = open(argv[2], FM_WRITE);
 
-	int nWritten = 0;
+	// touch it first
+	int nWritten = write(out, dump, BLOCK);
+	printf("physically at %p\n", (void*) memloc((L4_Word_t) dump));
 
 	while (nWritten < SIZE) {
 		nWritten += write(out, dump + nWritten, BLOCK);

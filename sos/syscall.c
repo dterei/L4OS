@@ -197,7 +197,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_PROCESS_CREATE:
-		case SOS_SHARE_VM:
+
 		default:
 			// Unknown system call, so we don't want to reply to this thread
 			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));

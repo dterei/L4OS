@@ -38,6 +38,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_MEMUSE: return "SOS_MEMUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
+		case SOS_MEMLOC: return "SOS_MEMLOC";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 		case L4_PAGEFAULT: return "L4_PAGEFAULT";
 		case L4_INTERRUPT: return "L4_INTERRUPT";
@@ -51,7 +52,8 @@ void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
+void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
+		L4_Word_t *rvals, int nRvals, L4_Msg_t *msg) {
 	L4_MsgTag_t tag;
 
 	L4_Set_MsgLabel(msg, s << MAGIC_THAT_MAKES_LABELS_WORK);
@@ -64,7 +66,16 @@ L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
 	}
 
 	L4_MsgStore(tag, msg);
-	return L4_MsgWord(msg, 0);
+
+	for (int i = 0; i < nRvals; i++) {
+		rvals[i] = L4_MsgWord(msg, 0);
+	}
+}
+
+L4_Word_t syscall(L4_ThreadId_t tid, syscall_t s, int reply, L4_Msg_t *msg) {
+	L4_Word_t rval;
+	syscall_generic(tid, s, reply, &rval, 1, msg);
+	return rval;
 }
 
 void kprint(char *str) {
@@ -348,6 +359,17 @@ int memuse(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 	return syscall(L4_rootserver, SOS_MEMUSE, YES_REPLY, &msg);
+}
+
+L4_Word_t memloc(L4_Word_t addr) {
+	L4_Msg_t msg;
+	L4_Word_t rvals[2];
+
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, addr);
+	syscall_generic(vpager(), SOS_MEMLOC, YES_REPLY, rvals, 2, &msg);
+
+	return rvals[1];
 }
 
 L4_ThreadId_t vpager(void) {

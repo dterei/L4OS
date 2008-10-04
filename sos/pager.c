@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 2
+#define verbose 1
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
@@ -376,12 +376,6 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t vaddr) {
 
 		process_get_info(p)->size++;
 		allocLimit--;
-
-		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
-		*entry &= ~ADDRESS_MASK;
-		*entry |= frame;
-		// TODO cache magic?
-
 		addFrameList(p, vaddr);
 	}
 
@@ -514,18 +508,18 @@ static void pager(PagerRequest *pr) {
 	dprintf(3, "*** pager: entry %p found at %p\n", (void*) *entry, entry);
 
 	if (*entry & ONDISK_MASK) {
-		// on disk, queue a swapin request
+		// On disk, queue a swapin request
 		dprintf(2, "*** pager: page is on disk\n");
 		queueRequest(pr);
 		return;
 	} else if ((frame & ADDRESS_MASK) != 0) {
 		// Already appears in page table as a frame, just got unmapped
+		// (probably to update the refbit)
 		dprintf(3, "*** pager: got unmapped\n");
 	} else if (r->mapDirectly) {
 		// Wants to be mapped directly (code/data probably).
 		dprintf(3, "*** pager: mapping directly\n");
 		frame = addr;
-		*entry = addr;
 	} else {
 		// Didn't appear in frame table so we need to allocate a new one.
 		// However there are potentially no free frames.
@@ -541,13 +535,13 @@ static void pager(PagerRequest *pr) {
 		}
 	}
 
-	*entry |= REFBIT_MASK;
+	*entry = frame | REFBIT_MASK;
 
 	dprintf(3, "*** pager: mapping vaddr=%p pid=%d frame=%p rights=%d\n",
 			(void*) addr, process_get_pid(pr->p), (void*) frame, r->rights);
-
 	mapPage(process_get_sid(pr->p), addr, frame, r->rights);
-	prepareDataOut(pr->p, addr);
+
+	//prepareDataOut(pr->p, addr);
 	//please(L4_CacheFlushRangeInvalidate(process_get_sid(pr->p),
 	//				addr, addr + PAGESIZE));
 
@@ -981,6 +975,11 @@ static void virtualPagerHandler(void) {
 				} else {
 					dprintf(0, "!!! virtualPagerHandler: got reply from user\n");
 				}
+				break;
+
+			case SOS_MEMLOC:
+				syscall_reply(tid, *(pagetableLookup(process_get_pagetable(p),
+								L4_MsgWord(&msg, 0) & PAGEALIGN)));
 				break;
 
 			case L4_EXCEPTION:
