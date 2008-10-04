@@ -29,9 +29,8 @@ void nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 
 /* Write the specified number of bytes from the buffer buf to a given NFS file */
 void nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
-			int *rval));
+		const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
+			fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
 /* Get directory entries of the NFS filesystem */
 void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,

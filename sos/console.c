@@ -231,17 +231,15 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 /* Write to a console file */
 void
 console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-			const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
-				VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
-				int *rval)) {
+			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
+				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
 	// because it doesn't like a const
 	// XXX Need to make sure we don't block up sos too long.
 	// either use a thread just for writes or continuations.
-	*rval = network_sendstring_char(nbyte, (char *) buf);
-	write_done(tid, self, file, offset, buf, 0, rval);
-	syscall_reply(tid, *rval);
+	int status = network_sendstring_char(nbyte, (char *) buf);
+	write_done(tid, self, file, offset, buf, 0, status);
 }
 
 /* Get a directory listing */

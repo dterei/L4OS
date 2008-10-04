@@ -97,8 +97,9 @@ typedef struct {
 	NFS_BaseRequest p;
 	fildes_t file;
 	char *buf;
+	size_t nbyte;
 	void (*write_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-			const char *buf, size_t nbyte, int *rval);
+			const char *buf, size_t nbyte, int status);
 } NFS_WriteRequest;
 
 typedef struct {
@@ -482,9 +483,7 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 	}
 
 	if (status != NFS_OK) {
-		*(rq->p.rval) = SOS_VFS_ERROR;
-		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, rq->p.rval);
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, SOS_VFS_ERROR);
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
@@ -492,25 +491,22 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 	cp_stats(&(rq->p.vnode->vstat), attr);
 
 	// call vfs to handle fp and anything else
-	rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, (size_t) *(rq->p.rval), rq->p.rval);
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, rq->nbyte, rq->nbyte);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Write the specified number of bytes from the buffer buf to a given NFS file */
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
-			int *rval)) {
+		const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
+			fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
 	NFS_File *nf = (NFS_File *) self->extra;	
 	if (nf == NULL) {
 		dprintf(0, "!!! nfsfs_write: Invalid NFS file (p %d, f %d), no nfs struct!\n",
 				L4_ThreadNo(tid), file);
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
+		write_done(tid, self, file, offset, buf, 0, SOS_VFS_NOFILE);
 		return;
 	}
 
@@ -520,13 +516,11 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		nbyte = NFS_BUFSIZ2;
 	}
 
-	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid, rval);
+	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid, NULL);
 	rq->file = file;
 	rq->buf = (char *) buf;
+	rq->nbyte = nbyte;
 	rq->write_done = write_done;
-
-	// Set rval to nbyte already, will reset if error occurs in write_cb
-	*rval = nbyte;
 
 	nfs_write(&(nf->fh), offset, nbyte, rq->buf, write_cb, rq->p.token);
 }
