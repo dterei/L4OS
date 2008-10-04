@@ -31,7 +31,7 @@ static void vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t
 
 /* Handle the file pointer in the file handler */
 static void vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
-		size_t nbyte, int *rval);
+		size_t nbyte, int status);
 
 /* Handle the file pointer in the file handler */
 static void vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
@@ -278,7 +278,7 @@ vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int s
 
 /* Read from a file */
 void
-vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
+vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_read: %d %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
 	// get file
@@ -289,8 +289,7 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	VNode vnode = vf->vnode;
 	if (vnode == NULL) {
 		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_NOFILE);
 		return;
 	}
 
@@ -298,33 +297,43 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte, int *rval) {
 	if (!(vf->fmode & FM_READ)) {
 		dprintf(1, "*** vfs_read: invalid read permissions for file: %d, %d\n",
 				file, vf->fmode);
-		*rval = SOS_VFS_PERM;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_PERM);
 		return;
 	}
 
-	vnode->read(tid, vnode, file, vf->fp, buf, nbyte, rval, vfs_read_done);
+	vnode->read(tid, vnode, file, vf->fp, buf, nbyte, vfs_read_done);
 }
 
-/* Handle the file pointer in the file handler, rval is set already by the fs layer
+/* Handle the file pointer in the file handler, status is set already by the fs layer
  * to the value that should be returned to the user, while nbyte is used to tell
  * the vfs layer how much to change the file pos pointer by. These may differ
- * for special file systems such as console where you never want to chang the
+ * for special file systems such as console where you never want to change the
  * file pos pointer.
  */
 static
 void
 vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
-		size_t nbyte, int *rval) {
-	dprintf(1, "*** vfs_read_done: %d %d %d %p %d %d\n", L4_ThreadNo(tid),
-			L4_ThreadNo(tid), file, buf, nbyte, *rval);
+		size_t nbyte, int status) {
+	dprintf(1, "*** vfs_read_done: %d %d %p %d %d\n", L4_ThreadNo(tid), file, buf,
+			nbyte, status);
 
-	if (*rval < 0) {
+	// check no error
+	if (status < 0) {
+		syscall_reply(tid, status);
 		return;
 	}
 
+	// get structs
 	Process *p = process_lookup(L4_ThreadNo(tid));
-	process_get_files(p)[file].fp += nbyte;
+	VFile *vf = process_get_files(p);
+	if (p == NULL || vf == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
+		return;
+	}
+
+	// update file
+	vf[file].fp += nbyte;
+	syscall_reply(tid, status);
 }
 
 /* Write to a file */

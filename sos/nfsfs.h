@@ -24,8 +24,8 @@ void nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 /* Close a specified file previously opened with nfsfs_open */
 void nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval));
+		char *buf, size_t nbyte, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status));
 
 /* Write the specified number of bytes from the buffer buf to a given NFS file */
 void nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,

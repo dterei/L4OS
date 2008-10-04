@@ -110,7 +110,7 @@ void syscall_prepare(L4_Msg_t *msg);
 
 /* Make a syscall, with nRvals return value placed in rvals */
 void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
-		L4_Word_t *rvals, int nRvals, L4_Msg_t &msg);
+		L4_Word_t *rvals, int nRvals, L4_Msg_t *msg);
 
 /* An interface to syscall_generic that returns a single value */
 L4_Word_t syscall(L4_ThreadId_t, syscall_t s, int reply, L4_Msg_t *msg);

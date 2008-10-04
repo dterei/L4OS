@@ -28,8 +28,8 @@ void console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 
 /* Read from a console file */
 void console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval));
+		char *buf, size_t nbyte, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status));
 
 /* Write to a console file */
 void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
