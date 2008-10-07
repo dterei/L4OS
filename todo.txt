@@ -1,8 +1,3 @@
-- Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
-into the vfs and then handle opening already open vnodes in the vfs layer
-instead of having each fs handle it.
-(Undecided, changes live in vfs-exp branch)
-
 - There is a really weird bug (or otherwise) causing mangled output on the
 computers at uni.  But not on my laptop.  Just run "ps" from sosh.  I hope and
 assume that this is some kind of communication problem (and not from SOS) but
@@ -38,5 +33,6 @@ some way to prevent it from showing up in dirent.  Maybe just hide all hidden
 files, Unix-style.  That's not really a hack (and we could even argue it's a
 policy) but it's pretty restrictive.
 
-- change debugging so that level 0 is only used for critical errors!
+- change debugging so that level 0 is only used for critical errors (also suggest
+use level 1 for quite useful stuff, e.g some things which are currently on level 0).
 
