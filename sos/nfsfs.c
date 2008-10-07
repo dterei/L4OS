@@ -156,6 +156,7 @@ newtoken(void) {
 static
 NFS_BaseRequest *
 create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid) {
+	dprintf(2, "create request: %d %p %d\n", rt, vn, L4_ThreadNo(tid));
 	NFS_BaseRequest *rq;
 
 	switch (rt) {
@@ -393,6 +394,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 	}
 
 	free((NFS_File *) self->extra);
+	self->extra = NULL;
 
 	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
@@ -644,7 +646,7 @@ nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path) {
 
 	if (self != NULL) {
 		// cant remove open files
-		syscall_reply(tid, SOS_VFS_ERROR);
+		syscall_reply(tid, SOS_VFS_OPEN);
 	} else {
 		// remove file
 		NFS_RemoveRequest *rq = (NFS_RemoveRequest *)

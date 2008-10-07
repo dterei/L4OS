@@ -21,7 +21,8 @@ calls since we are not POSIX compliant).
 
 - Support multiple consoles.
 
-- Support directories.
+- Support directories and properly support multiple filesystems properly. Each
+directory basically should be associated somehow with a filesystem.
 
 - Move most of sosh's built in commands to sepperate programs and allow them
 to be killed with CTRL-C.

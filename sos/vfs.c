@@ -95,6 +95,11 @@ remove_vnode(VNode vnode) {
 
 	VNode vp = vnode->previous;
 	VNode vn = vnode->next;
+	
+	if (vnode == NULL) {
+		dprintf(0, "!!! vfs: remove_vnode: NULL node passed in\n");
+		return;
+	}
 
 	if (vp == NULL && vn == NULL) {
 		GlobalVNodes = NULL;
@@ -139,8 +144,10 @@ free_vnode(VNode vnode) {
 	}
 	if (vnode->extra != NULL) {
 		free(vnode->extra);
+		vnode->extra = NULL;
 	}
 	free(vnode);
+	vnode = NULL;
 }
 
 /* Handles updating the ref counts */
@@ -179,12 +186,12 @@ int
 decrease_refs(VNode vnode, fmode_t mode) {
 	// close file for reading
 	if (mode & FM_READ) {
-		vnode->readers++;
+		vnode->readers--;
 	}
 
 	// close file for writing
 	if (mode & FM_WRITE) {
-		vnode->writers++;
+		vnode->writers--;
 	}
 
 	// check refs are consistent
@@ -287,6 +294,10 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	if (fd < 0) {
 		dprintf(1, "*** vfs_open_done: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		decrease_refs(self, mode);
+		if (self->readers <= 0 && self->writers <= 0) {
+			remove_vnode(self);
+			free_vnode(self);
+		}
 		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
@@ -322,6 +333,8 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 
 	decrease_refs(vnode, vf[file].fmode);
 
+	int mode = vf[file].fmode;
+
 	// close file table entry
 	vf[file].vnode = NULL;
 	vf[file].fmode = 0;
@@ -329,7 +342,7 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 
 	// close vnode if no longer referenced
 	if (vnode->readers <= 0 && vnode->writers <= 0) {
-		vnode->close(tid, vnode, file, vf[file].fmode, vfs_close_done);
+		vnode->close(tid, vnode, file, mode, vfs_close_done);
 	} else {
 		syscall_reply(tid, SOS_VFS_OK);
 	}
@@ -341,9 +354,11 @@ void
 vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status) {
 	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, status);
 
-	// close global vnode entry
-	remove_vnode(self);
-	free_vnode(self);
+	if (status == SOS_VFS_OK) {
+		// close global vnode entry
+		remove_vnode(self);
+		free_vnode(self);
+	}
 	syscall_reply(tid, status);
 }
 
@@ -542,6 +557,14 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf) {
 void vfs_remove(L4_ThreadId_t tid, const char *path) {
 	dprintf(1, "*** vfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 	
+	// get file
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *files = process_get_files(p);
+	if (p == NULL || files == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p)\n", p, files);
+		return;
+	}
+
 	// Check open vnodes
 	VNode vnode = find_vnode(path);
 	if (vnode != NULL) {

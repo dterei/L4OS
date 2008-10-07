@@ -23,6 +23,8 @@ int rm(int argc, char **argv) {
 			printf("Can't remove this type of file\n");
 		} else if (r == SOS_VFS_ERROR) {
 			printf("General failure\n");
+		} else if (r == SOS_VFS_OPEN) {
+			printf("File currently open, can't remove!\n");
 		}
 	}
 

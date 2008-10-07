@@ -4,21 +4,24 @@
 
 #define WAIT_FOR (5)
 
+#define verbose 1
+#define dprintf(v, buf) if ((v) < verbose) kprint(buf);
+
 int main(int argc, char *argv[]) {
 	char buf[64];
 
 	sprintf(buf, ">>> memcheck: there are %d frames in use\n", memuse());
-	kprint(buf);
+	dprintf(1, buf);
 
 	sprintf(buf, ">>> memcheck: tid of vpager is %ld\n", L4_ThreadNo(vpager()));
-	kprint(buf);
+	dprintf(1, buf);
 
 	sprintf(buf, ">>> memcheck: waiting for sosh to die\n");
-	kprint(buf);
+	dprintf(1, buf);
 	process_wait(WAIT_FOR);
 
 	sprintf(buf, ">>> memcheck: there are now %d frames in use\n", memuse());
-	kprint(buf);
+	dprintf(1, buf);
 
 	process_delete(my_id());
 	return 0;

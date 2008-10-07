@@ -24,7 +24,8 @@ typedef enum {
 	SOS_VFS_CORVNODE = -8,
 	SOS_VFS_NOTIMP = -9,
 	SOS_VFS_WRITEFULL = -10,
-	SOS_VFS_READFULL = -11
+	SOS_VFS_READFULL = -11,
+	SOS_VFS_OPEN = -12,
 } vfs_return_t;
 
 /* System calls for SOS */
