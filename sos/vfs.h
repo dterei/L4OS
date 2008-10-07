@@ -39,7 +39,7 @@ struct VNode_t {
 
 	void (*stat)(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
-	void (*remove)(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
+	void (*remove)(L4_ThreadId_t tid, VNode self, const char *path);
 };
 
 /* For the PCB */
@@ -85,7 +85,7 @@ void vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte);
 void vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf);
 
 /* Remove a file */
-void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval);
+void vfs_remove(L4_ThreadId_t tid, const char *path);
 
 #endif
 

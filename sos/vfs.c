@@ -16,10 +16,10 @@
  * layer can handle File specific operations such as increasing file pointers,
  * creating and closing files... ect
  *
- * The rval passed through is check to determine the status of the FS operations.
+ * The status passed through is check to determine the status of the FS operations.
  */
 
-/* This callback if rval is zero or greater will create a filehandler for the address space
+/* This callback if status is zero or greater will create a filehandler for the address space
  * specified by tid.
  */
 static void vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
@@ -180,7 +180,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 	}
 }
 
-/* This callback if rval is zero or greater will create a filehandler for the address space
+/* This callback if status is zero or greater will create a filehandler for the address space
  * specified by tid.
  */
 static
@@ -502,7 +502,7 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf) {
 }
 
 /* Remove a file */
-void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval) {
+void vfs_remove(L4_ThreadId_t tid, const char *path) {
 	dprintf(1, "*** vfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 	
 	// Check open vnodes
@@ -514,17 +514,16 @@ void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval) {
 		if (!(vnode->vstat.st_fmode & FM_WRITE)) {
 			dprintf(1, "vnfs_remove: no write permission for file, can't remove (%d)\n",
 					vnode->vstat.st_fmode);
-			*rval = SOS_VFS_PERM;
-			syscall_reply(tid, *rval);
+			syscall_reply(tid, SOS_VFS_PERM);
 			return;
 		}
 
 		// this will fail for nfs and console fs, can only remove non open files.
-		vnode->remove(tid, vnode, path, rval);
+		vnode->remove(tid, vnode, path);
 	}
 	// not open so assume nfs
 	else {
-		nfsfs_remove(tid, NULL, path, rval);
+		nfsfs_remove(tid, NULL, path);
 	}
 }
 

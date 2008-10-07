@@ -265,13 +265,12 @@ console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 
 /* Remove a file */
 void
-console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval) {
+console_remove(L4_ThreadId_t tid, VNode self, const char *path) {
 	dprintf(1, "*** console_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 
 	dprintf(0, "!!! console_remove: Not implemented for console fs\n");
 
-	*rval = SOS_VFS_NOTIMP;
-	syscall_reply(tid, *rval);
+	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* Callback from Serial Library for Reads */

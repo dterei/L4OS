@@ -43,7 +43,7 @@ void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_
 void console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
 /* Remove a file (so does nothing) (UNSUPPORTED) */
-void console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
+void console_remove(L4_ThreadId_t tid, VNode self, const char *path);
 
 #endif /* console.h */
 

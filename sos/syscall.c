@@ -15,12 +15,10 @@
 
 #define verbose 1
 
-static int rval;
-
 void
-syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
+syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 {
-	syscall_reply_m(tid, 1, xval);
+	syscall_reply_m(tid, 1, rval);
 }
 
 void
@@ -81,7 +79,7 @@ int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf; (void) buf;
-	L4_Word_t word;
+	L4_Word_t rval, word;
 
 	//L4_CacheFlushAll();
 
@@ -144,7 +142,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_REMOVE:
-			vfs_remove(tid, pager_buffer(tid), &rval);
+			vfs_remove(tid, pager_buffer(tid));
 			break;
 
 		case SOS_TIME_STAMP:

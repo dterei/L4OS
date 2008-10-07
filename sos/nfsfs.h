@@ -39,7 +39,7 @@ void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t 
 void nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
 /* Remove a file */
-void nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
+void nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path);
 
 #endif
 
