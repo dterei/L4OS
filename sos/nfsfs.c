@@ -371,7 +371,13 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	rq->mode = mode;
 	rq->open_done = open_done;
 
-	nfs_lookup(&nfs_mnt, (char *) path, lookup_cb, rq->p.token);
+	// If open mode is write, then create new file since we want to start again.
+	if (mode & FM_WRITE) {
+		sattr_t sat = DEFAULT_SATTR;
+		nfs_create(&nfs_mnt, rq->p.vnode->path, &sat, lookup_cb, rq->p.token);
+	} else {
+		nfs_lookup(&nfs_mnt, (char *) path, lookup_cb, rq->p.token);
+	}
 }
 
 /* Open a specified file using NFS */
