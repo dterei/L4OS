@@ -34,8 +34,6 @@ static L4_Word_t SlotsFree;
 void
 swapfile_init(void)
 {
-	L4_Msg_t msg;
-
 	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
 	FileSlots = (L4_Word_t *) frame_alloc();
 	NextSlot = 0;
@@ -46,12 +44,6 @@ swapfile_init(void)
 	{
 		FileSlots[i] = j;
 	}
-
-	// remove existing swapfile
-	dprintf(2, "*** swapfile_init: deleting existing swap file\n");
-	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
-	syscall_prepare(&msg);
-	syscall(L4_rootserver, SOS_REMOVE, YES_REPLY, &msg); // might fail, who cares
 
 	swapfile_open();
 }
