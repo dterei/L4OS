@@ -901,7 +901,7 @@ static void demandPager(int vfsRval) {
 			swapoutRequest.offset += SWAP_BUFSIZ; // FIXME use vfsRval
 		}
 	} else {
-		dprintf(0, "*** demandPager: swapin continuation\n");
+		dprintf(3, "*** demandPager: swapin continuation\n");
 
 		// This is part of a swapin continuation
 		assert(requestsHead->offset <= PAGESIZE);
