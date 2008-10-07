@@ -37,11 +37,10 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offse
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
 /* List directory entries of a console file (so does nothing) (UNSUPPORTED) */
-void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-		int *rval);
+void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
 /* Get file information of a console file (so does nothing) (UNSUPPORTED) */
-void console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
+void console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
 /* Remove a file (so does nothing) (UNSUPPORTED) */
 void console_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);

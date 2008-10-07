@@ -545,8 +545,7 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		if (nfile->size + 1 <= rq->nbyte) {
 			strncpy(rq->buf, nfile->file, nfile->size);
 			rq->buf[nfile->size] = '\0';
-			*(rq->p.rval) = nfile->size;
-			syscall_reply(rq->p.tid, *(rq->p.rval));
+			syscall_reply(rq->p.tid, nfile->size);
 			remove_request((NFS_BaseRequest *) rq);
 			return;
 		}
@@ -560,18 +559,16 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 
 	// error case, just return SOS_VFS_OK to say nothing read, its not an error just eof
 	dprintf(2, "nfsfs_getdirent: didnt find file (%d)\n", rq->pos);
-	*(rq->p.rval) = SOS_VFS_EOF;
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	syscall_reply(rq->p.tid, SOS_VFS_EOF);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Get directory entries of the NFS filesystem */
 void
-nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-		int *rval) {
+nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte) {
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %p, %d\n", self, pos, name, nbyte);
 
-	NFS_DirRequest *rq = (NFS_DirRequest *) create_request(RT_DIR, self, tid, rval);
+	NFS_DirRequest *rq = (NFS_DirRequest *) create_request(RT_DIR, self, tid, NULL);
 
 	rq->pos = pos;
 	rq->buf = name;
@@ -595,23 +592,20 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	// fail
 	if (status != NFS_OK) {
-		*(rq->p.rval) = SOS_VFS_ERROR;
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		syscall_reply(rq->p.tid, SOS_VFS_ERROR);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 	// good
 	else {
 		cp_stats(rq->stat, attr);
-		*(rq->p.rval) = SOS_VFS_OK;
-		dprintf(1, "nfsfs_stat_cb: Copied fine, reply to %d, value %d\n", L4_ThreadNo(rq->p.tid), *(rq->p.rval));
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		syscall_reply(rq->p.tid, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
 
 /* Get file details for a specified NFS File */
 void
-nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
+nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 	dprintf(1, "*** nfsfs_stat: %p, %s, %p\n", self, path, buf);
 
 	if (self != NULL) {
@@ -619,14 +613,12 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 		if (nf == NULL) {
 			dprintf(0, "!!! nfsfs_stat: Broken NFS file! No nfs struct! (file %s)\n",
 					path);
-			*rval = SOS_VFS_ERROR;
-			syscall_reply(tid, *rval);
+			syscall_reply(tid, SOS_VFS_ERROR);
 			return;
 		}
 
 		memcpy((void *) buf, (void *) &(self->vstat), sizeof(stat_t));
-		*rval = SOS_VFS_OK;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_OK);
 	}
 	
 	// stat non open file
@@ -634,7 +626,7 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 		dprintf(1, "*** nfsfs_stat: trying to stat non open file! (file %s)\n", path);
 
 		NFS_StatRequest *rq = (NFS_StatRequest *)
-			create_request(RT_STAT, self, tid, rval);
+			create_request(RT_STAT, self, tid, NULL);
 		rq->stat = buf;
 
 		nfs_lookup(&nfs_mnt, (char *) path, stat_cb, rq->p.token);

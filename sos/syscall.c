@@ -128,21 +128,19 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			vfs_lseek(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
 					(fpos_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2),
-					&rval);
+					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
 					(int) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
-					(size_t) L4_MsgWord(msg, 1),
-					&rval);
+					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_STAT:
 			buf = pager_buffer(tid);
-			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1), &rval);
+			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1));
 			break;
 
 		case SOS_REMOVE:

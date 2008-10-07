@@ -244,26 +244,23 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 
 /* Get a directory listing */
 void
-console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-		int *rval) {
+console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte) {
 	dprintf(1, "*** console_getdirent: %d, %s, %d\n", pos, name, nbyte);
 
 	dprintf(0, "!!! console_getdirent: Not implemented for console fs\n");
 
-   *rval = SOS_VFS_NOTIMP;
-	syscall_reply(tid, *rval);
+	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* Stat a file */
 void
-console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
+console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 	dprintf(1, "*** console_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
 			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
 
 	dprintf(0, "!!! console_stat: Not implemented for console fs\n");
 
-   *rval = SOS_VFS_NOTIMP;
-	syscall_reply(tid, *rval);
+	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* Remove a file */

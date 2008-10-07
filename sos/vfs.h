@@ -35,10 +35,9 @@ struct VNode_t {
 			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
-	void (*getdirent)(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-			int *rval);
+	void (*getdirent)(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
-	void (*stat)(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
+	void (*stat)(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
 	void (*remove)(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
 };
@@ -77,13 +76,13 @@ void vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte);
 void vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte);
 
 /* Seek to a position in a file */
-void vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence, int *rval);
+void vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence);
 
 /* Get a directory listing */
-void vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte, int *rval);
+void vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte);
 
 /* Stat a file */
-void vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf, int *rval);
+void vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf);
 
 /* Remove a file */
 void vfs_remove(L4_ThreadId_t tid, const char *path, int *rval);

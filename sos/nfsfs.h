@@ -33,11 +33,10 @@ void nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
 /* Get directory entries of the NFS filesystem */
-void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-		int *rval);
+void nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
 /* Get file details for a specified NFS File */
-void nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval);
+void nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
 /* Remove a file */
 void nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval);
