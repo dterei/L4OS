@@ -12,6 +12,7 @@
 // This assumes that there are 2 free pages on boot
 int swaptest(int argc, char **argv) {
 	char *newArgv[5];
+	char *buf = malloc(sizeof(char) * 20);
 	int target;
 
 	// These will be put in memory as usual
@@ -49,7 +50,8 @@ int swaptest(int argc, char **argv) {
 	rm(2, newArgv);
 
 	newArgv[0] = "memdump";
-	sprintf(newArgv[1], "%u", (unsigned int) target);
+	sprintf(buf, "%u", (unsigned int) target);
+	newArgv[1] = buf;
 	newArgv[2] = "dump";
 	memdump(3, newArgv);
 

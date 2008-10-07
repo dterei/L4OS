@@ -14,6 +14,8 @@ int memdump(int argc, char **argv) {
 		return 1;
 	}
 
+	printf("Start memdump\n");
+
 	char *dump = (char*) (atoi(argv[1]) & ~(SIZE - 1));
 
 	if (dump == NULL) {
