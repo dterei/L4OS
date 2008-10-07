@@ -24,9 +24,7 @@
  */
 static void vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 
-/* This callback will decrease the refcount for the file handler, if the vnode returned is
- * null, then the filehandler is also closed.
- */
+/* This callback will remove the vnode from the global list and reply to the thread */
 static void vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status);
 
 /* Handle the file pointer in the file handler */
@@ -132,17 +130,79 @@ find_vnode(const char *path) {
 	return NULL;
 }
 
+/* Free a vnode */
+static
+void
+free_vnode(VNode vnode) {
+	if (vnode == NULL) {
+		return;
+	}
+	if (vnode->extra != NULL) {
+		free(vnode->extra);
+	}
+	free(vnode);
+}
+
+/* Handles updating the ref counts */
+static
+int
+increase_refs(VNode vnode, fmode_t mode) {
+	// open file for reading
+	if (mode & FM_READ) {
+		// check if reader slots full
+		if (vnode->readers >= vnode->Max_Readers && vnode->Max_Readers != VFS_UNLIMITED_RW) {
+			return SOS_VFS_READFULL;
+		} else {
+			vnode->readers++;
+		}
+	}
+
+	// open file for writing
+	if (mode & FM_WRITE) {
+		// check if writers slots full
+		if (vnode->writers >= vnode->Max_Writers && vnode->Max_Writers != VFS_UNLIMITED_RW) {
+			if (mode & FM_READ) {
+				vnode->readers--;
+			}
+			return SOS_VFS_WRITEFULL;
+		} else {
+			vnode->writers++;
+		}
+	}
+
+	return SOS_VFS_OK;
+}
+
+/* Handles updating the ref counts */
+static
+int
+decrease_refs(VNode vnode, fmode_t mode) {
+	// close file for reading
+	if (mode & FM_READ) {
+		vnode->readers++;
+	}
+
+	// close file for writing
+	if (mode & FM_WRITE) {
+		vnode->writers++;
+	}
+
+	// check refs are consistent
+	if (vnode->readers < 0 || vnode->writers < 0) {
+		dprintf(0, "!!! VNode refs corrupt! (%s) (r %d) (w %d)\n", vnode->path,
+				vnode->readers, vnode->writers);
+	}
+
+	return SOS_VFS_OK;
+}
+
 /* Open a file, in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call.
  */
 void
 vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
-	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid),
-			path, path, mode);
+	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid), path, path, mode);
 	
-	// TODO: Move opening of already open vnode to the vfs layer, requires moving the
-	// max readers and writers variables into the vnode struct rather then console.
-
 	VNode vnode = NULL;
 
 	// get file
@@ -172,36 +232,21 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// Not an open file so open nfs file
 	if (vnode == NULL) {
+		vnode = (VNode) malloc(sizeof(struct VNode_t));
+		if (vnode == NULL) {
+			dprintf(0, "!!! vfs_open: Malloc Failed! cant create new vnode !!!\n");
+			vfs_open_done(tid, vnode, mode, SOS_VFS_NOMEM);
+			return;
+		}
 		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, vfs_open_done);
+		// update global vnode list
+		add_vnode(vnode);
 	}
 
 	// Open file, so handle in just vfs layer
 	else {
-		// open file for reading
-		if (mode & FM_READ) {
-			// check if reader slots full
-			if (vnode->readers > vnode->Max_Readers) {
-				syscall_reply(tid, SOS_VFS_READFULL);
-				return;
-			} else {
-				vnode->readers++;
-			}
-		}
-
-		// open file for writing
-		if (mode & FM_WRITE) {
-			// check if writers slots full
-			if (vnode->writers > vnode->Max_Writers) {
-				if (mode & FM_READ) {
-					vnode->readers--;
-				}
-				syscall_reply(tid, SOS_VFS_WRITEFULL);
-				return;
-			} else {
-				vnode->writers++;
-			}
-		}
+		vfs_open_done(tid, vnode, mode, SOS_VFS_OK);
 	}
 }
 
@@ -228,14 +273,20 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 		return;
 	}
 
+	// increase ref counts (should be zero since its a new vnode)
+	int rval = increase_refs(self, mode);
+	if (rval != SOS_VFS_OK) {
+		dprintf(0, "!!! vfs_open_done: file opened too many times (r %d/%d) (w %d/%d)\n",
+				self->readers, self->Max_Readers, self->writers, self->Max_Writers);
+		syscall_reply(tid, rval);
+		return;
+	}
+
 	// get new fd
 	fildes_t fd = findNextFd(p);
 	if (fd < 0) {
 		dprintf(1, "*** vfs_open_done: thread %d can't open more files!\n", L4_ThreadNo(tid));
-		if (self->extra != NULL) {
-			free(self->extra);
-		}
-		free(self);
+		decrease_refs(self, mode);
 		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
@@ -245,19 +296,6 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	files[fd].fmode = mode;
 	files[fd].fp = 0;
 
-	// update global vnode list if not already on it
-	if (self->next == NULL && self->previous == NULL && self != GlobalVNodes) {
-		dprintf(1, "*** vfs_open_done: add to vnode list (%s), %p, %p, %p, %d\n", self->path,
-				self, self->next, self->previous, fd);
-
-		add_vnode(self);
-	} else {
-		dprintf(1, "*** vfs_open_done: already on vnode list (%s), %p, %p, %p, %d\n", self->path,
-				self, self->next, self->previous, fd);
-	}
-
-	// update vnode refcount
-	self->refcount++;
 	syscall_reply(tid, fd);
 }
 
@@ -266,8 +304,6 @@ void
 vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 	
-	//TODO: Move closing a vnode to the vfs layer (for refcount stuff anyway).
-
 	// get file
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	VFile *vf = process_get_files(p);
@@ -284,54 +320,30 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 		return;
 	}
 
-	// vnode close function is responsible for freeing the node if appropriate
-	// so don't access after a close without checking its not null
-	// try closing vnode;
-	vnode->close(tid, vnode, file, vf[file].fmode, vfs_close_done);
-}
+	decrease_refs(vnode, vf[file].fmode);
 
-/* This callback will decrease the refcount for the file handler, if the vnode returned is
- * null, then the filehandler is also closed.
- */
-static
-void
-vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status) {
-	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, status);
-
-	// get file
-	Process *p = process_lookup(L4_ThreadNo(tid));
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
-
-	// close failed
-	if (status != SOS_VFS_OK) {
-		dprintf(1, "*** vfs_close_done: can't close file: error code %d\n", status);
-		syscall_reply(tid, status);
-		return;
-	}
-
-	// get vnode
-	VNode vnode = vf[file].vnode;
-	
 	// close file table entry
 	vf[file].vnode = NULL;
 	vf[file].fmode = 0;
 	vf[file].fp = 0;
 
-	// close global vnode entry if returned vnode is null
-	if (self == NULL && vnode != NULL) {
-		remove_vnode(vnode);
-		free(vnode);
-	} else if (vnode == NULL) {
-		dprintf(0, "!!! vfs_close_done: Error closing vnode, already NULL (%d %d, %p, %p, %d)!!!\n",
-				L4_ThreadNo(tid), file, self, vnode, status);
+	// close vnode if no longer referenced
+	if (vnode->readers <= 0 && vnode->writers <= 0) {
+		vnode->close(tid, vnode, file, vf[file].fmode, vfs_close_done);
 	} else {
-		vnode->refcount--;
+		syscall_reply(tid, SOS_VFS_OK);
 	}
+}
 
+/* This callback will remove the vnode from the global list and reply to the thread */
+static
+void
+vfs_close_done(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status) {
+	dprintf(1, "*** vfs_close_done: %d %p %d\n", file, self, status);
+
+	// close global vnode entry
+	remove_vnode(self);
+	free_vnode(self);
 	syscall_reply(tid, status);
 }
 

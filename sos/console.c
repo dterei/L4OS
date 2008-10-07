@@ -11,9 +11,6 @@
 // How many consoles we have
 #define NUM_CONSOLES 1
 
-// Unlimited Console readers or writers value
-#define CONSOLE_RW_UNLIMITED ((unsigned int) (-1))
-
 // struct for storing console read requests (continuation struct)
 typedef struct {
 	L4_ThreadId_t tid;
@@ -39,7 +36,7 @@ typedef struct {
 } Console_File;
 
 // The file names of our consoles
-Console_File Console_Files[] = { {NULL, "console", 1, CONSOLE_RW_UNLIMITED } };
+Console_File Console_Files[] = { {NULL, "console", 1, VFS_UNLIMITED_RW } };
 
 // callback for read
 static void serial_read_callback(struct serial *serial, char c);
@@ -106,25 +103,9 @@ console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
 
-	// make sure console exists
-	if (self == NULL) {
-		open_done(tid, self, mode, SOS_VFS_NOVNODE);
-		return;
-	}
+	dprintf(0, "!!! console_open: Not implemented for console fs\n");
 
-	// make sure they passed in the right vnode
-	if (strcmp(self->path, path) != 0) {
-		open_done(tid, self, mode, SOS_VFS_NOVNODE);
-		return;
-	}
-
-	Console_File *cf = (Console_File *) (self->extra);
-	if (cf == NULL) {
-		open_done(tid, self, mode, SOS_VFS_CORVNODE);
-		return;
-	}
-
-	open_done(tid, self, mode, SOS_VFS_OK);
+	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* Close a console file */
@@ -145,31 +126,9 @@ console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		return;
 	}
 
-	// decrease counts
-	if (mode & FM_WRITE) {
-		self->writers--;
-	}
-	if (mode & FM_READ) {
-		self->readers--;
-	}
+	dprintf(0, "!!! console_close: Not implemented for console fs\n");
 
-	// remove it if waiting on read (although shouldnt be able to occur)
-	if (L4_IsThreadEqual(cf->reader.tid, tid)) {
-		cf->reader.tid = L4_nilthread;
-		cf->reader.buf = NULL;
-		cf->reader.nbyte = 0;
-		cf->reader.rbyte = 0;
-	}
-
-	// 'close' vnode if no one has it open
-	if (self->writers <= 0 && self->readers <= 0 && self->refcount == 1) {
-		self->refcount = 0;
-		self->writers = 0;
-		self->readers = 0;
-		self = NULL;
-	}
-
-	close_done(tid, self, file, mode, SOS_VFS_OK);
+	close_done(tid, self, file, mode, SOS_VFS_NOTIMP);
 }
 
 /* Read from a console file */

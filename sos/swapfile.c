@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "swapfile.h"
 
-#define verbose 3
+#define verbose 1
 
 #define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))

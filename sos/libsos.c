@@ -86,12 +86,12 @@ libsos_init(void)
     if (!L4_UtcbIsKernelManaged()) {
         utcb_fpage_s.raw = L4_GetUtcbBits();
         utcb_fpage_s = L4_FpageLog2(utcb_base_s, utcb_fpage_s.raw);
-        dprintf(0, "UTCB at %lx l2sz %lx\n", utcb_base_s, utcb_fpage_s.raw);
+        dprintf(1, "UTCB at %lx l2sz %lx\n", utcb_base_s, utcb_fpage_s.raw);
     }
     else {  // No userland utcb map
         utcb_fpage_s = L4_Nilpage;
         utcb_base_s      = -1UL;
-        dprintf(0, "UTCB under kernel control\n");
+        dprintf(1, "UTCB under kernel control\n");
     }
 
     dprintf(1, "BootInfo at %p\n", __okl4_bootinfo);
@@ -491,9 +491,9 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
-		dprintf(0, "Bootinfo created thread: %d\n", (int) L4_ThreadNo(newtid));
+		dprintf(1, "Bootinfo created thread: %d\n", (int) L4_ThreadNo(newtid));
 	} else {
-		dprintf(0, "Bootinfo failed to create thread: %d\n", newtid.raw);
+		dprintf(1, "Bootinfo failed to create thread: %d\n", newtid.raw);
 		return BI_NAME_INVALID;
 	}
 

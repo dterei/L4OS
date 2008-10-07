@@ -3,6 +3,8 @@
 
 #include <sos/sos.h>
 
+#define VFS_UNLIMITED_RW ((unsigned int) (-1))
+
 /* Simple VFS-style vnode */
 typedef struct VNode_t *VNode;
 
@@ -11,7 +13,6 @@ struct VNode_t {
 	// Properties
 	char path[N_NAME];
 	stat_t vstat;
-	int refcount;
 
 	// Open counters
 	unsigned int Max_Readers;

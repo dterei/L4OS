@@ -43,6 +43,9 @@ nfsfs_timeout_thread(void) {
  */
 #define DEFAULT_SATTR { (438), (0), (0), (0), {(0), (0)}, {(0), (0)} }
 
+#define DEFAULT_MAX_READERS VFS_UNLIMITED_RW
+#define DEFAULT_MAX_WRITERS VFS_UNLIMITED_RW
+
 /* NFS File */
 typedef struct {
 	VNode vnode;
@@ -333,22 +336,17 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	}
 }
 
-/* Handle opening an NFS file */
-static
+/* Open a specified file using NFS */
 void
-getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
+nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
-	dprintf(1, "*** nfsfs_getvnode: %p, %s, %d, %p\n", self, path, mode, open_done);
-
-	self = (VNode) malloc(sizeof(struct VNode_t));
-	if (self == NULL) {
-		dprintf(0, "!!! nfsfs_getvnode: Malloc Failed! cant create new vnode !!!\n");
-		open_done(tid, self, mode, SOS_VFS_NOMEM);
-		return;
-	}
+	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	memcpy( (void *) self->path, (void *) path, N_NAME);
-	self->refcount = 0;
+	self->readers = 0;
+	self->writers = 0;
+	self->Max_Readers = DEFAULT_MAX_READERS;
+	self->Max_Writers = DEFAULT_MAX_WRITERS;
 	self->vstat.st_type = ST_FILE;
 	self->next = NULL;
 	self->previous = NULL;
@@ -380,21 +378,6 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	}
 }
 
-/* Open a specified file using NFS */
-void
-nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
-	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
-
-	if (self == NULL) {
-		dprintf(2, "nfs_open: get new vnode\n");
-		getvnode(tid, self, path, mode, open_done);
-	} else {
-		dprintf(2, "nfs_open: already open vnode, increase refcount\n\n");
-		open_done(tid, self, mode, SOS_VFS_OK);
-	}
-};
-
 /* Close a specified file previously opened with nfsfs_open, don't free the vnode
  * just free nfs specific file structs as vfs will free the vnode
  */
@@ -409,13 +392,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		return;
 	}
 
-	// reduce ref count and free if no longer needed
-	self->refcount--;
-	dprintf(2, "refcount: %d\n", self->refcount);
-	if (self->refcount <= 0) {
-		free((NFS_File *) self->extra);
-		self = NULL;
-	}
+	free((NFS_File *) self->extra);
 
 	close_done(tid, self, file, mode, SOS_VFS_OK);
 }

@@ -99,12 +99,12 @@ network_init(void)
 		 msg = "%s: Error mounting path '%s'!\n";
 	 else
 		 msg = "%s: Successfully mounted '%s'\n";
-	 printf(msg, __FUNCTION__, NFS_DIR);
+	 dprintf(1, msg, __FUNCTION__, NFS_DIR);
 
 	 // Initialise the serial driver
 	 serial = serial_init();
 
-    printf("Finished %s\n\n", __FUNCTION__);
+    dprintf(1, "Finished %s\n\n", __FUNCTION__);
 }
 
 int
