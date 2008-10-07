@@ -24,7 +24,10 @@ int cat(int argc, char **argv) {
 
 	while ((num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
 		buf[num_read] = '\0';
-		printf("%s", buf);
+		// print char by char as printf has a bug printing some of the weirder chars
+		for (int i = 0; i < num_read; i++) {
+			printf("%c", buf[i]);
+		}
 	}
 
 	close(fd);

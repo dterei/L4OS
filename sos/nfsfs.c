@@ -347,7 +347,7 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		return;
 	}
 
-	strncpy(self->path, path, N_NAME);
+	memcpy( (void *) self->path, (void *) path, N_NAME);
 	self->refcount = 0;
 	self->vstat.st_type = ST_FILE;
 	self->next = NULL;
@@ -547,7 +547,7 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		dprintf(2, "found file, getting now\n");
 		struct nfs_filename *nfile = &filenames[rq->pos - rq->cpos];
 		if (nfile->size + 1 <= rq->nbyte) {
-			strncpy(rq->buf, nfile->file, nfile->size);
+			memcpy( (void *) rq->buf, (void *) nfile->file, nfile->size);
 			rq->buf[nfile->size] = '\0';
 			syscall_reply(rq->p.tid, nfile->size);
 			remove_request((NFS_BaseRequest *) rq);
