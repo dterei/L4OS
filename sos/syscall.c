@@ -24,6 +24,13 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 void
 syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 {
+	// make sure process/thread still exists
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	if (p == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n", process_get_pid(p));
+		return;
+	}
+
 	assert(!L4_IsThreadEqual(tid, L4_rootserver));
 	L4_MsgTag_t tag;
 
