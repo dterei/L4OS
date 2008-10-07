@@ -1,10 +1,14 @@
 #ifndef _SOSH_H_
 #define _SOSH_H_
 
-#define BUF_SIZ 256
+#include <sos/globals.h>
+
+#define BUF_SIZ IO_MAX_BUFFER
 #define MAX_ARGS 32
 #define MAX_PROCESSES 10
 
 #define verbose 0
+
+extern fildes_t in;
 
 #endif // sos/sosh.h

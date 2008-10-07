@@ -83,7 +83,7 @@ typedef long time_t;
 
 #ifndef _PID_T
 #define _PID_T
-typedef unsigned int pid_t;
+typedef int pid_t;
 #endif
 
 #ifndef _INO_T

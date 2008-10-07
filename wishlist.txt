@@ -15,3 +15,22 @@ more system calls).  Like red.
 
 - Kernel VM 
 
+- Port a unix tool to our OS to prove its robustness. (e.g grep or something
+similar which should be complicated in function but not use to many system
+calls since we are not POSIX compliant).
+
+- Support multiple consoles.
+
+- Support directories.
+
+- Move most of sosh's built in commands to sepperate programs and allow them
+to be killed with CTRL-C.
+
+- Have a hard code stable program which runs and is responsible for spawning sosh.
+If sosh crashes, it starts it up again... 
+
+- Support file modes. At moment don't support append, opening files in write mode
+always truncates any existing file to zero... ect.
+
+- Banner
+

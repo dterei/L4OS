@@ -18,11 +18,13 @@
 
 #include "constants.h"
 
-#define L4_PAGEFAULT	((L4_Word_t) -2)
-#define L4_INTERRUPT	((L4_Word_t) -1)
-#define L4_EXCEPTION ((L4_Word_t) -5)
-
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
+
+#define please(expr)\
+	if (!(expr)) {\
+		printf("%s line %d failed: ", __FUNCTION__, __LINE__);\
+		sos_print_error(L4_ErrorCode());\
+	}\
 
 // Bootinfo required callbacks
 bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,

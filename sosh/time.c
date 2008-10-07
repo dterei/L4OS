@@ -7,7 +7,7 @@
 #include "sosh.h"
 
 int time(int argc, char **argv) {
-	long int start = 0, finish = 0;
+	uint64_t start = 0, finish = 0;
 
 	if (argc < 2) {
 		printf("Usage: time cmd [args]\n");
@@ -19,7 +19,7 @@ int time(int argc, char **argv) {
 			start = uptime();
 			sosh_commands[i].command(argc - 1, argv + 1);
 			finish = uptime();
-			printf("*******\n%ld us\n", finish - start);
+			printf("*******\n%llu us\n", finish - start);
 			return 0;
 		}
 	}

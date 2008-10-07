@@ -6,6 +6,7 @@
 #include "libsos.h"
 #include "network.h"
 #include "syscall.h"
+#include "constants.h"
 
 #define verbose 1
 
@@ -31,7 +32,6 @@ nfsfs_timeout_thread(void) {
 
 
 /******** NFS FS ********/
-#define NFS_BUFSIZ 500 /* Keep this value in sync with UDP_PACKETSIZE */
 #define NULL_TOKEN ((uintptr_t) (-1))
 
 /*
@@ -47,7 +47,6 @@ nfsfs_timeout_thread(void) {
 typedef struct {
 	VNode vnode;
 	struct cookie fh;
-	fattr_t attr;
 } NFS_File;
 
 /* Types of NFS request, used for continuations until callbacks */
@@ -71,7 +70,6 @@ struct NFS_BaseRequest_t {
 	uintptr_t token;
 	VNode vnode;
 	L4_ThreadId_t tid;
-	int *rval;
 
 	NFS_BaseRequest *previous;
 	NFS_BaseRequest *next;
@@ -80,7 +78,7 @@ struct NFS_BaseRequest_t {
 typedef struct {
 	NFS_BaseRequest p;
 	fmode_t mode;
-	void (*open_done) (L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode, int *rval);
+	void (*open_done) (L4_ThreadId_t tid, VNode self, fmode_t mode, int status);
 } NFS_LookupRequest;
 
 /* Could combine read and write since are the same, but prefer separate for
@@ -91,15 +89,16 @@ typedef struct {
 	fildes_t file;
 	char *buf;
 	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
-			size_t nbyte, int *rval);
+			size_t nbyte, int status);
 } NFS_ReadRequest;
 
 typedef struct {
 	NFS_BaseRequest p;
 	fildes_t file;
 	char *buf;
+	size_t nbyte;
 	void (*write_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-			const char *buf, size_t nbyte, int *rval);
+			const char *buf, size_t nbyte, int status);
 } NFS_WriteRequest;
 
 typedef struct {
@@ -153,43 +152,42 @@ newtoken(void) {
 /* Create a new NFS request of type specified */
 static
 NFS_BaseRequest *
-create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid, int *rval) {
-	//XXX: Check for malloc fail!
+create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid) {
 	NFS_BaseRequest *rq;
+
 	switch (rt) {
 		case RT_LOOKUP:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_LookupRequest));
-			rq->rt = RT_LOOKUP;
 			break;
 		case RT_READ:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_ReadRequest));
-			rq->rt = RT_READ;
 			break;
 		case RT_WRITE:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_WriteRequest));
-			rq->rt = RT_WRITE;
 			break;
 		case RT_STAT:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_StatRequest));
-			rq->rt = RT_STAT;
 			break;
 		case RT_DIR:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_DirRequest));
-			rq->rt = RT_DIR;
 			break;
 		case RT_REMOVE:
 			rq = (NFS_BaseRequest *) malloc(sizeof(NFS_RemoveRequest));
-			rq->rt = RT_REMOVE;
 			break;
 		default:
 			dprintf(0, "!!! nfsfs_create_request: invalid request type %d\n", rt);
 			return NULL;
 	}
 
+	if (rq == NULL) {
+		dprintf(0, "!!! nfsfs_create_request: Malloc failed! (type %d)\n", rt);
+		return NULL;
+	}
+
+	rq->rt = rt;
 	rq->token = newtoken();
 	rq->vnode = vn;
 	rq->tid = tid;
-	rq->rval = rval;
 
 	rq->next = NULL;
 	rq->previous = NULL;
@@ -271,6 +269,26 @@ get_request(uintptr_t token) {
 	return NULL;
 }
 
+/* Convert the NFS mode (xwr) to unix mode (rwx) */
+static fmode_t
+mode_nfs2unix(fmode_t mode) {
+	return
+		(((mode & 0x1) >> 0) << 2) |
+		(((mode & 0x4) >> 2) << 1) |
+		(((mode & 0x2) >> 1) << 0);
+}
+
+/* Copy the relavent entriees from attr to buf */
+static
+void
+cp_stats(stat_t *stat, fattr_t *attr) {
+	stat->st_type  = attr->type;
+	stat->st_fmode = mode_nfs2unix(attr->mode);
+	stat->st_size  = attr->size;
+	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
+	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+}
+
 /* NFS_LookUp Callback */
 static
 void 
@@ -287,11 +305,9 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	if (status == NFS_OK) {
 		NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
 		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
-		memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
+		cp_stats(&(rq->p.vnode->vstat), attr);
 		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->p.tid));
-		*(rq->p.rval) = SOS_VFS_OK;
-		rq->open_done(rq->p.tid, rq->p.vnode, rq->p.vnode->path, rq->mode, rq->p.rval);
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 
@@ -309,11 +325,10 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		free((NFS_File *) rq->p.vnode->extra);
 		free(rq->p.vnode);
 		if (status == NFSERR_NOENT) {
-			*(rq->p.rval) = SOS_VFS_NOVNODE;
+			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_NOVNODE);
 		} else {
-			*(rq->p.rval) = SOS_VFS_ERROR;
+			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_ERROR);
 		}
-		syscall_reply(rq->p.tid, *(rq->p.rval));
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
@@ -322,18 +337,17 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 static
 void
 getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval)) {
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_getvnode: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	self = (VNode) malloc(sizeof(struct VNode_t));
 	if (self == NULL) {
 		dprintf(0, "!!! nfsfs_getvnode: Malloc Failed! cant create new vnode !!!\n");
-		*rval = SOS_VFS_NOMEM;
-		syscall_reply(tid, *rval);
+		open_done(tid, self, mode, SOS_VFS_NOMEM);
+		return;
 	}
 
-	strncpy(self->path, path, N_NAME);
+	memcpy( (void *) self->path, (void *) path, N_NAME);
 	self->refcount = 0;
 	self->vstat.st_type = ST_FILE;
 	self->next = NULL;
@@ -352,29 +366,32 @@ getvnode(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->remove = nfsfs_remove;
 
 	NFS_LookupRequest *rq = (NFS_LookupRequest *)
-		create_request(RT_LOOKUP, self, tid, rval);
+		create_request(RT_LOOKUP, self, tid);
 
 	rq->mode = mode;
 	rq->open_done = open_done;
 
-	nfs_lookup(&nfs_mnt, (char *) path, lookup_cb, rq->p.token);
+	// If open mode is write, then create new file since we want to start again.
+	if (mode & FM_WRITE) {
+		sattr_t sat = DEFAULT_SATTR;
+		nfs_create(&nfs_mnt, rq->p.vnode->path, &sat, lookup_cb, rq->p.token);
+	} else {
+		nfs_lookup(&nfs_mnt, (char *) path, lookup_cb, rq->p.token);
+	}
 }
 
 /* Open a specified file using NFS */
 void
 nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
-		int *rval, void (*open_done)(L4_ThreadId_t tid, VNode self,
-			const char *path, fmode_t mode, int *rval)) {
+		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 
 	if (self == NULL) {
 		dprintf(2, "nfs_open: get new vnode\n");
-		getvnode(tid, self, path, mode, rval, open_done);
+		getvnode(tid, self, path, mode, open_done);
 	} else {
 		dprintf(2, "nfs_open: already open vnode, increase refcount\n\n");
-		*rval = SOS_VFS_OK;
-		open_done(tid, self, path, mode, rval);
-		syscall_reply(tid, *rval);
+		open_done(tid, self, mode, SOS_VFS_OK);
 	}
 };
 
@@ -383,15 +400,12 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
  */
 void
 nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-		int *rval, void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
-			int *rval)) {
+		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_close: %p, %d, %d, %p\n", self, file, mode, close_done);
 
 	if (self == NULL) {
 		dprintf(0, "!!! nfsfs_close: Trying to close null file!\n");
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
-		close_done(tid, self, file, mode, rval);
+		close_done(tid, self, file, mode, SOS_VFS_NOFILE);
 		return;
 	}
 
@@ -403,9 +417,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		self = NULL;
 	}
 
-	*rval = SOS_VFS_OK;
-	syscall_reply(tid, *rval);
-	close_done(tid, self, file, mode, rval);
+	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
 
 /* NFS callback for nfs_read */
@@ -421,49 +433,40 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	}
 
 	if (status != NFS_OK) {
-		free((NFS_File *) rq->p.vnode->extra);
-		free(rq->p.vnode);
-		*(rq->p.rval) = SOS_VFS_ERROR;
-		rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, rq->p.rval);
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, SOS_VFS_ERROR);
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
 
-	NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
-
-	memcpy((void *) &(nf->attr), (void *) attr, sizeof(fattr_t));
-	strncpy(rq->buf, data, bytes_read);
-	*(rq->p.rval) = bytes_read;
+	memcpy((void *) rq->buf, (void *) data, bytes_read);
+	cp_stats(&(rq->p.vnode->vstat), attr);
 
 	// call vfs to handle fp and anything else
-	rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, bytes_read, rq->p.rval);
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, bytes_read, bytes_read);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Read a specified number of bytes into a buffer from the given NFS file */
 void
 nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
-		char *buf, size_t nbyte, int *rval, void (*read_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int *rval)) {
+		char *buf, size_t nbyte, void (*read_done)(L4_ThreadId_t tid,
+			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
 	NFS_File *nf = (NFS_File *) self->extra;	
 	if (nf == NULL) {
 		dprintf(0, "!!! nfsfs_read: Invalid NFS file (p %d, f %d), no nfs struct!\n",
 				L4_ThreadNo(tid), file);
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
+		read_done(tid, self, file, pos, buf, 0, SOS_VFS_NOFILE);
 		return;
 	}
 
-	if (nbyte >= NFS_BUFSIZ) {
+	if (nbyte > NFS_BUFSIZ2) {
 		dprintf(1, "tried to read too much data at once: %d\n", nbyte);
-		nbyte = NFS_BUFSIZ - 1;
+		nbyte = NFS_BUFSIZ2;
 	}
 
-	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid, rval);
+	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid);
 	rq->file = file;
 	rq->buf = buf;
 	rq->read_done = read_done;
@@ -484,51 +487,44 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 	}
 
 	if (status != NFS_OK) {
-		free((NFS_File *) rq->p.vnode->extra);
-		free(rq->p.vnode);
-		*(rq->p.rval) = SOS_VFS_ERROR;
-		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, rq->p.rval);
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, SOS_VFS_ERROR);
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
 
+	cp_stats(&(rq->p.vnode->vstat), attr);
+
 	// call vfs to handle fp and anything else
-	rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, (size_t) *(rq->p.rval), rq->p.rval);
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, rq->nbyte, rq->nbyte);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Write the specified number of bytes from the buffer buf to a given NFS file */
 void
 nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
-		const char *buf, size_t nbyte, int *rval, void (*write_done)(L4_ThreadId_t tid,
-			VNode self, fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte,
-			int *rval)) {
+		const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
+			fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** nfsfs_write: %p, %d, %d, %p, %d\n", self, file, offset, buf, nbyte);
 
 	NFS_File *nf = (NFS_File *) self->extra;	
 	if (nf == NULL) {
 		dprintf(0, "!!! nfsfs_write: Invalid NFS file (p %d, f %d), no nfs struct!\n",
 				L4_ThreadNo(tid), file);
-		*rval = SOS_VFS_NOFILE;
-		syscall_reply(tid, *rval);
+		write_done(tid, self, file, offset, buf, 0, SOS_VFS_NOFILE);
 		return;
 	}
 
-	if (nbyte >= NFS_BUFSIZ) {
+	if (nbyte > NFS_BUFSIZ2) {
 		dprintf(1, "!!! nfsfs_write: request too large! (tid %d) (file %d) (size %d) (max %d)!\n",
-				L4_ThreadNo(tid), file, nbyte, NFS_BUFSIZ);
-		nbyte = NFS_BUFSIZ - 1;
+				L4_ThreadNo(tid), file, nbyte, NFS_BUFSIZ2);
+		nbyte = NFS_BUFSIZ2;
 	}
 
-	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid, rval);
+	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid);
 	rq->file = file;
 	rq->buf = (char *) buf;
+	rq->nbyte = nbyte;
 	rq->write_done = write_done;
-
-	// Set rval to nbyte already, will reset if error occurs in write_cb
-	*rval = nbyte;
 
 	nfs_write(&(nf->fh), offset, nbyte, rq->buf, write_cb, rq->p.token);
 }
@@ -551,10 +547,9 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		dprintf(2, "found file, getting now\n");
 		struct nfs_filename *nfile = &filenames[rq->pos - rq->cpos];
 		if (nfile->size + 1 <= rq->nbyte) {
-			strncpy(rq->buf, nfile->file, nfile->size);
+			memcpy( (void *) rq->buf, (void *) nfile->file, nfile->size);
 			rq->buf[nfile->size] = '\0';
-			*(rq->p.rval) = nfile->size;
-			syscall_reply(rq->p.tid, *(rq->p.rval));
+			syscall_reply(rq->p.tid, nfile->size);
 			remove_request((NFS_BaseRequest *) rq);
 			return;
 		}
@@ -562,51 +557,29 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		// need later directory entry
 		dprintf(2, "Need more dir entries to get file\n");
 		rq->cpos += num_entries;
-		nfs_readdir(&nfs_mnt, next_cookie, NFS_BUFSIZ, getdirent_cb, rq->p.token);
+		nfs_readdir(&nfs_mnt, next_cookie, NFS_BUFSIZ2, getdirent_cb, rq->p.token);
 		return;
 	}
 
 	// error case, just return SOS_VFS_OK to say nothing read, its not an error just eof
 	dprintf(2, "nfsfs_getdirent: didnt find file (%d)\n", rq->pos);
-	*(rq->p.rval) = SOS_VFS_EOF;
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	syscall_reply(rq->p.tid, SOS_VFS_EOF);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Get directory entries of the NFS filesystem */
 void
-nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte,
-		int *rval) {
+nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte) {
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %p, %d\n", self, pos, name, nbyte);
 
-	NFS_DirRequest *rq = (NFS_DirRequest *) create_request(RT_DIR, self, tid, rval);
+	NFS_DirRequest *rq = (NFS_DirRequest *) create_request(RT_DIR, self, tid);
 
 	rq->pos = pos;
 	rq->buf = name;
 	rq->nbyte = nbyte;
 	rq->cpos = 0;
 
-	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ, getdirent_cb, rq->p.token);
-}
-
-/* Convert the NFS mode (xwr) to unix mode (rwx) */
-static fmode_t
-mode_nfs2unix(fmode_t mode) {
-	return
-		(((mode & 0x1) >> 0) << 2) |
-		(((mode & 0x4) >> 2) << 1) |
-		(((mode & 0x2) >> 1) << 0);
-}
-
-/* Copy the relavent entriees from attr to buf */
-static
-void
-cp_stats(stat_t *stat, fattr_t *attr) {
-	stat->st_type  = attr->type;
-	stat->st_fmode = mode_nfs2unix(attr->mode);
-	stat->st_size  = attr->size;
-	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
-	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ2, getdirent_cb, rq->p.token);
 }
 
 /* NFS Callback for NFS_Stat */
@@ -623,22 +596,20 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	// fail
 	if (status != NFS_OK) {
-		*(rq->p.rval) = SOS_VFS_ERROR;
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		syscall_reply(rq->p.tid, SOS_VFS_ERROR);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 	// good
 	else {
 		cp_stats(rq->stat, attr);
-		*(rq->p.rval) = SOS_VFS_OK;
-		syscall_reply(rq->p.tid, *(rq->p.rval));
+		syscall_reply(rq->p.tid, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
 
 /* Get file details for a specified NFS File */
 void
-nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rval) {
+nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 	dprintf(1, "*** nfsfs_stat: %p, %s, %p\n", self, path, buf);
 
 	if (self != NULL) {
@@ -646,14 +617,12 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 		if (nf == NULL) {
 			dprintf(0, "!!! nfsfs_stat: Broken NFS file! No nfs struct! (file %s)\n",
 					path);
-			*rval = SOS_VFS_ERROR;
-			syscall_reply(tid, *rval);
+			syscall_reply(tid, SOS_VFS_ERROR);
 			return;
 		}
 
-		cp_stats(buf, &(nf->attr));
-		*rval = SOS_VFS_OK;
-		syscall_reply(tid, *rval);
+		memcpy((void *) buf, (void *) &(self->vstat), sizeof(stat_t));
+		syscall_reply(tid, SOS_VFS_OK);
 	}
 	
 	// stat non open file
@@ -661,7 +630,7 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf, int *rv
 		dprintf(1, "*** nfsfs_stat: trying to stat non open file! (file %s)\n", path);
 
 		NFS_StatRequest *rq = (NFS_StatRequest *)
-			create_request(RT_STAT, self, tid, rval);
+			create_request(RT_STAT, self, tid);
 		rq->stat = buf;
 
 		nfs_lookup(&nfs_mnt, (char *) path, stat_cb, rq->p.token);
@@ -680,29 +649,29 @@ remove_cb(uintptr_t token, int status) {
 		return;
 	}
 
+	// set to our status
 	if (status == NFS_OK) {
-		*(rq->p.rval) = SOS_VFS_OK;
+		status = SOS_VFS_OK;
 	} else {
-		*(rq->p.rval) = SOS_VFS_ERROR;
+		status = SOS_VFS_ERROR;
 	}
 
-	syscall_reply(rq->p.tid, *(rq->p.rval));
+	syscall_reply(rq->p.tid, status);
 	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Remove a file */
 void
-nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path, int *rval) {
+nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path) {
 	dprintf(1, "*** nfsfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 
 	if (self != NULL) {
 		// cant remove open files
-		*rval = SOS_VFS_ERROR;
-		syscall_reply(tid, *rval);
+		syscall_reply(tid, SOS_VFS_ERROR);
 	} else {
 		// remove file
 		NFS_RemoveRequest *rq = (NFS_RemoveRequest *)
-			create_request(RT_REMOVE, self, tid, rval);
+			create_request(RT_REMOVE, self, tid);
 		rq->path = path;
 		nfs_remove(&nfs_mnt, (char *) path, remove_cb, rq->p.token);
 	}

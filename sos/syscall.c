@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include <clock/clock.h>
 #include <sos/sos.h>
 
@@ -11,13 +13,24 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 2
-
-static int rval;
+#define verbose 1
 
 void
-syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
+syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 {
+	syscall_reply_m(tid, 1, rval);
+}
+
+void
+syscall_reply_m(L4_ThreadId_t tid, int count, ...)
+{
+	// make sure process/thread still exists
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	if (p == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n", process_get_pid(p));
+		return;
+	}
+
 	assert(!L4_IsThreadEqual(tid, L4_rootserver));
 	L4_MsgTag_t tag;
 
@@ -25,16 +38,26 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);
-	L4_MsgAppendWord(&msg, rval);
-	L4_MsgAppendWord(&msg, xval);
 	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
+
+	va_list va;
+	va_start(va, count);
+	L4_Word_t w;
+	for (int i = 0; i < count; i++) {
+		w = va_arg(va, L4_Word_t);
+		L4_MsgAppendWord(&msg, w);
+	}
+	va_end(va);
+
 	L4_MsgLoad(&msg);
 
-	if (L4_IsThreadEqual(tid, virtual_pager)) {
+	int send = L4_IsThreadEqual(tid, virtual_pager);
+
+	if (send) {
 		// this isn't a very nice way of doing it, but all calls to the pager
 		// need to be sent (since they are nonblocking).  ideally this will
 		// be set up by the caller not as a hack to syscall_reply.
-		dprintf(1, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
+		dprintf(2, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
 		tag = L4_Send(tid);
 	} else {
 		dprintf(2, "*** syscall_reply: reply to %ld\n", L4_ThreadNo(tid));
@@ -42,7 +65,8 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t xval)
 	}
 
 	if (L4_IpcFailed(tag)) {
-		dprintf(0, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
+		dprintf(1, "!!! syscall_reply (%s) to %ld failed: ",
+				send ? "send" : "reply", L4_ThreadNo(tid));
 		sos_print_error(L4_ErrorCode());
 	}
 }
@@ -62,9 +86,9 @@ int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf; (void) buf;
-	L4_Word_t word;
+	L4_Word_t rval, word;
 
-	L4_CacheFlushAll();
+	//L4_CacheFlushAll();
 
 	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
@@ -83,72 +107,55 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
 			break;
 
-		case SOS_COPYIN:
-			copyIn(tid,
-					(void*) L4_MsgWord(msg, 0),
-					(size_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2));
-			break;
-
-		case SOS_COPYOUT:
-			copyOut(tid,
-					(void*) L4_MsgWord(msg, 0),
-					(size_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2));
-			break;
-
 		case SOS_OPEN:
-			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0), &rval);
+			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0));
 			break;
 
 		case SOS_CLOSE:
-			vfs_close(tid, (fildes_t) L4_MsgWord(msg, 0), &rval);
+			vfs_close(tid, (fildes_t) L4_MsgWord(msg, 0));
 			break;
 
 		case SOS_READ:
 			vfs_read(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
-					(size_t) L4_MsgWord(msg, 1),
-					&rval);
+					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_WRITE:
 			vfs_write(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
-					(size_t) L4_MsgWord(msg, 1),
-					&rval);
+					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_LSEEK:
 			vfs_lseek(tid,
 					(fildes_t) L4_MsgWord(msg, 0),
 					(fpos_t) L4_MsgWord(msg, 1),
-					(int) L4_MsgWord(msg, 2),
-					&rval);
+					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_GETDIRENT:
 			vfs_getdirent(tid,
 					(int) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
-					(size_t) L4_MsgWord(msg, 1),
-					&rval);
+					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_STAT:
 			buf = pager_buffer(tid);
-			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1), &rval);
+			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1));
 			break;
 
 		case SOS_REMOVE:
-			vfs_remove(tid, pager_buffer(tid), &rval);
+			vfs_remove(tid, pager_buffer(tid));
 			break;
 
 		case SOS_TIME_STAMP:
 			rval = (L4_Word_t) time_stamp();
-			syscall_reply(tid, rval);
+			word = (L4_Word_t) (time_stamp() >> 32);
+			syscall_reply_m(tid, 2, rval, word);
 			break;
 
 		case SOS_USLEEP:
@@ -191,7 +198,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_PROCESS_CREATE:
-		case SOS_SHARE_VM:
+
 		default:
 			// Unknown system call, so we don't want to reply to this thread
 			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
