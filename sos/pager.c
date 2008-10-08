@@ -512,7 +512,7 @@ static int pagerAction(PagerRequest *pr) {
 
 	if (r == NULL) {
 		printf("Segmentation fault\n");
-		process_kill(p);
+		process_delete(process_get_pid(p));
 		return 0;
 	}
 
