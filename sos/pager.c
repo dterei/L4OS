@@ -1001,9 +1001,10 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case L4_EXCEPTION:
-				dprintf(0, "exception: ip=%lx, sp=%lx\ncpsr=%lx\nexception=%lx, cause=%lx\n\n",
-						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1), L4_MsgWord(&msg, 2),
-						L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
+				dprintf(0, "!!! virtualPagerHandler exception: ip=%lx, sp=%lx\n",
+						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+				dprintf(0, "    cpsr=%lx exception=%lx, cause=%lx\n",
+						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
 				break;
 
 			default:
