@@ -26,19 +26,6 @@
 		sos_print_error(L4_ErrorCode());\
 	}\
 
-// Bootinfo required callbacks
-bi_name_t bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
-		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
-		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data);
-int bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
-		const bi_user_data_t * data);
-bi_name_t bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
-		const bi_user_data_t * data);
-bi_name_t bootinfo_new_pool(int is_virtual, const bi_user_data_t * data);
-bi_name_t bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data);
-int bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data);
-int bootinfo_cleanup(const bi_user_data_t *data);
-
 // Clear the message registers.  Useful to use before an L4_Reply()
 void msgClearWith(L4_Word_t x);
 
@@ -59,7 +46,7 @@ void msgClearWith(L4_Word_t x);
 // early in the startup of your rootserver.  No other functions within libsos
 // can be called before init.
 //
-extern int libsos_init(void);
+int libsos_init(void);
 
 //
 // sos_find_memory
@@ -71,11 +58,11 @@ extern int libsos_init(void);
 // that the addresses returned are physical and have not yet been mapped into
 // the sos address space.
 //
-extern void sos_find_memory(L4_Word_t *lowP, L4_Word_t *highP);
+void sos_find_memory(L4_Word_t *lowP, L4_Word_t *highP);
 
 // sos_start_binfo_executables
 // launches executables listed in the bootinfo
-extern void sos_start_binfo_executables(void *userstack);
+void sos_start_binfo_executables(void);
 
 //
 // sos_logf(const char *msg, ...)
@@ -89,10 +76,10 @@ extern void sos_start_binfo_executables(void *userstack);
 // range of memory in reverse, the same way that the L4 manual documents these
 // structures.  Useful for debugging protocol messages.
 //
-extern void sos_print_fpage(L4_Fpage_t fpage);	// print fpage
-extern void sos_print_error(L4_Word_t ec);	// print l4 error
-extern void sos_print_l4memory(void *addr, L4_Word_t len);
-extern void sos_logf(const char *msg, ...);
+void sos_print_fpage(L4_Fpage_t fpage);	// print fpage
+void sos_print_error(L4_Word_t ec);	// print l4 error
+void sos_print_l4memory(void *addr, L4_Word_t len);
+void sos_logf(const char *msg, ...);
 
 //
 // sos_get_new_tid(void)
@@ -132,9 +119,9 @@ sos_my_tid(void)
 // priority.  A new thread is created and started with the given priority,
 // initial instruction point(entry) and a pointer to the top of a new stack. 
 //
-extern L4_ThreadId_t sos_thread_new_priority(L4_ThreadId_t tid,
+L4_ThreadId_t sos_thread_new_priority(L4_ThreadId_t tid,
 		L4_Word_t prio, void *entry, void *stack);
-extern L4_ThreadId_t sos_thread_new(L4_ThreadId_t tid,
+L4_ThreadId_t sos_thread_new(L4_ThreadId_t tid,
 		void *entrypoint, void *stack);
 
 //
@@ -146,7 +133,7 @@ extern L4_ThreadId_t sos_thread_new(L4_ThreadId_t tid,
 // variable is currently unused, but can be used by you to assign a thread id,
 // if you choose.  The pager variable will probably be L4_rootserver.
 //
-extern L4_ThreadId_t sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
+L4_ThreadId_t sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 				  void *entrypoint, void *stack);
 
 #define THREADBITS 8
@@ -198,7 +185,7 @@ static inline L4_ThreadId_t sos_cap2tid(L4_ThreadId_t tid) {
 // TODO: Should probably just change to using a PCB and this function
 // will return a PCB instead of a number
 //
-extern L4_Word_t getCurrentProcNum(void);
+L4_Word_t getCurrentProcNum(void);
 
 //
 // sos_usleep(uint32_t microseconds)
@@ -208,7 +195,7 @@ extern L4_Word_t getCurrentProcNum(void);
 // You will need to reimplment this function when you finish your clock driver.
 // NB your timer must work before the network_init() function is called.
 //
-extern void sos_usleep(uint32_t microseconds);
+void sos_usleep(uint32_t microseconds);
 
 // the notify bit that gets set when an interrupt happens
 #define SOS_IRQ_NOTIFY_BIT  31

@@ -32,52 +32,28 @@
 
 #define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
-#define INFINITY (1 << 8)
-#define RUN_FRAME_TEST 0
 
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
 
-// Set aside some memory for a stack for the
-// first user task 
-#define STACK_SIZE 0x1000
+// Stack for the initialisation thread
+#define STACK_SIZE PAGESIZE
 static L4_Word_t init_stack_s[STACK_SIZE];
-static L4_Word_t user_stack_s[STACK_SIZE];
 
-// Init thread - This function starts up our device drivers and runs the first
-// user program.
 static void
-init_thread(void)
-{
+init_thread(void) {
 	L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
 
-	// Initialise the network for libsos_logf_init
 	network_init();
 	vfs_init();
 	pager_init();
+	sos_start_binfo_executables();
 
-	// start executables listed in the the BootInfo
-	// hack: crt0 expects to be able to pop 3 words off the stack
-	dprintf(0, "user_stack_s start at %lx, end at %lx\n", user_stack_s, &user_stack_s[STACK_SIZE]);
-	sos_start_binfo_executables(&user_stack_s[STACK_SIZE-3]);
-
-	// Thread finished - block forever
 	for (;;)
 		sos_usleep(30 * 1000 * 1000);
 }
 
-/*
-  Syscall loop.
-
-  This implements a very simple, single threaded functions for 
-  recieving any IPCs and dispatching to the correct subsystem.
-
-  It currently handles pagefaults, interrupts and special sigma0
-  requests.
-*/
-
 static __inline__ void 
-syscall_loop(void)
-{
+syscall_loop(void) {
 	dprintf(3, "Entering %s\n", __FUNCTION__);
 
 	int send = 0;
@@ -160,70 +136,8 @@ syscall_loop(void)
 	}
 }
 
-//
-// Test for M1
-//
-static void
-frame_test(void) {
-	static L4_Word_t *page, *page1, *page2;
-	static int i;
-
-	dprintf(0, "entered frame_test\n");
-
-	/* Allocate 10 pages and make sure you can touch them all */
-	for (i = 0; i < 10; i++) {
-		/* Allocate a page */
-		page = (L4_Word_t*) frame_alloc();
-		assert(page);
-
-		/* Test you can touch the page */
-		*page = 0x37;
-		assert(*page == 0x37);
-
-		dprintf(0, "(1) Page #%d allocated at %p\n", i, page);
-	}
-
-	/* A couple of pages to free later. */
-	page1 = (L4_Word_t*) frame_alloc();
-	page2 = (L4_Word_t*) frame_alloc();
-
-	/* Test that you eventually run out of memory gracefully. */
-	for (;;) {
-		page = (L4_Word_t*) frame_alloc();
-
-		if (!page) {
-			dprintf(0, "(2) Out of memory!\n");
-			break;
-		} else {
-			*page = 0x37;
-			assert(*page == 0x37);
-		}
-	}
-
-	frame_free((L4_Word_t) page1);
-	frame_free((L4_Word_t) page2);
-
-	/* Test that you never run out of memory if you always free frames. */
-	for (i = 0; i < INFINITY; i++) {
-		page = (L4_Word_t*) frame_alloc();
-		assert(page != NULL);
-
-		// Test you can touch the page.
-		*page = 0x37;
-		assert(*page == 0x37);
-
-		dprintf(0, "(3) Page #%d allocated at %p\n",  i, page);
-		frame_free((L4_Word_t) page);
-	}
-}
-
-//
-// Main entry point - called by crt.
-//
-
 int
-main (void)
-{
+main(void) {
 	// store our thread id
 	L4_Set_UserDefinedHandle(L4_rootserver.raw);
 
@@ -261,12 +175,8 @@ main (void)
 	// leaving this thread free to act as a pager and interrupt handler.
 	sos_thread_new(L4_nilthread, &init_thread, &init_stack_s[STACK_SIZE]);
 
-	/* Test M1 */
-	if (RUN_FRAME_TEST) frame_test();
-
 	dprintf(1, "*** main: about to start syscall loop\n");
-	syscall_loop(); // Enter the syscall loop
-	/* Not reached */
+	syscall_loop();
 
 	return 0;
 }
