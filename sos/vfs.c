@@ -296,7 +296,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	// increase ref counts (should be zero since its a new vnode)
 	int rval = increase_refs(self, mode);
 	if (rval != SOS_VFS_OK) {
-		dprintf(0, "!!! vfs_open_done: file opened too many times (r %d/%d) (w %d/%d)\n",
+		dprintf(0, "!!! vfs_open_done: file opened too many times (r %u/%u) (w %u/%u)\n",
 				self->readers, self->Max_Readers, self->writers, self->Max_Writers);
 		vfs_open_err(self);
 		syscall_reply(tid, rval);
@@ -560,11 +560,14 @@ vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte) {
 
 				if (nlen < nbyte) {
 					memcpy(name, vnode->path, nlen);
+					name[nlen] = '\0';
 					syscall_reply(tid, nlen);
 				} else {
-					dprintf(0, "!!! Filename too big for given buffer! (%d) (%d)\n", nlen, nbyte);
+					dprintf(0, "!!! vfs_getdirent: Filename too big for given buffer! (%d) (%d)\n",
+							nlen, nbyte);
 					syscall_reply(tid, SOS_VFS_NOMEM);
 				}
+				return;
 			}
 
 			pos2++;

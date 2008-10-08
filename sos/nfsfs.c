@@ -533,7 +533,8 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 			rq->buf[nfile->size] = '\0';
 			status = nfile->size;
 		} else {
-			dprintf(0, "!!! Filename too big for given buffer! (%d) (%d)\n", nfile->size, rq->nbyte);
+			dprintf(0, "!!! nfs_getdirent_cb: Filename too big for given buffer! (%d) (%d)\n",
+					nfile->size, rq->nbyte);
 			status = SOS_VFS_NOMEM;
 		}
 		syscall_reply(rq->p.tid, status);
