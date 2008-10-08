@@ -30,7 +30,7 @@ void process_set_sp(Process *p, void *sp);
 void process_set_ip(Process *p, void *ip);
 
 // Prepare a process to be run
-void process_prepare(Process *p);
+void process_prepare(Process *p, int asThread);
 
 // Run a process
 L4_ThreadId_t process_run(Process *p, int asThread);

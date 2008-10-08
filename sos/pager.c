@@ -405,14 +405,17 @@ void pager_init(void) {
 	// Start the real pager process
 	Process *pager = process_init();
 
-	process_prepare(pager);
+	process_prepare(pager, RUN_AS_THREAD);
 	process_set_ip(pager, (void*) virtualPagerHandler);
 	process_set_sp(pager, virtualPagerStack + PAGER_STACK_SIZE - 1);
 
-	// Start pager, but wait until it has actually started before
-	// trying to assign virtual_pager to anything
-	dprintf(1, "*** pager_init: about to run pager\n");
 	process_run(pager, RUN_AS_THREAD);
+
+	// Wait until it has actually started, or nasty things will
+	// happen to user processes
+	while (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
+		L4_Yield();
+	}
 }
 
 int sos_moremem(uintptr_t *base, unsigned int nb) {
@@ -941,16 +944,15 @@ void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 }
 
 static void virtualPagerHandler(void) {
+	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 	virtual_pager = sos_my_tid();
+
 	dprintf(1, "*** virtualPagerHandler: started, tid %ld\n",
 			L4_ThreadNo(virtual_pager));
 
 	// Initialise the swap file
 	swapfile_init();
 	dprintf(1, "*** virtualPagerHandler: swapfile opened at %d\n", swapfile);
-
-	// Accept the pages and signal we've actually started
-	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
