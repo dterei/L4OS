@@ -30,7 +30,6 @@
 
 #define verbose 1
 
-#define ONE_MEG (1 * 1024 * 1024)
 #define HEAP_SIZE ONE_MEG /* 1 MB heap */
 
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
@@ -71,7 +70,7 @@ syscall_loop(void) {
 
 		if (L4_IpcFailed(tag)) {
 			L4_Word_t ec = L4_ErrorCode();
-			dprintf(0, "%s: IPC error\n", __FUNCTION__);
+			dprintf(0, "!!! %s: IPC error\n", __FUNCTION__);
 			sos_print_error(ec);
 			assert( !(ec & 1) );	// Check for recieve error and bail
 			send = 0;
@@ -147,7 +146,7 @@ main(void) {
 	// Find information about available memory
 	L4_Word_t low, high;
 	sos_find_memory(&low, &high);
-	dprintf(0, "Available memory from 0x%08lx to 0x%08lx - %luMB\n", 
+	dprintf(1, "Available memory from 0x%08lx to 0x%08lx - %luMB\n", 
 			low, high, (high - low) / ONE_MEG);
 
 	// Initialise the various monolithic things
@@ -175,7 +174,7 @@ main(void) {
 	// leaving this thread free to act as a pager and interrupt handler.
 	sos_thread_new(L4_nilthread, &init_thread, &init_stack_s[STACK_SIZE]);
 
-	dprintf(1, "*** main: about to start syscall loop\n");
+	dprintf(2, "*** main: about to start syscall loop\n");
 	syscall_loop();
 
 	return 0;

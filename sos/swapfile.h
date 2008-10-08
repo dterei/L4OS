@@ -19,4 +19,4 @@ L4_Word_t swapslot_alloc(void);
 // Free an allocated slow in the swapfile
 int swapslot_free(L4_Word_t slot);
 
-#endif // _SWAPFILE_H
+#endif // sos/swapfile.h

@@ -7,8 +7,11 @@
  */
 #include <sos/globals.h>
 
-// Random problems seem to occur if all of buffer used.
-#define NFS_BUFSIZ (IO_MAX_BUFFER - 180)
+/* Random problems seem to occur if all of buffer used, some is needed for
+ * nfs header.
+ */
+#define NFS_HEADER 180
+#define NFS_BUFSIZ (IO_MAX_BUFFER - NFS_HEADER)
 
 #define PAGESIZE 4096
 
@@ -19,5 +22,8 @@
 #define PAGEALIGN (~((PAGESIZE) - 1))
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
 #define PROCESS_MAX_FILES 16
+
+// swapfile filename
+#define SWAPFILE_FN ".swap"
 
 #endif // constants.h

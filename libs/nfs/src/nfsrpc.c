@@ -75,16 +75,16 @@ mnt_get_export_list(void)
 
     while (getfrombuf(ret, (char*) &opt, sizeof(opt)), opt) {
 
-	printf( "NFS Export...\n" );
+	debug( "NFS Export...\n" );
 
 	getstring(ret, str, 100);
 
-	printf( "* Export name is %s\n", (char*) &str );
+	debug( "* Export name is %s\n", (char*) &str );
 
 	/* now to extract more stuff... */
 	while (getfrombuf(ret, (char*) &opt, sizeof(opt)), opt) {
 	    getstring(ret, str, 100 );
-	    printf("* Group %s\n", (char*) str);
+	    debug("* Group %s\n", (char*) str);
 	}
     }
 
@@ -144,11 +144,11 @@ nfs_init(struct ip_addr server)
 		debug("mountd port number is %d\n", map.port);
 		mount_port = map.port;
 		if (mount_port == 0) {
-			printf("Mount port invalid\n");
+			printf("!!! Mount port invalid\n");
 			return 1;
 		}
 	} else {
-		printf("Error getting mountd port number\n");
+		printf("!!! Error getting mountd port number\n");
 		return 1;
 	}
 
@@ -162,7 +162,7 @@ nfs_init(struct ip_addr server)
 		nfs_port = map.port;
 	} else {
 		if (nfs_port == 0) {
-			printf("Invalid NFS port\n");
+			printf("!!! Invalid NFS port\n");
 			return 1;
 		}
 		debug( "Error getting NFS port number\n" );

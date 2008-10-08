@@ -21,4 +21,4 @@ void irq_add(int irq, int (*irq_request)(L4_ThreadId_t *tid, int *send));
 // Find a driver with a given irq
 IrqInfo irq_find(int irq);
 
-#endif // SOS_IRQ_H
+#endif // sos/irq.h

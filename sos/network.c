@@ -25,7 +25,7 @@
 struct cookie mnt_point = {{0}};
 static struct serial *serial = NULL;
 
-#define verbose 1
+#define verbose 2
 
 /* 
  * This is the directory on the NFS server that will be mounted
@@ -48,7 +48,7 @@ int network_irq(L4_ThreadId_t *tP, int *sendP)
 void
 network_init(void)
 {
-    printf("\nStarting %s\n", __FUNCTION__);
+    dprintf(1, "\nStarting %s\n", __FUNCTION__);
 
     // Initialise the nslu2 hardware
     ixOsalOemInit(); 
@@ -99,12 +99,12 @@ network_init(void)
 		 msg = "%s: Error mounting path '%s'!\n";
 	 else
 		 msg = "%s: Successfully mounted '%s'\n";
-	 dprintf(1, msg, __FUNCTION__, NFS_DIR);
+	 dprintf(2, msg, __FUNCTION__, NFS_DIR);
 
 	 // Initialise the serial driver
 	 serial = serial_init();
 
-    dprintf(1, "Finished %s\n\n", __FUNCTION__);
+    dprintf(2, "Finished %s\n\n", __FUNCTION__);
 }
 
 int
@@ -112,15 +112,15 @@ network_sendstring_char(int len, char *contents) {
 	int i;
 	char c;
 
-	dprintf(1, "*** network_sendstring: ");
+	dprintf(2, "*** network_sendstring: ");
 
 	for (i = 0; i < len; i++) {
 		c = contents[i];
 		serial_send(serial, &c, 1);
-		dprintf(1, "%c", c);
+		dprintf(3, "%c", c);
 	}
 
-	dprintf(1, "\n");
+	dprintf(3, "\n");
 
 	return len;
 }
@@ -130,24 +130,24 @@ network_sendstring_int(int len, int *contents) {
 	int i;
 	char c;
 
-	dprintf(1, "*** network_sendstring: ");
+	dprintf(2, "*** network_sendstring: ");
 
 	for (i = 0; i < len; i++) {
 		c = (char) contents[i];
 		serial_send(serial, &c, 1);
-		dprintf(1, "%c", c);
+		dprintf(3, "%c", c);
 	}
 
-	dprintf(1, "\n");
+	dprintf(3, "\n");
 
 	return len;
 }
 
 int
 network_register_serialhandler(void (*handler)(struct serial *serial, char c)) {
-	dprintf(1, "*** network_register_serialhandler\n");
+	dprintf(2, "*** network_register_serialhandler\n");
 	if (serial == NULL) {
-		dprintf(1, "*** serial not started yet ***\n");
+		dprintf(2, "*** serial not started yet ***\n");
 		return -1;
 	}
 	

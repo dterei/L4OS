@@ -23,6 +23,7 @@ static L4_Word_t nfsfs_timer_stack[STACK_SIZE];
 static
 void
 nfsfs_timeout_thread(void) {
+	L4_KDB_SetThreadName(sos_my_tid(), "nfsfs_timeout");
 	while (1) {
 		sos_usleep(NFSFS_TIMEOUT_MS);
 		nfs_timeout();

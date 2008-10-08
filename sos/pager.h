@@ -47,5 +47,4 @@ char *pager_buffer(L4_ThreadId_t tid);
 int sos_moremem(uintptr_t *base, unsigned int nb);
 int sos_memuse(void);
 
-#endif // _PAGER_H
-
+#endif // sos/pager.h

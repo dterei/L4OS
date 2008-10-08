@@ -75,4 +75,4 @@ void process_add_rootserver(void);
 // Debug print a process
 void process_dump(Process *p);
 
-#endif // process.h
+#endif // sos/process.h

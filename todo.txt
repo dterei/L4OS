@@ -33,6 +33,8 @@ policy) but it's pretty restrictive.
 
 - change debugging so that level 0 is only used for critical errors (also suggest
 use level 1 for quite useful stuff, e.g some things which are currently on level 0).
+Should be that we can run it with debugging set to 1 and nothing should print unless
+a critical error or obvious bug occurs.
 
 - Fix problem where an exception is occurring during startup, stopping sosh
 (why sosh?) from starting.  I though I'd fixed it (evidenced by my commit log)
@@ -43,4 +45,10 @@ frequently.
 only on a process being killed (aka deleted) explicitly.
 
 - Somehow startRequest is being called when allocLimit > 0.  Need to fix.
+
+- get all threads having a name (.eg ps) and all setting L4_KDB_SetThreadName();
+
+- investigate moving the kernel heap size setting to constants.h
+
+- have the init_thread finish instead of just constantly sleeping.
 

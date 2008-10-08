@@ -593,7 +593,8 @@ vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf) {
 }
 
 /* Remove a file */
-void vfs_remove(L4_ThreadId_t tid, const char *path) {
+void
+vfs_remove(L4_ThreadId_t tid, const char *path) {
 	dprintf(1, "*** vfs_remove: %d %s ***\n", L4_ThreadNo(tid), path);
 	
 	// get file

@@ -200,5 +200,4 @@ void sos_usleep(uint32_t microseconds);
 // the notify bit that gets set when an interrupt happens
 #define SOS_IRQ_NOTIFY_BIT  31
 
-#endif // _LIBSOS_H
-
+#endif // sos/libsos.h

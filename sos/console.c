@@ -154,8 +154,7 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
-	// XXX Need to make sure we don't block up sos too long.
-	// either use a thread just for writes or continuations.
+	// should be fine of not blocking too long due to max buffer size enforced by vfs
 	int status = network_sendstring_char(nbyte, (char *) buf);
 	write_done(tid, self, file, offset, buf, 0, status);
 }

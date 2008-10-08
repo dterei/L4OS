@@ -29,4 +29,4 @@
 #include <l4/time.h>
 #include <l4/types.h>
 
-#endif // _L4_H
+#endif // sos/l4.h

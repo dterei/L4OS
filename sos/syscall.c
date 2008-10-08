@@ -71,11 +71,17 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 	}
 }
 
-static L4_Word_t *buffer(L4_ThreadId_t tid) {
+static
+L4_Word_t *
+buffer(L4_ThreadId_t tid)
+{
 	return (L4_Word_t*) pager_buffer(tid);
 }
 
-static char *wordAlign(char *s) {
+static
+char *
+wordAlign(char *s)
+{
 	unsigned int x = (unsigned int) s;
 	x--;
 	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));

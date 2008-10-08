@@ -17,10 +17,10 @@
 #include "libsos.h"
 #include "pager.h"
 #include "swapfile.h"
+#include "vfs.h"
 
 #define verbose 1
 
-#define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
 #define NULL_SLOT ((L4_Word_t) (-1))
 
@@ -48,7 +48,8 @@ swapfile_init(void)
 	swapfile_open();
 }
 
-void swapfile_open(void) {
+void
+swapfile_open(void) {
 	L4_Msg_t msg;
 
 	dprintf(2, "*** swapfile_init: opening swap file\n");
@@ -59,13 +60,14 @@ void swapfile_open(void) {
 	dprintf(2, "*** swapfile_init: opened swapfile, fd=%d\n", swapfile);
 }
 
-void swapfile_close(void) {
+void
+swapfile_close(void) {
 	L4_Msg_t msg;
 
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) swapfile);
 	syscall(L4_rootserver, SOS_CLOSE, YES_REPLY, &msg);
-	swapfile = (-1);
+	swapfile = VFS_NIL_FILE;
 }
 
 L4_Word_t
