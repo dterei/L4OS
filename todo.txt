@@ -1,3 +1,9 @@
+- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", with
+*** sos_pager_handler: addr=0x0000000c ip=0x001488e4 sender=0
+This might be our problem, not sure.  Not the same as the other unhandled page
+fault that often happens (on a high address) which everybody gets and certainly
+isn't our fault.
+
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
 instead of having each fs handle it.
@@ -14,39 +20,37 @@ if there is a bug that might cause this behaviour.
 moment it just pagefaults like crazy.  Apparently this is a mystery funtion
 somewhere, possibly written in assembler (?).
 
-- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", we
-really need to fix this if possible.  It's irritating and probably a SOS bug.
-I assume some kind of race condition since it's somewhat random.
-*** sos_pager_handler: addr=0x0000000c ip=0x001488e4 sender=0
-(That is the last pager-debug message that prints).
-
 - Need internal synchronisation of NFS, and it would make sense (compared to
 what we already have) to use events.  It also would be easier to implement it
 at the VFS level so may as well do it there.  I.e. VFS read and write (and who
 knows maybe more?) requests get put on a queue and executed sequentially.
+Incidentally we should try to produce this error before bothering to fix it.
 
 - Fill in the missing bits from M7 we couldn't do due to not having a working
 M6 - freeing allocated frames, freeing allocated slots in the swap file, and
-freeing pager requests.
+freeing pager requests.  And freeing L4's resources (from sos_process_create).
 
-- Hide swap file.  A nice way I can think of doing this is by adding it as a
-special file, making all the callbacks NULL except for open which is just a
-callback which returns SOS_VFS_NOFILE.  Oh and hmm there will also need to be
-some way to prevent it from showing up in dirent.  Maybe just hide all hidden
-files, Unix-style.  That's not really a hack (and we could even argue it's a
-policy) but it's pretty restrictive.
-
-- Associate a value with every syscall reply indicating where it came from.
-For example, if replying from a VFS_OPEN then the tag should be VFS_REPLY and
-the first value should be VFS_OPEN.  We need either this, or a different way of
-handling the Send-not-Reply to pager (which is kind of hard).  For now, only
-need it for the VFS functions (seek, open, read, write).
+- Need to spread the job of killing/deleting processes across the rootserver
+and the pager.  Because they are running in separate threads obvoiusly, and
+this has caused problems before so logically it's probably causing the problems
+mentioned below.  However, this means that either process_delete becomes a
+syscall targeted at the pager - a nice solution, but it's a little bit messy,
+I would prefer to minimise the number of syscalls that need to go to the pager.
+Alternatively we leave it in the rootserver and then allow the rootserver to
+IPC the pager - but again I want to avoid this, and plus it makes it quite
+difficult to do the segfault-killing from the pager.  A final alternative is
+to have them as separate system calls and in libsos arrange them both to be
+called - but this is somewhat bad design (relying on userspace to do something
+important) and it still involves a separate syscall for the pager.
+So in conclusion: this todo point, is to move the process_delete system call
+to the pager (unfortunately).  Other ideas welcome of course.  Oh by the way,
+this will still involve a system call in the rootserver, I just meant that the
+initialising system call will go to the pager.  One small additional point is
+that this supplementary SOS syscall will need to be "privileged" only i.e.
+only callable by the pager (or nasty user tasks could conceivably crash stuff).
 
 - Killing processes is now causing all sorts of problems, quite a range - from
 crashing SOS to crashing the user to failed assertions.  Doesn't make sense to
-fix this until the thing above has been dealt with.
-
-- Need to free the resources from L4 as well as those from sos (when deleting
-processes).  By L4 resources I mean those made in sos_process_create, probably
-implies we should have a sos_process_delete.
+fix this until the thing above has been dealt with, the problem will hopefully
+disappear.
 
