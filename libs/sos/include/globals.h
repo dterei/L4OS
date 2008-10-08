@@ -6,4 +6,4 @@
 /* Max buffer size for write and read */
 #define IO_MAX_BUFFER 1280
 
-#endif // sos/globals.h
+#endif // libs/sos/globals.h
