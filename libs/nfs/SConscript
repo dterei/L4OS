@@ -1,6 +1,6 @@
 Import("env")
 
-cpppath    = env.scons_env["CPPPATH"]+["#sos"] # Grab sos headers
+cpppath = env.scons_env["CPPPATH"]+["#sos"] # Grab sos headers
 lib = env.KengeLibrary("nfs", LIBS=['c', 'lwip'], CPPPATH = cpppath)
 
 Return("lib")

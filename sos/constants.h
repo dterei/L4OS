@@ -7,6 +7,9 @@
  */
 #include <sos/globals.h>
 
+// UDP port AOS serial library uses/sosh.
+#define SERIAL_PORT (26706)
+
 /* Random problems seem to occur if all of buffer used, some is needed for
  * nfs header.
  */
