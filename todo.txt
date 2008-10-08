@@ -46,4 +46,7 @@ need it for the VFS functions (seek, open, read, write).
 crashing SOS to crashing the user to failed assertions.  Doesn't make sense to
 fix this until the thing above has been dealt with.
 
+- Need to free the resources from L4 as well as those from sos (when deleting
+processes).  By L4 resources I mean those made in sos_process_create, probably
+implies we should have a sos_process_delete.
 
