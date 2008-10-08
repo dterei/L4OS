@@ -59,7 +59,7 @@ enum NfsRequestType {
 	RT_WRITE,
 	RT_STAT,
 	RT_DIR,
-	RT_REMOVE
+	RT_REMOVE,
 };
 
 typedef struct NFS_BaseRequest_t NFS_BaseRequest;
@@ -148,8 +148,7 @@ static
 uintptr_t
 newtoken(void) {
 	static uintptr_t tok = 0;
-	tok++;
-	return (tok % ( NULL_TOKEN - 1));
+	return ((tok++) % (NULL_TOKEN - 1));
 }
 
 /* Create a new NFS request of type specified */
@@ -255,7 +254,7 @@ remove_request(NFS_BaseRequest *rq) {
 			free((NFS_RemoveRequest *) rq);
 			break;
 		default:
-			dprintf(0, "nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
+			dprintf(0, "!!! nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
 }
 
@@ -264,7 +263,7 @@ static
 NFS_BaseRequest*
 get_request(uintptr_t token) {
 	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
-		dprintf(2, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
+		dprintf(3, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
 		if (brq->token == token) {
 			return brq;
 		}
@@ -301,23 +300,23 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	NFS_LookupRequest *rq = (NFS_LookupRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt lookup callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt lookup callback, no matching token: %d\n", token);
 		return;
 	}
 
 	// open done
 	if (status == NFS_OK) {
 		NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
-		memcpy((void *) &(nf->fh), (void *) fh, sizeof(struct cookie));
+		memcpy(&(nf->fh), fh, sizeof(struct cookie));
 		cp_stats(&(rq->p.vnode->vstat), attr);
-		dprintf(1, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->p.tid));
+		dprintf(2, "nfsfs: Sending: %d, %d\n", token, L4_ThreadNo(rq->p.tid));
 		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_OK);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 
 	// create the file
 	else if ((status == NFSERR_NOENT) && (rq->mode & FM_WRITE)) {
-		dprintf(1, "nfsfs: Create new file!\n");
+		dprintf(2, "nfsfs: Create new file!\n");
 		// reuse current rq struct, has all we need and is hot and ready
 		sattr_t sat = DEFAULT_SATTR;
 		nfs_create(&nfs_mnt, rq->p.vnode->path, &sat, lookup_cb, rq->p.token);
@@ -325,14 +324,18 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	// error
 	else {
-		dprintf(0, "!!!nfsfs: lookup_cb: Error occured! (%d)\n", status);
+		dprintf(0, "!!! nfsfs: lookup_cb: Error occured! (%d)\n", status);
 		free((NFS_File *) rq->p.vnode->extra);
 		free(rq->p.vnode);
+		rq->p.vnode = NULL;
 		if (status == NFSERR_NOENT) {
-			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_NOVNODE);
+			status = SOS_VFS_NOVNODE;
+		} else if (status == NFSERR_PERM) {
+			status = SOS_VFS_PERM;
 		} else {
-			rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, SOS_VFS_ERROR);
+			status = SOS_VFS_ERROR;
 		}
+		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, status);
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
@@ -343,7 +346,7 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** nfsfs_open: %p, %s, %d, %p\n", self, path, mode, open_done);
 
-	memcpy( (void *) self->path, (void *) path, N_NAME);
+	memcpy( (void *) self->path, (void *) path, MAX_FILE_NAME);
 	self->readers = 0;
 	self->writers = 0;
 	self->Max_Readers = DEFAULT_MAX_READERS;
@@ -364,9 +367,7 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->stat = nfsfs_stat;
 	self->remove = nfsfs_remove;
 
-	NFS_LookupRequest *rq = (NFS_LookupRequest *)
-		create_request(RT_LOOKUP, self, tid);
-
+	NFS_LookupRequest *rq = (NFS_LookupRequest *) create_request(RT_LOOKUP, self, tid);
 	rq->mode = mode;
 	rq->open_done = open_done;
 
@@ -407,7 +408,7 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt read callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt read callback, no matching token: %d\n", token);
 		return;
 	}
 
@@ -433,16 +434,16 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	dprintf(1, "*** nfsfs_read: %p, %d, %d, %p, %d\n", self, file, pos, buf, nbyte);
 
 	NFS_File *nf = (NFS_File *) self->extra;	
-	if (nf == NULL) {
+	if (self == NULL || nf == NULL) {
 		dprintf(0, "!!! nfsfs_read: Invalid NFS file (p %d, f %d), no nfs struct!\n",
 				L4_ThreadNo(tid), file);
 		read_done(tid, self, file, pos, buf, 0, SOS_VFS_NOFILE);
 		return;
 	}
 
-	if (nbyte > NFS_BUFSIZ2) {
-		dprintf(1, "tried to read too much data at once: %d\n", nbyte);
-		nbyte = NFS_BUFSIZ2;
+	if (nbyte > NFS_BUFSIZ) {
+		dprintf(2, "nfsfs_read: tried to read too much data at once: %d\n", nbyte);
+		nbyte = NFS_BUFSIZ;
 	}
 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid);
@@ -461,7 +462,7 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 
 	NFS_WriteRequest *rq = (NFS_WriteRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt write callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt write callback, no matching token: %d\n", token);
 		return;
 	}
 
@@ -493,10 +494,10 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		return;
 	}
 
-	if (nbyte > NFS_BUFSIZ2) {
-		dprintf(1, "!!! nfsfs_write: request too large! (tid %d) (file %d) (size %d) (max %d)!\n",
-				L4_ThreadNo(tid), file, nbyte, NFS_BUFSIZ2);
-		nbyte = NFS_BUFSIZ2;
+	if (nbyte > NFS_BUFSIZ) {
+		dprintf(2, "!!! nfsfs_write: request too large! (tid %d) (file %d) (size %d) (max %d)!\n",
+				L4_ThreadNo(tid), file, nbyte, NFS_BUFSIZ);
+		nbyte = NFS_BUFSIZ;
 	}
 
 	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid);
@@ -517,33 +518,38 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 
 	NFS_DirRequest *rq = (NFS_DirRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt dirent callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt dirent callback, no matching token: %d\n", token);
 		return;
 	}
 
+	// got it
 	if (rq->cpos + num_entries >= rq->pos + 1) {
-		// got it
 		dprintf(2, "found file, getting now\n");
+		int status = SOS_VFS_ERROR;
 		struct nfs_filename *nfile = &filenames[rq->pos - rq->cpos];
 		if (nfile->size + 1 <= rq->nbyte) {
-			memcpy( (void *) rq->buf, (void *) nfile->file, nfile->size);
+			memcpy(rq->buf, nfile->file, nfile->size);
 			rq->buf[nfile->size] = '\0';
-			syscall_reply(rq->p.tid, nfile->size);
-			remove_request((NFS_BaseRequest *) rq);
-			return;
+			status = nfile->size;
+		} else {
+			dprintf(0, "!!! Filename too big for given buffer! (%d) (%d)\n", nfile->size, rq->nbyte);
+			status = SOS_VFS_NOMEM;
 		}
-	} else if (next_cookie > 0) {
-		// need later directory entry
+		syscall_reply(rq->p.tid, status);
+		remove_request((NFS_BaseRequest *) rq);
+	}
+	// need later directory entry
+	else if (next_cookie > 0) {
 		dprintf(2, "Need more dir entries to get file\n");
 		rq->cpos += num_entries;
-		nfs_readdir(&nfs_mnt, next_cookie, NFS_BUFSIZ2, getdirent_cb, rq->p.token);
-		return;
+		nfs_readdir(&nfs_mnt, next_cookie, NFS_BUFSIZ, getdirent_cb, rq->p.token);
 	}
-
 	// error case, just return SOS_VFS_OK to say nothing read, its not an error just eof
-	dprintf(2, "nfsfs_getdirent: didnt find file (%d)\n", rq->pos);
-	syscall_reply(rq->p.tid, SOS_VFS_EOF);
-	remove_request((NFS_BaseRequest *) rq);
+	else {
+		dprintf(2, "nfsfs_getdirent: didnt find file (%d)\n", rq->pos);
+		syscall_reply(rq->p.tid, SOS_VFS_EOF);
+		remove_request((NFS_BaseRequest *) rq);
+	}
 }
 
 /* Get directory entries of the NFS filesystem */
@@ -552,13 +558,12 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	dprintf(1, "*** nfsfs_getdirent: %p, %d, %p, %d\n", self, pos, name, nbyte);
 
 	NFS_DirRequest *rq = (NFS_DirRequest *) create_request(RT_DIR, self, tid);
-
 	rq->pos = pos;
 	rq->buf = name;
 	rq->nbyte = nbyte;
 	rq->cpos = 0;
 
-	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ2, getdirent_cb, rq->p.token);
+	nfs_readdir(&nfs_mnt, 0, NFS_BUFSIZ, getdirent_cb, rq->p.token);
 }
 
 /* NFS Callback for NFS_Stat */
@@ -569,21 +574,19 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	NFS_StatRequest *rq = (NFS_StatRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt stat callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt stat callback, no matching token: %d\n", token);
 		return;
 	}
 
-	// fail
-	if (status != NFS_OK) {
-		syscall_reply(rq->p.tid, SOS_VFS_ERROR);
-		remove_request((NFS_BaseRequest *) rq);
-	}
-	// good
-	else {
+	if (status == NFS_OK) {
 		cp_stats(rq->stat, attr);
-		syscall_reply(rq->p.tid, SOS_VFS_OK);
-		remove_request((NFS_BaseRequest *) rq);
+		status = SOS_VFS_OK;
+	} else {
+		status = SOS_VFS_ERROR;
 	}
+
+	syscall_reply(rq->p.tid, status);
+	remove_request((NFS_BaseRequest *) rq);
 }
 
 /* Get file details for a specified NFS File */
@@ -608,8 +611,7 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 	else {
 		dprintf(1, "*** nfsfs_stat: trying to stat non open file! (file %s)\n", path);
 
-		NFS_StatRequest *rq = (NFS_StatRequest *)
-			create_request(RT_STAT, self, tid);
+		NFS_StatRequest *rq = (NFS_StatRequest *) create_request(RT_STAT, self, tid);
 		rq->stat = buf;
 
 		nfs_lookup(&nfs_mnt, (char *) path, stat_cb, rq->p.token);
@@ -624,11 +626,10 @@ remove_cb(uintptr_t token, int status) {
 
 	NFS_RemoveRequest *rq = (NFS_RemoveRequest *) get_request(token);
 	if (rq == NULL) {
-		dprintf(0, "!!!nfsfs: Corrupt remove callback, no matching token: %d\n", token);
+		dprintf(0, "!!! nfsfs: Corrupt remove callback, no matching token: %d\n", token);
 		return;
 	}
 
-	// set to our status
 	if (status == NFS_OK) {
 		status = SOS_VFS_OK;
 	} else {

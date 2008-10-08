@@ -91,14 +91,14 @@ extern fildes_t stdout_fd;
 extern fildes_t stdin_fd;
 
 /* Max size of a filename */
-#define N_NAME 32
+#define MAX_FILE_NAME 32
 
 typedef struct {
 	pid_t     pid;
 	unsigned  size;  // in pages
 	unsigned  stime; // start time in msec since booting
 	unsigned  ctime; // CPU time accumulated in msec
-	char	    command[N_NAME]; // Name of exectuable
+	char	    command[MAX_FILE_NAME]; // Name of exectuable
 } process_t;
 
 /* Get the string representation of a syscall */

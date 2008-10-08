@@ -7,8 +7,8 @@
  */
 #include <sos/globals.h>
 
-#define NFS_BUFSIZ IO_MAX_BUFFER
-#define NFS_BUFSIZ2 1100
+// Random problems seem to occur if all of buffer used.
+#define NFS_BUFSIZ (IO_MAX_BUFFER - 180)
 
 #define PAGESIZE 4096
 

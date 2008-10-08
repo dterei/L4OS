@@ -36,14 +36,14 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offse
 			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
-/* List directory entries of a console file (so does nothing) (UNSUPPORTED) */
+/* List directory entries of a console file (UNSUPPORTED) */
 void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
-/* Get file information of a console file (so does nothing) (UNSUPPORTED) */
+/* Get file information of a console file */
 void console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 
-/* Remove a file (so does nothing) (UNSUPPORTED) */
+/* Remove a file (UNSUPPORTED) */
 void console_remove(L4_ThreadId_t tid, VNode self, const char *path);
 
-#endif /* console.h */
+#endif // sos/console.h
 

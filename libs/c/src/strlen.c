@@ -94,3 +94,13 @@ strlen(const char *s)
     for (p = s; *p != '\0'; p++);
     return p - s;
 }
+
+size_t
+strnlen(const char *s, size_t maxlen)
+{
+	size_t i;
+
+	for (i = 0; *s != '\0' && i < maxlen; s++, i++);
+	return i;
+}
+

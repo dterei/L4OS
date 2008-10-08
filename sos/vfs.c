@@ -16,6 +16,8 @@
  * layer can handle File specific operations such as increasing file pointers,
  * creating and closing files... ect
  *
+ * Callbacks will also reply to the thread.
+ *
  * The status passed through is check to determine the status of the FS operations.
  */
 
@@ -68,7 +70,7 @@ findNextFd(Process *p) {
 	}
 
 	// Too many open files.
-	return (-1);
+	return VFS_NIL_FILE;
 }
 
 /* Add vnode to global list */
@@ -222,14 +224,14 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// check can open more files
 	if (findNextFd(p) < 0) {
-		dprintf(1, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
+		dprintf(2, "*** vfs_open: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
 
 	// check filename is valid
-	if (strlen(path) >= N_NAME) {
-		dprintf(1, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
+	if (strlen(path) >= MAX_FILE_NAME) {
+		dprintf(2, "*** vfs_open: path invalid! thread %d\n", L4_ThreadNo(tid));
 		syscall_reply(tid, SOS_VFS_PATHINV);
 		return;
 	}
@@ -245,15 +247,24 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 			vfs_open_done(tid, vnode, mode, SOS_VFS_NOMEM);
 			return;
 		}
-		dprintf(1, "*** vfs_open: try to open file with nfs: %s\n", path);
+		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, vfs_open_done);
-		// update global vnode list
 		add_vnode(vnode);
 	}
 
 	// Open file, so handle in just vfs layer
 	else {
 		vfs_open_done(tid, vnode, mode, SOS_VFS_OK);
+	}
+}
+
+static
+void
+vfs_open_err(VNode self) {
+	if (self->readers <= 0 && self->writers <= 0) {
+		remove_vnode(self);
+		free_vnode(self);
+		self = NULL;
 	}
 }
 
@@ -270,12 +281,14 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	VFile *files = process_get_files(p);
 	if (p == NULL || files == NULL) {
 		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p)\n", p, files);
+		vfs_open_err(self);
 		return;
 	}
 
 	// open failed
 	if (status != SOS_VFS_OK || self == NULL) {
-		dprintf(1, "*** vfs_open_done: can't open file: error code %d\n", status);
+		dprintf(2, "*** vfs_open_done: can't open file: error code %d\n", status);
+		vfs_open_err(self);
 		syscall_reply(tid, status);
 		return;
 	}
@@ -285,6 +298,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	if (rval != SOS_VFS_OK) {
 		dprintf(0, "!!! vfs_open_done: file opened too many times (r %d/%d) (w %d/%d)\n",
 				self->readers, self->Max_Readers, self->writers, self->Max_Writers);
+		vfs_open_err(self);
 		syscall_reply(tid, rval);
 		return;
 	}
@@ -292,12 +306,9 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	// get new fd
 	fildes_t fd = findNextFd(p);
 	if (fd < 0) {
-		dprintf(1, "*** vfs_open_done: thread %d can't open more files!\n", L4_ThreadNo(tid));
+		dprintf(0, "!!! vfs_open_done: thread %d can't open more files!\n", L4_ThreadNo(tid));
 		decrease_refs(self, mode);
-		if (self->readers <= 0 && self->writers <= 0) {
-			remove_vnode(self);
-			free_vnode(self);
-		}
+		vfs_open_err(self);
 		syscall_reply(tid, SOS_VFS_NOMORE);
 		return;
 	}
@@ -483,8 +494,8 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
 		return;
 	}
+	
 	vf[file].fp += nbyte;
-
 	syscall_reply(tid, status);
 }
 
@@ -506,12 +517,12 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence) {
 
 	// make sure ok
 	if (vnode == NULL) {
-		dprintf(0, "*** vfs_seek: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
 		syscall_reply(tid, SOS_VFS_NOFILE);
 		return;
 	}
 
-	dprintf(2, "vfs_seek: old fp %d\n", vf[file].fp);
+	dprintf(3, "vfs_seek: old fp %d\n", vf[file].fp);
 
 	if (whence == SEEK_SET) {
 		vf[file].fp = (L4_Word_t) pos;
@@ -523,7 +534,7 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence) {
 		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
 	}
 
-	dprintf(2, "vfs_seek: new fp %d\n", vf[file].fp);
+	dprintf(3, "vfs_seek: new fp %d\n", vf[file].fp);
 
 	syscall_reply(tid, SOS_VFS_OK);
 }
@@ -533,7 +544,35 @@ void
 vfs_getdirent(L4_ThreadId_t tid, int pos, char *name, size_t nbyte) {
 	dprintf(1, "*** vfs_getdirent: %d, %p, %d\n", pos, name, nbyte);
 
-	nfsfs_getdirent(tid, NULL, pos, name, nbyte);
+	// check
+	if (pos < 0 || nbyte <= 0 || name == NULL) {
+		syscall_reply(tid, SOS_VFS_ERROR);
+		return;
+	}
+	
+	// print out any special files
+	int pos2 = 0;
+	for (VNode vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
+		if (vnode->vstat.st_type == ST_SPECIAL) {
+
+			if (pos == pos2) {
+				int nlen = strnlen(vnode->path, MAX_FILE_NAME);
+
+				if (nlen < nbyte) {
+					memcpy(name, vnode->path, nlen);
+					syscall_reply(tid, nlen);
+				} else {
+					dprintf(0, "!!! Filename too big for given buffer! (%d) (%d)\n", nlen, nbyte);
+					syscall_reply(tid, SOS_VFS_NOMEM);
+				}
+			}
+
+			pos2++;
+		}
+	}
+
+	// Only support nfs fs for moment
+	nfsfs_getdirent(tid, NULL, pos - pos2, name, nbyte);
 }
 
 /* Stat a file */

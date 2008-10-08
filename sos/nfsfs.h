@@ -41,5 +41,5 @@ void nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
 /* Remove a file */
 void nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path);
 
-#endif
+#endif // sos/nfsfs.h
 

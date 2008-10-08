@@ -207,7 +207,8 @@ sos_get_new_tid(void) {
 	}
 }
 
-void sos_get_new_tid_disable(void) {
+void
+sos_get_new_tid_disable(void) {
 	last_thread_disabled_s = 1;
 }
 
@@ -323,7 +324,8 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
  * BOOTINFO STUFF *
  ******************/
 
-static void addRegion(BootinfoProcess *bip, Region *r, bi_name_t id) {
+static void
+addRegion(BootinfoProcess *bip, Region *r, bi_name_t id) {
 	BootinfoRegion *new = (BootinfoRegion*) malloc(sizeof(BootinfoRegion));
 	new->region = r;
 	new->id = id;
@@ -524,7 +526,7 @@ bootinfo_cleanup(const bi_user_data_t *data) {
 	return 0;
 }
 
-	void
+void
 sos_start_binfo_executables(void *userstack)
 {
 	int result;
@@ -547,7 +549,7 @@ sos_start_binfo_executables(void *userstack)
 // Memory for the ixp400 networking layers
 extern void *sos_malloc(uint32_t size);
 
-	void
+void
 *sos_malloc(uint32_t size)
 {
 	if (sSosMemoryBot + size < sSosMemoryTop) {
@@ -560,13 +562,13 @@ extern void *sos_malloc(uint32_t size);
 	}
 }
 
-	void
+void
 sos_usleep(uint32_t microseconds)
 {
 	utimer_sleep(microseconds);	// M4 must change to your timer
 }
 
-	L4_Word_t
+L4_Word_t
 getCurrentProcNum(void)
 {
 	L4_SpaceId_t sp = L4_SenderSpace();
@@ -584,7 +586,7 @@ getCurrentProcNum(void)
 	return as;
 }
 
-	void
+void
 msgClearWith(L4_Word_t x)
 {
 	L4_Msg_t clear;

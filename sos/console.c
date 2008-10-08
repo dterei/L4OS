@@ -10,6 +10,7 @@
 
 // How many consoles we have
 #define NUM_CONSOLES 1
+#define CONSOLE_STAT { (ST_SPECIAL), (FM_READ | FM_WRITE), (0), (0), (0) }
 
 // struct for storing console read requests (continuation struct)
 typedef struct {
@@ -54,12 +55,9 @@ console_init(VNode sflist) {
 		VNode console = (VNode) malloc(sizeof(struct VNode_t));
 
 		// set up console vnode
-		strncpy(console->path, Console_Files[i].path, N_NAME);
-		console->vstat.st_type = ST_SPECIAL;
-		console->vstat.st_fmode = FM_READ | FM_WRITE;
-		console->vstat.st_size = 0;
-		console->vstat.st_ctime = 0;
-		console->vstat.st_atime = 0;
+		strncpy(console->path, Console_Files[i].path, MAX_FILE_NAME);
+		stat_t st = CONSOLE_STAT;
+		memcpy(&(console->vstat), &st, sizeof(stat_t));
 		console->readers = 0;
 		console->writers = 0;
 		console->Max_Readers = Console_Files[i].Max_Readers;
@@ -102,10 +100,8 @@ void
 console_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 		void (*open_done)(L4_ThreadId_t tid, VNode self, fmode_t mode, int status)) {
 	dprintf(1, "*** console_open(%s, %d)\n", path, mode);
-
 	dprintf(0, "!!! console_open: Not implemented for console fs\n");
-
-	syscall_reply(tid, SOS_VFS_NOTIMP);
+	open_done(tid, self, mode, SOS_VFS_NOTIMP);
 }
 
 /* Close a console file */
@@ -113,21 +109,7 @@ void
 console_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		void (*close_done)(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode, int status)) {
 	dprintf(1, "*** console_close: %d\n", file);
-
-	// make sure console exists
-	if (self == NULL) {
-		close_done(tid, self, file, mode, SOS_VFS_NOVNODE);
-		return;
-	}
-
-	Console_File *cf = (Console_File *) (self->extra);
-	if (cf == NULL) {
-		close_done(tid, self, file, mode, SOS_VFS_CORVNODE);
-		return;
-	}
-
 	dprintf(0, "!!! console_close: Not implemented for console fs\n");
-
 	close_done(tid, self, file, mode, SOS_VFS_NOTIMP);
 }
 
@@ -146,12 +128,13 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 
 	Console_File *cf = (Console_File *) (self->extra);
 	if (cf == NULL) {
+		dprintf(0, "!!! VNode without Console_File (%p) passed into console_read\n", cf);
 		read_done(tid, self, file, pos, buf, 0, SOS_VFS_CORVNODE);
 		return;
 	}
 
 	if (!L4_IsNilThread(cf->reader.tid)) {
-		read_done(tid, self, file, pos, buf, 0, SOS_VFS_ERROR);
+		read_done(tid, self, file, pos, buf, 0, SOS_VFS_READFULL);
 		return;
 	}
 
@@ -171,7 +154,6 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
-	// because it doesn't like a const
 	// XXX Need to make sure we don't block up sos too long.
 	// either use a thread just for writes or continuations.
 	int status = network_sendstring_char(nbyte, (char *) buf);
@@ -182,30 +164,37 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 void
 console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte) {
 	dprintf(1, "*** console_getdirent: %d, %s, %d\n", pos, name, nbyte);
-
 	dprintf(0, "!!! console_getdirent: Not implemented for console fs\n");
-
 	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* Stat a file */
 void
 console_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
-	dprintf(1, "*** console_stat: %s, %d, %d, %d, %d, %d\n", path, buf->st_type,
-			buf->st_fmode, buf->st_size, buf->st_ctime, buf->st_atime);
+	dprintf(1, "*** console_stat: %d, %p, %s, %p\n", L4_ThreadNo(tid), self, path, buf);
 
-	dprintf(0, "!!! console_stat: Not implemented for console fs\n");
+	// make sure console exists
+	if (self == NULL) {
+		syscall_reply(tid, SOS_VFS_NOVNODE);
+		return;
+	}
 
-	syscall_reply(tid, SOS_VFS_NOTIMP);
+	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL) {
+		dprintf(0, "!!! VNode without Console_File (%p) passed into console_stat\n", cf);
+		syscall_reply(tid, SOS_VFS_CORVNODE);
+		return;
+	}
+
+	memcpy(buf, &(self->vstat), sizeof(stat_t));
+	syscall_reply(tid, SOS_VFS_OK);
 }
 
 /* Remove a file */
 void
 console_remove(L4_ThreadId_t tid, VNode self, const char *path) {
 	dprintf(1, "*** console_remove: %d %s ***\n", L4_ThreadNo(tid), path);
-
 	dprintf(0, "!!! console_remove: Not implemented for console fs\n");
-
 	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
@@ -237,7 +226,7 @@ serial_read_callback(struct serial *serial, char c) {
 
 		// remove request now its done
 		rq->tid = L4_nilthread;
-		rq->file = (fildes_t) (-1);
+		rq->file = VFS_NIL_FILE;
 		rq->buf = NULL;
 		rq->nbyte = 0;
 		rq->rbyte = 0;

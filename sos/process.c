@@ -99,7 +99,7 @@ void process_set_sp(Process *p, void *sp) {
 }
 
 void process_set_name(Process *p, char *name) {
-	strncpy(p->info.command, name, N_NAME);
+	strncpy(p->info.command, name, MAX_FILE_NAME);
 }
 
 static void addRegion(Process *p, region_type type,

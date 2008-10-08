@@ -4,6 +4,7 @@
 #include <sos/sos.h>
 
 #define VFS_UNLIMITED_RW ((unsigned int) (-1))
+#define VFS_NIL_FILE (-1)
 
 /* Simple VFS-style vnode */
 typedef struct VNode_t *VNode;
@@ -11,7 +12,7 @@ typedef struct VNode_t *VNode;
 /* All allocated vnodes stored in double link list */
 struct VNode_t {
 	// Properties
-	char path[N_NAME];
+	char path[MAX_FILE_NAME];
 	stat_t vstat;
 
 	// Open counters
@@ -94,5 +95,4 @@ void vfs_stat(L4_ThreadId_t tid, const char *path, stat_t *buf);
 /* Remove a file */
 void vfs_remove(L4_ThreadId_t tid, const char *path);
 
-#endif
-
+#endif // sos/vfs.h

@@ -99,6 +99,7 @@ void *memset(void *, int, size_t);
 char *strerror(int errnum);
 int strerror_r(int errnum, char *s, size_t len);
 size_t strlen(const char *);
+size_t strnlen(const char *, size_t maxlen);
 char *stpcpy(char *dst, const char *src);
 
 /* Extra POSIX defined thigns that aren't part of the C standard */
