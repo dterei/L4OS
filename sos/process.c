@@ -250,6 +250,7 @@ static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
 		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
 			sosProcs[i]->waitingOn = WAIT_NOBODY;
+			dprintf(0, "*** wakeAll: waking %d\n", process_get_pid(sosProcs[i]));
 			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
 		}
 	}

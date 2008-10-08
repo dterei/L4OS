@@ -20,8 +20,6 @@ what we already have) to use events.  It also would be easier to implement it
 at the VFS level so may as well do it there.  I.e. VFS read and write (and who
 knows maybe more?) requests get put on a queue and executed sequentially.
 
-- Finish M6.
-
 - Fill in the missing bits from M7 we couldn't do due to not having a working
 M6 - freeing allocated frames, freeing allocated slots in the swap file, and
 freeing pager requests.
@@ -35,4 +33,14 @@ policy) but it's pretty restrictive.
 
 - change debugging so that level 0 is only used for critical errors (also suggest
 use level 1 for quite useful stuff, e.g some things which are currently on level 0).
+
+- Fix problem where an exception is occurring during startup, stopping sosh
+(why sosh?) from starting.  I though I'd fixed it (evidenced by my commit log)
+but apparently I was too optimistic.  Way too optimistic, it's happening very
+frequently.
+
+- Fix the process-waking problem where it won't wake on a process segfaulting,
+only on a process being killed (aka deleted) explicitly.
+
+- Somehow startRequest is being called when allocLimit > 0.  Need to fix.
 

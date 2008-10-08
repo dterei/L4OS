@@ -129,7 +129,7 @@ sos_find_memory(L4_Word_t *lowP, L4_Word_t *highP)
     bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
     
     bi_callbacks.init_mem = bootinfo_init_mem;
-    result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, NULL);
+    result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks);
     assert(!result);
     
     dprintf(2, "Biggest conventional memory %lx-%lx\n", sSosMemoryBot, sSosMemoryTop);
@@ -333,7 +333,7 @@ addRegion(BootinfoProcess *bip, Region *r, bi_name_t id) {
 	bip->regions = new;
 }
 
-bi_name_t
+static bi_name_t
 bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data) {
@@ -366,7 +366,7 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 	return ++bootinfo_id;
 }
 
-int
+static int
 bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_attach: (pd %d, ms %d) = %d\n", pd, ms, bootinfo_id);
@@ -410,18 +410,18 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 	return 0;
 }
 
-bi_name_t
+static bi_name_t
 bootinfo_new_cap(bi_name_t obj, bi_cap_rights_t rights,
 		const bi_user_data_t *data) {
 	return ++bootinfo_id;
 }
 
-bi_name_t
+static bi_name_t
 bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {
 	return ++bootinfo_id;
 }
 
-bi_name_t
+static bi_name_t
 bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
 	dprintf(1, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
 
@@ -466,7 +466,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 	return ++bootinfo_id;
 }
 
-int
+static int
 bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
 
@@ -502,7 +502,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	return 0;
 }
 
-int
+static int
 bootinfo_cleanup(const bi_user_data_t *data) {
 	dprintf(1, "*** bootinfo_cleanup\n");
 
@@ -527,8 +527,7 @@ bootinfo_cleanup(const bi_user_data_t *data) {
 }
 
 void
-sos_start_binfo_executables(void *userstack)
-{
+sos_start_binfo_executables() {
 	int result;
 	bi_callbacks_t bi_callbacks = OKL4_BOOTINFO_CALLBACK_INIT;
 
@@ -541,9 +540,8 @@ sos_start_binfo_executables(void *userstack)
 	bi_callbacks.run_thread = bootinfo_run_thread;
 	bi_callbacks.cleanup = bootinfo_cleanup;
 
-	result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks, userstack);
-	if (result)
-		dprintf(0, "bootinfo_parse failed: %d\n", result);
+	result = bootinfo_parse(__okl4_bootinfo, &bi_callbacks);
+	if (result) dprintf(0, "bootinfo_parse failed: %d\n", result);
 }
 
 // Memory for the ixp400 networking layers
@@ -579,7 +577,6 @@ getCurrentProcNum(void)
 	L4_Word_t as = L4_SpaceNo(sp);
 	if (as < 0 || as >= MAX_ADDRSPACES) {
 		dprintf(0, "!!! Invalid Address Space Number! Outside range! (%d)\n", as);
-		// XXX: Should probably kill the whole process (might be many threads)
 		return (-1);
 	}
 
