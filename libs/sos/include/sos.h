@@ -26,6 +26,7 @@ typedef enum {
 	SOS_VFS_WRITEFULL = -10,
 	SOS_VFS_READFULL = -11,
 	SOS_VFS_OPEN = -12,
+	SOS_VFS_DIR = -13,
 } vfs_return_t;
 
 /* System calls for SOS */
@@ -72,8 +73,9 @@ typedef uint8_t fmode_t;
 
 /* stat file types */
 typedef enum {
-	ST_FILE, /* plain file */
 	ST_SPECIAL, /* special (console, etc) file */
+	ST_FILE, /* plain file */
+	ST_DIR, /* directory file */
 } st_type_t;
 
 typedef struct {

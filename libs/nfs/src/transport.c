@@ -16,6 +16,8 @@
 #include "libsos.h"
 #include "constants.h"
 
+#define verbose 2
+
 // Needs to be called every 100ms by somebody
 extern void nfs_timeout(void);
 
@@ -471,9 +473,9 @@ static uint32_t time_of_day = 0;
 time_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p,
 		struct ip_addr *addr, u16_t port)
 {
-	debug("Got time packet?!\n");
+	dprintf(1, "Got time packet?!\n");
 	memcpy(&time_of_day, p->payload, sizeof(time_of_day));
-	debug("Sending blah\n");
+	dprintf(1, "Sending blah\n");
 	L4_Send((L4_ThreadId_t) (uintptr_t) arg);
 }
 

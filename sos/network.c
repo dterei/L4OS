@@ -25,7 +25,7 @@
 struct cookie mnt_point = {{0}};
 static struct serial *serial = NULL;
 
-#define verbose 1
+#define verbose 2
 
 /* 
  * This is the directory on the NFS server that will be mounted

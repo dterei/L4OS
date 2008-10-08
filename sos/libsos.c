@@ -33,7 +33,7 @@
 extern void utimer_init(void);
 extern void utimer_sleep(uint32_t microseconds);
 
-#define verbose 1
+#define verbose 2
 
 extern void _start(void);
 
@@ -337,10 +337,10 @@ static bi_name_t
 bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		uintptr_t flags, uintptr_t attr, bi_name_t physpool,
 		bi_name_t virtpool, bi_name_t zone, const bi_user_data_t * data) {
-	dprintf(1, "*** bootinfo_new_ms: (owner %d) = %d\n", owner, bootinfo_id);
+	dprintf(2, "*** bootinfo_new_ms: (owner %d) = %d\n", owner, bootinfo_id);
 
 	if (owner == 0) {
-		dprintf(1, "*** bootinfo_new_ms: ignoring owner of 0\n");
+		dprintf(2, "*** bootinfo_new_ms: ignoring owner of 0\n");
 		return ++bootinfo_id;
 	}
 
@@ -355,7 +355,7 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 		dprintf(0, "!!! bootinfo_new_ms: didn't find relevant process!\n");
 		return ++bootinfo_id;
 	} else {
-		dprintf(1, "*** bootinfo_new_ms: found process at %p\n", bip);
+		dprintf(2, "*** bootinfo_new_ms: found process at %p\n", bip);
 	}
 
 	// Create new region.
@@ -369,10 +369,10 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 static int
 bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		const bi_user_data_t *data) {
-	dprintf(1, "*** bootinfo_attach: (pd %d, ms %d) = %d\n", pd, ms, bootinfo_id);
+	dprintf(2, "*** bootinfo_attach: (pd %d, ms %d) = %d\n", pd, ms, bootinfo_id);
 
 	if (pd == 0) {
-		dprintf(1, "*** bootinfo_attach: ignoring pd of 0\n");
+		dprintf(2, "*** bootinfo_attach: ignoring pd of 0\n");
 		return 0;
 	}
 
@@ -387,7 +387,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		dprintf(0, "!!! bootinfo_attach: didn't find relevant process!\n");
 		return BI_NAME_INVALID;
 	} else {
-		dprintf(1, "*** bootinfo_attach: found process at %p\n", bip);
+		dprintf(2, "*** bootinfo_attach: found process at %p\n", bip);
 	}
 
 	// Look for the region.
@@ -401,7 +401,7 @@ bootinfo_attach(bi_name_t pd, bi_name_t ms, int rights,
 		dprintf(0, "!!! bootinfo_attach: didn't find relevant region!\n");
 		return BI_NAME_INVALID;
 	} else {
-		dprintf(1, "*** bootinfo_attach: found relevant region at %p\n", region);
+		dprintf(2, "*** bootinfo_attach: found relevant region at %p\n", region);
 	}
 
 	// Make necessary changes to the region.
@@ -423,7 +423,7 @@ bootinfo_new_pool(int is_virtual, const bi_user_data_t * data) {
 
 static bi_name_t
 bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
-	dprintf(1, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
+	dprintf(2, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
 
 	BootinfoProcess *bip = (BootinfoProcess*) malloc(sizeof(BootinfoProcess));
 	bip->process = process_init();
@@ -440,10 +440,10 @@ static bi_name_t
 bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 		uintptr_t user_main, int priority, char* name,
 		size_t name_len, const bi_user_data_t *data) {
-	dprintf(1, "*** bootinfo_new_thread: (owner %d) = %d\n", bi_owner, bootinfo_id);
+	dprintf(2, "*** bootinfo_new_thread: (owner %d) = %d\n", bi_owner, bootinfo_id);
 
 	if (bi_owner == 0) {
-		dprintf(1, "*** bootinfo_new_thread: ignoring owner of 0\n");
+		dprintf(2, "*** bootinfo_new_thread: ignoring owner of 0\n");
 		return 0;
 	}
 
@@ -468,7 +468,7 @@ bootinfo_new_thread(bi_name_t bi_owner, uintptr_t ip,
 
 static int
 bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
-	dprintf(1, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
+	dprintf(2, "*** bootinfo_run_thread: (tid %d) = %d\n", tid, bootinfo_id);
 
 	// Find the process to run.
 	BootinfoProcess *bip;
@@ -490,12 +490,12 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	// Prepare and run the process
 	process_prepare(bip->process, RUN_AS_PROCESS);
 	L4_ThreadId_t newtid = process_run(bip->process, RUN_AS_PROCESS);
-	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
+	dprintf(2, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {
-		dprintf(1, "Bootinfo created thread: %d\n", (int) L4_ThreadNo(newtid));
+		dprintf(2, "Bootinfo created thread: %d\n", (int) L4_ThreadNo(newtid));
 	} else {
-		dprintf(1, "Bootinfo failed to create thread: %d\n", newtid.raw);
+		dprintf(2, "Bootinfo failed to create thread: %d\n", newtid.raw);
 		return BI_NAME_INVALID;
 	}
 
@@ -504,7 +504,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 
 static int
 bootinfo_cleanup(const bi_user_data_t *data) {
-	dprintf(1, "*** bootinfo_cleanup\n");
+	dprintf(2, "*** bootinfo_cleanup\n");
 
 	BootinfoProcess *freeMe;
 	BootinfoRegion *freeMeToo;
@@ -521,7 +521,7 @@ bootinfo_cleanup(const bi_user_data_t *data) {
 		bips = freeMe;
 	}
 
-	dprintf(1, "*** bootinfo_cleanup done\n");
+	dprintf(2, "*** bootinfo_cleanup done\n");
 
 	return 0;
 }

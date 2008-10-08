@@ -14,7 +14,7 @@
 #define WAIT_ANYBODY (-1)
 #define WAIT_NOBODY (-2)
 
-#define verbose 1
+#define verbose 2
 
 // The equivalent of a PCB
 struct Process_t {
@@ -125,7 +125,7 @@ static void addBuiltinRegions(Process *p) {
 		// so just let it do its stuff and set the sp manually, etc.
 		return;
 	} else {
-		dprintf(1, "Base is at %p\n", (void*) base);
+		dprintf(2, "Base is at %p\n", (void*) base);
 	}
 
 	base = ((base - 1) & PAGEALIGN) + PAGESIZE; // Page align up
@@ -198,7 +198,7 @@ void process_prepare(Process *p, int asThread) {
 
 L4_ThreadId_t process_run(Process *p, int asThread) {
 	L4_ThreadId_t tid;
-	if (verbose > 1) process_dump(p);
+	if (verbose > 2) process_dump(p);
 
 	p->startedAt = time_stamp();
 
@@ -370,6 +370,6 @@ void process_add_rootserver(void) {
 	assert(rootserver->info.pid == L4_rootserverno);
 	sosProcs[L4_rootserverno] = rootserver;
 
-	if (verbose > 1) process_dump(rootserver);
+	if (verbose > 2) process_dump(rootserver);
 }
 

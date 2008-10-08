@@ -25,8 +25,13 @@ struct arg args[] = {
 };
 
 static void prstat(const char *name) {
-	printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
-			sbuf.st_type == ST_SPECIAL  ? 's' : '-',
+	// array corresponding to file types.
+	static char type[] = {'s', '-', 'd'};
+	// make sure we don't go out of array
+	int t = sbuf.st_type > 2 ? 0 : sbuf.st_type;
+
+	printf("%c%c%c%c 0x%08x 0x%08lx 0x%08lx %s\n",
+			type[t],
 			sbuf.st_fmode & FM_READ     ? 'r' : '-',
 			sbuf.st_fmode & FM_WRITE    ? 'w' : '-',
 			sbuf.st_fmode & FM_EXEC     ? 'x' : '-',
