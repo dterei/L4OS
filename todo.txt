@@ -36,13 +36,5 @@ some way to prevent it from showing up in dirent.  Maybe just hide all hidden
 files, Unix-style.  That's not really a hack (and we could even argue it's a
 policy) but it's pretty restrictive.
 
-- Fix problem where an exception is occurring during startup, stopping sosh
-(why sosh?) from starting.  I though I'd fixed it (evidenced by my commit log)
-but apparently I was too optimistic.  Way too optimistic, it's happening very
-frequently.
-
-- Fix the process-waking problem where it won't wake on a process segfaulting,
-only on a process being killed (aka deleted) explicitly.
-
 - Somehow startRequest is being called when allocLimit > 0.  Need to fix.
 
