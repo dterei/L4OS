@@ -42,7 +42,6 @@ static L4_Word_t sSosMemoryTop, sSosMemoryBot;
 static L4_Fpage_t utcb_fpage_s;
 static L4_Word_t utcb_base_s;
 static L4_Word_t last_thread_s;
-static L4_Word_t last_thread_disabled_s;
 
 // Address of the bootinfo buffer
 extern void *__okl4_bootinfo;
@@ -198,17 +197,8 @@ sos_logf(const char *msg, ...)
 // A simple, i.e. broken, kernel thread id allocator
 L4_ThreadId_t
 sos_get_new_tid(void) {
-	if (!last_thread_disabled_s) {
-		dprintf(3, "allocating new tid %lu\n", last_thread_s+1);
-		return L4_GlobalId(++last_thread_s, 1);
-	} else {
-		dprintf(0, "sos_get_new_tid has been disabled!\n");
-		return L4_nilthread;
-	}
-}
-
-void sos_get_new_tid_disable(void) {
-	last_thread_disabled_s = 1;
+	assert(last_thread_s < PROCESS_BASE_PID);
+	return L4_GlobalId(++last_thread_s, 1);
 }
 
 // get the next thread id that will be issued
@@ -487,7 +477,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 
 	// Prepare and run the process
 	process_prepare(bip->process);
-	L4_ThreadId_t newtid = process_run(bip->process, RUN_AS_PROCESS);
+	L4_ThreadId_t newtid = process_run(bip->process);
 	dprintf(1, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {

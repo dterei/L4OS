@@ -45,7 +45,7 @@ init_thread(void) {
 
 	network_init();
 	vfs_init();
-	pager_init();
+	//pager_init();
 	sos_start_binfo_executables();
 
 	for (;;)
@@ -170,6 +170,9 @@ main(void) {
 	// loop - needs to be done here because the setup thread needs to be
 	// able to IPC the rootserver
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor,L4_NotifyMsgAcceptor));
+
+	// Ok to do this in the rootsever now
+	pager_init();
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.

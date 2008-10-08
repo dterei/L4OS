@@ -12,7 +12,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 3
 
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
@@ -402,17 +402,11 @@ void pager_init(void) {
 	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) allocFrames(numFrames);
 
-	// Start the real pager process
-	Process *pager = process_init();
-
-	process_prepare(pager);
+	// Start the virtual pager thread
+	Process *pager = thread_init(process_lookup(L4_rootserverno));
 	process_set_ip(pager, (void*) virtualPagerHandler);
 	process_set_sp(pager, virtualPagerStack + PAGER_STACK_SIZE - 1);
-
-	// Start pager, but wait until it has actually started before
-	// trying to assign virtual_pager to anything
-	dprintf(1, "*** pager_init: about to run pager\n");
-	process_run(pager, RUN_AS_THREAD);
+	process_run(pager);
 }
 
 int sos_moremem(uintptr_t *base, unsigned int nb) {
@@ -946,7 +940,7 @@ static void virtualPagerHandler(void) {
 			L4_ThreadNo(virtual_pager));
 
 	// Initialise the swap file
-	swapfile_init();
+	//swapfile_init();
 	dprintf(1, "*** virtualPagerHandler: swapfile opened at %d\n", swapfile);
 
 	// Accept the pages and signal we've actually started
@@ -961,6 +955,7 @@ static void virtualPagerHandler(void) {
 		tag = L4_Wait(&tid);
 
 		tid = sos_cap2tid(tid);
+		printf("tid is %ld\n", L4_ThreadNo(tid));
 		p = process_lookup(L4_ThreadNo(tid));
 		L4_MsgStore(tag, &msg);
 

@@ -5,8 +5,6 @@
 #include "vfs.h"
 
 #define NIL_PID (-1)
-#define RUN_AS_PROCESS 0
-#define RUN_AS_THREAD 1
 
 // The process data structure
 typedef struct Process_t Process;
@@ -14,8 +12,11 @@ typedef struct Process_t Process;
 // Find a process from a thread
 Process *process_lookup(L4_Word_t key);
 
-// Create a new process with a given name
+// Create a new process
 Process *process_init(void);
+
+// Create a new thread within a given process
+Process *thread_init(Process *p);
 
 // Add a region to a process
 void process_add_region(Process *p, Region *r);
@@ -33,7 +34,7 @@ void process_set_ip(Process *p, void *ip);
 void process_prepare(Process *p);
 
 // Run a process
-L4_ThreadId_t process_run(Process *p, int asThread);
+L4_ThreadId_t process_run(Process *p);
 
 // Get the process id of a process
 pid_t process_get_pid(Process *p);

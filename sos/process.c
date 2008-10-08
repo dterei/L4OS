@@ -26,38 +26,68 @@ struct Process_t {
 	timestamp_t   startedAt;
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
+	Process      *threadSpace;
 };
 
+static struct Process_t EMPTY_PCB;
+
 // Array of all PCBs
-static Process *sosProcs[MAX_ADDRSPACES];
+static Process *pcbs[MAX_ADDRSPACES];
 
 // The next pid to allocate
-static L4_Word_t nextPid;
+static L4_Word_t nextTno = PROCESS_BASE_PID;
 
-// All pids below this value have already been allocated by libsos
-// as threadids, and all over SOS it has been assumed that there is
-// a 1:1 mapping between pid and tid (and sid incidentally), so just
-// never allocate a pid below this value.
-static L4_Word_t tidOffset;
+static L4_Word_t getNextTno(void) {
+	L4_Word_t oldPid = nextTno;
+	int firstIteration = 1;
+
+	while (pcbs[nextTno] != NULL) {
+		// Detect loop, no more pids!
+		if (!firstIteration && oldPid == nextTno) {
+			dprintf(0, "!!! getNextTno: none left\n");
+			break;
+		}
+
+		nextTno++;
+
+		// Gone past the end, loop around
+		if (nextTno > MAX_THREADS) {
+			nextTno = PROCESS_BASE_PID;
+		}
+
+		firstIteration = 0;
+	}
+
+	// Should probably throw error here instead, but
+	// it's too much effort
+	assert(pcbs[nextTno] == NULL);
+
+	return nextTno;
+}
+
+static int isThread(Process *p) {
+	return p->threadSpace != NULL;
+}
 
 Process *process_lookup(L4_Word_t key) {
-	while (sosProcs[key] == NULL) key--;
-	return sosProcs[key];
+	Process *p = pcbs[key];
+
+	printf("process_lookup found %p\n", p);
+
+	if (p == NULL) {
+		return NULL;
+	} else if (isThread(p)) {
+		return p->threadSpace;
+	} else {
+		return p;
+	}
 }
 
 static Process *processAlloc(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
-	p->info.pid = 0;   // decide later
-	p->info.size = 0;  // fill in as we go
-	p->info.stime = 0; // decide later
-	p->info.ctime = 0; // don't ever need
-	p->info.command[0] = '\0';
-
+	*p = EMPTY_PCB;
 	p->pagetable = pagetable_init();
-	p->regions = NULL;
-	p->sp = NULL;
-	p->ip = NULL;
 	vfiles_init(p->files);
 	p->waitingOn = WAIT_NOBODY;
 
@@ -65,20 +95,26 @@ static Process *processAlloc(void) {
 }
 
 Process *process_init(void) {
-	// On the first process initialisation set the offset
-	// to whatever it is, and disable libsos from allocating
-	// any more threadids.  Admittedly, this is a bit of a hack.
-	if (tidOffset == 0) {
-		tidOffset = L4_ThreadNo(sos_peek_new_tid());
-		sos_get_new_tid_disable();
-		nextPid = tidOffset;
-	}
-
-	// Do the normal process initialisation
 	return processAlloc();
 }
 
+Process *thread_init(Process *p) {
+	Process *thread = (Process*) malloc(sizeof(struct Process_t));
+	*thread = EMPTY_PCB;
+
+	assert(p != NULL);
+	thread->threadSpace = p;
+	assert(thread->threadSpace != NULL);
+
+	thread->info.pid = getNextTno();
+	pcbs[thread->info.pid] = thread;
+
+	return thread;
+}
+
+
 void process_add_region(Process *p, Region *r) {
+	assert(!isThread(p));
 	region_append(r, p->regions);
 	p->regions = r;
 }
@@ -99,17 +135,20 @@ void process_set_sp(Process *p, void *sp) {
 }
 
 void process_set_name(Process *p, char *name) {
+	assert(!isThread(p));
 	strncpy(p->info.command, name, N_NAME);
 }
 
 static void addRegion(Process *p, region_type type,
 		uintptr_t base, uintptr_t size, int rights, int dirmap) {
+	assert(!isThread(p));
 	Region *new = region_init(type, base, size, rights, dirmap);
 	region_append(new, p->regions);
 	p->regions = new;
 }
 
 static void addBuiltinRegions(Process *p) {
+	assert(!isThread(p));
 	uintptr_t base = 0;
 
 	// Find the highest address and put the heap above it
@@ -157,57 +196,28 @@ void process_dump(Process *p) {
 	printf("*** %s: ip: %p\n", __FUNCTION__, p->ip);
 }
 
-static L4_Word_t getNextPid(void) {
-	L4_Word_t oldPid = nextPid;
-	int firstIteration = 1;
-
-	while (sosProcs[nextPid] != NULL) {
-		// Detect loop, no more pids!
-		if (!firstIteration && oldPid == nextPid) {
-			dprintf(0, "!!! getNextPid: none left\n");
-			break;
-		}
-
-		nextPid++;
-
-		// Gone past the end, loop around
-		if (nextPid > MAX_THREADS) {
-			nextPid = tidOffset;
-		}
-
-		firstIteration = 0;
-	}
-
-	// Should probably throw error here instead, but
-	// it's too much effort
-	assert(sosProcs[nextPid] == NULL);
-
-	return nextPid;
-}
-
 void process_prepare(Process *p) {
+	assert(!isThread(p));
+
 	// Add the builtin regions (stack, heap)
 	// This will set the stack pointer too
 	addBuiltinRegions(p);
 
 	// Register with the collection of PCBs
-	p->info.pid = getNextPid();
-	sosProcs[p->info.pid] = p;
-
-	// Necessary?
-	//L4_CacheFlushAll();
+	p->info.pid = getNextTno();
+	pcbs[p->info.pid] = p;
 
 	// Open stdout
 	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
 }
 
-L4_ThreadId_t process_run(Process *p, int asThread) {
+L4_ThreadId_t process_run(Process *p) {
 	L4_ThreadId_t tid;
 	if (verbose > 1) process_dump(p);
 
 	p->startedAt = time_stamp();
 
-	if (asThread == RUN_AS_THREAD) {
+	if (isThread(p)) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
@@ -215,43 +225,64 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
-	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
-	assert(L4_ThreadNo(tid) == p->info.pid);
+	dprintf(0, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
+	assert(L4_IsThreadEqual(tid, process_get_tid(p)));
 
 	return tid;
 }
 
 pid_t process_get_pid(Process *p) {
-	if (p == NULL) return NIL_PID;
-	return p->info.pid;
+	if (p == NULL) {
+		return NIL_PID;
+	} else if (isThread(p)) {
+		return process_get_pid(p->threadSpace);
+	} else {
+		return p->info.pid;
+	}
 }
 
 L4_ThreadId_t process_get_tid(Process *p) {
-	if (p == NULL) return L4_nilthread;
-	return L4_GlobalId(p->info.pid, 1);
+	if (p == NULL) {
+		return L4_nilthread;
+	} else {
+		return L4_GlobalId(p->info.pid, 1);
+	}
 }
 
 L4_SpaceId_t process_get_sid(Process *p) {
-	if (p == NULL) return L4_nilspace;
-	return L4_SpaceId(process_get_pid(p));
+	if (p == NULL) {
+		return L4_nilspace;
+	} else {
+		return L4_SpaceId(process_get_pid(p));
+	}
 }
 
 Pagetable *process_get_pagetable(Process *p) {
-	if (p == NULL) return NULL;
-	return p->pagetable;
+	if (p == NULL) {
+		return NULL;
+	} else if (isThread(p)) {
+		return process_get_pagetable(p->threadSpace);
+	} else {
+		return p->pagetable;
+	}
 }
 
 Region *process_get_regions(Process *p) {
-	if (p == NULL) return NULL;
-	return p->regions;
+	if (p == NULL) {
+		return NULL;
+	} else if (isThread(p)) {
+		return process_get_regions(p->threadSpace);
+	} else {
+		return p->regions;
+	}
 }
 
 static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
-	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
-		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
-			sosProcs[i]->waitingOn = WAIT_NOBODY;
-			dprintf(0, "*** wakeAll: waking %d\n", process_get_pid(sosProcs[i]));
-			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
+	for (int i = PROCESS_BASE_PID; i < MAX_ADDRSPACES; i++) {
+		if ((pcbs[i] != NULL) && (pcbs[i]->waitingOn == wakeFor)) {
+			pcbs[i]->waitingOn = WAIT_NOBODY;
+			dprintf(0, "*** wakeAll: waking %d\n", process_get_pid(pcbs[i]));
+			syscall_reply(process_get_tid(pcbs[i]), wakeFrom);
 		}
 	}
 }
@@ -261,6 +292,8 @@ int process_kill(Process *p) {
 
 	if (p == NULL) {
 		return (-1);
+	} else if (isThread(p)) {
+		process_kill(p->threadSpace);
 	} else {
 		printf("pid is %d\n", p->info.pid);
 	}
@@ -276,6 +309,7 @@ int process_kill(Process *p) {
 	 * 	- free up the pid for another process
 	 * 	- free the PCB
 	 * 	- wake up waiting processes
+	 * 	! kill threads from that process
 	 *
 	 * Points marked with (!) are ones that haven't been
 	 * done yet.
@@ -312,7 +346,7 @@ int process_kill(Process *p) {
 	// free the pid as well
 	pid_t ghostPid = p->info.pid;
 	free(p);
-	sosProcs[ghostPid] = NULL;
+	pcbs[ghostPid] = NULL;
 
 	// Wake all process waiting on this process (or any)
 	wakeAll(ghostPid, ghostPid);
@@ -325,15 +359,15 @@ int process_write_status(process_t *dest, int n) {
 	int count = 0;
 
 	// Firstly, update the size of sos
-	assert(sosProcs[L4_rootserverno] != NULL);
-	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
+	assert(pcbs[L4_rootserverno] != NULL);
+	pcbs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
 
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL) {
-			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
-			*dest = sosProcs[i]->info;
+		if (pcbs[i] != NULL && !isThread(pcbs[i])) {
+			pcbs[i]->info.stime = (time_stamp() - pcbs[i]->startedAt);
+			*dest = pcbs[i]->info;
 			dest++;
 			count++;
 		}
@@ -344,13 +378,23 @@ int process_write_status(process_t *dest, int n) {
 
 process_t *process_get_info(Process *p) {
 	// If necessary, uptime stime here too
-	if (p == NULL) return NULL;
-	return &p->info;
+	if (p == NULL) {
+		return NULL;
+	} else if (isThread(p)) {
+		return process_get_info(p->threadSpace);
+	} else {
+		return &p->info;
+	}
 }
 
 VFile *process_get_files(Process *p) {
-	if (p == NULL) return NULL;
-	return p->files;
+	if (p == NULL) {
+		return NULL;
+	} else if (isThread(p)) {
+		return process_get_files(p->threadSpace);
+	} else {
+		return p->files;
+	}
 }
 
 void process_wait_any(Process *waiter) {
@@ -368,7 +412,7 @@ void process_add_rootserver(void) {
 	process_set_name(rootserver, "sos");
 
 	assert(rootserver->info.pid == L4_rootserverno);
-	sosProcs[L4_rootserverno] = rootserver;
+	pcbs[L4_rootserverno] = rootserver;
 
 	if (verbose > 1) process_dump(rootserver);
 }

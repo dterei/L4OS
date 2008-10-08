@@ -18,6 +18,7 @@
 #define ONE_MEG (1 * 1024 * 1024)
 #define PAGEALIGN (~((PAGESIZE) - 1))
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
+#define PROCESS_BASE_PID 8
 #define PROCESS_MAX_FILES 16
 
 #endif // constants.h
