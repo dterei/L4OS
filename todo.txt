@@ -31,14 +31,7 @@ some way to prevent it from showing up in dirent.  Maybe just hide all hidden
 files, Unix-style.  That's not really a hack (and we could even argue it's a
 policy) but it's pretty restrictive.
 
-- change debugging so that level 0 is only used for critical errors (also suggest
-use level 1 for quite useful stuff, e.g some things which are currently on level 0).
-Should be that we can run it with debugging set to 1 and nothing should print unless
-a critical error or obvious bug occurs.
-
 - Somehow startRequest is being called when allocLimit > 0.  Need to fix.
-
-- get all threads having a name (.eg ps) and all setting L4_KDB_SetThreadName();
 
 - investigate moving the kernel heap size setting to constants.h
 
