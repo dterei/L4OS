@@ -185,20 +185,15 @@ static L4_Word_t getNextPid(void) {
 	return nextPid;
 }
 
-void process_prepare(Process *p) {
-	// Add the builtin regions (stack, heap)
-	// This will set the stack pointer too
-	addBuiltinRegions(p);
-
+void process_prepare(Process *p, int asThread) {
 	// Register with the collection of PCBs
 	p->info.pid = getNextPid();
 	sosProcs[p->info.pid] = p;
 
-	// Necessary?
-	//L4_CacheFlushAll();
-
-	// Open stdout
-	vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
+	if (asThread != RUN_AS_THREAD) {
+		addBuiltinRegions(p);
+		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
+	}
 }
 
 L4_ThreadId_t process_run(Process *p, int asThread) {
@@ -208,10 +203,13 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	p->startedAt = time_stamp();
 
 	if (asThread == RUN_AS_THREAD) {
+		printf("as thread\n");
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
+		printf("as raw task\n");
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	} else {
+		printf("as virtual task\n");
 		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
