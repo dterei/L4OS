@@ -10,9 +10,6 @@
 /* Random problems seem to occur if all of buffer used, some is needed for
  * nfs header.
  */
-#define NFS_HEADER 180
-#define NFS_BUFSIZ (IO_MAX_BUFFER - NFS_HEADER)
-
 #define PAGESIZE 4096
 
 #define MAX_ADDRSPACES 256
