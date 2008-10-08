@@ -89,6 +89,7 @@
 size_t
 strlen(const char *s)
 {
+	 if (s == NULL) return (size_t) (0);
     const char *p;
 
     for (p = s; *p != '\0'; p++);
@@ -98,9 +99,10 @@ strlen(const char *s)
 size_t
 strnlen(const char *s, size_t maxlen)
 {
-	size_t i;
+	 if (s == NULL) return (size_t) (0);
+	 size_t i;
 
-	for (i = 0; *s != '\0' && i < maxlen; s++, i++);
-	return i;
+	 for (i = 0; *s != '\0' && i < maxlen; s++, i++);
+	 return i;
 }
 
