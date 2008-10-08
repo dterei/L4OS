@@ -274,7 +274,8 @@ get_request(uintptr_t token) {
 }
 
 /* Convert the NFS mode (xwr) to unix mode (rwx) */
-static fmode_t
+static
+fmode_t
 mode_nfs2unix(fmode_t mode) {
 	return
 		(((mode & 0x1) >> 0) << 2) |
@@ -291,6 +292,33 @@ cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_size  = attr->size;
 	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
 	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+}
+
+/* Change an NFS Error into a VFS Error */
+static
+L4_Word_t
+status_nfs2vfs(int status) {
+	switch(status) {
+		case NFS_OK:					return SOS_VFS_OK;		break;
+		case NFSERR_PERM:				return SOS_VFS_PERM;		break;
+		case NFSERR_NOENT:			return SOS_VFS_NOVNODE;	break;
+		case NFSERR_NAMETOOLONG:	return SOS_VFS_NOMEM;	break;
+		case NFSERR_IO:
+		case NFSERR_NXIO:
+		case NFSERR_ACCES:
+		case NFSERR_EXIST:
+		case NFSERR_NODEV:
+		case NFSERR_NOTDIR:
+		case NFSERR_ISDIR:
+		case NFSERR_FBIG:
+		case NFSERR_NOSPC:
+		case NFSERR_ROFS:
+		case NFSERR_NOTEMPTY:
+		case NFSERR_DQUOT:
+		case NFSERR_STALE:
+		case NFSERR_WFLUSH:
+		default:							return SOS_VFS_ERROR; 	break;
+	}
 }
 
 /* NFS_LookUp Callback */
@@ -328,15 +356,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 		dprintf(0, "!!! nfsfs: lookup_cb: Error occured! (%d)\n", status);
 		free((NFS_File *) rq->p.vnode->extra);
 		free(rq->p.vnode);
-		rq->p.vnode = NULL;
-		if (status == NFSERR_NOENT) {
-			status = SOS_VFS_NOVNODE;
-		} else if (status == NFSERR_PERM) {
-			status = SOS_VFS_PERM;
-		} else {
-			status = SOS_VFS_ERROR;
-		}
-		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, status);
+		rq->open_done(rq->p.tid, NULL, rq->mode, status_nfs2vfs(status));
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
@@ -414,7 +434,7 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	}
 
 	if (status != NFS_OK) {
-		rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, SOS_VFS_ERROR);
+		rq->read_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, status_nfs2vfs(status));
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
@@ -468,7 +488,7 @@ write_cb(uintptr_t token, int status, fattr_t *attr) {
 	}
 
 	if (status != NFS_OK) {
-		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, SOS_VFS_ERROR);
+		rq->write_done(rq->p.tid, rq->p.vnode, rq->file, 0, rq->buf, 0, status_nfs2vfs(status));
 		remove_request((NFS_BaseRequest *) rq);
 		return;
 	}
@@ -522,6 +542,13 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 		dprintf(0, "!!! nfsfs: Corrupt dirent callback, no matching token: %d\n", token);
 		return;
 	}
+
+	if (status != NFS_OK) {
+		syscall_reply(rq->p.tid, status_nfs2vfs(status));
+		remove_request((NFS_BaseRequest *) rq);
+		return;
+	}
+
 
 	// got it
 	if (rq->cpos + num_entries >= rq->pos + 1) {
@@ -582,12 +609,9 @@ stat_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 
 	if (status == NFS_OK) {
 		cp_stats(rq->stat, attr);
-		status = SOS_VFS_OK;
-	} else {
-		status = SOS_VFS_ERROR;
 	}
 
-	syscall_reply(rq->p.tid, status);
+	syscall_reply(rq->p.tid, status_nfs2vfs(status));
 	remove_request((NFS_BaseRequest *) rq);
 }
 
@@ -632,13 +656,7 @@ remove_cb(uintptr_t token, int status) {
 		return;
 	}
 
-	if (status == NFS_OK) {
-		status = SOS_VFS_OK;
-	} else {
-		status = SOS_VFS_ERROR;
-	}
-
-	syscall_reply(rq->p.tid, status);
+	syscall_reply(rq->p.tid, status_nfs2vfs(status));
 	remove_request((NFS_BaseRequest *) rq);
 }
 

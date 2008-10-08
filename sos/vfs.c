@@ -261,7 +261,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 static
 void
 vfs_open_err(VNode self) {
-	if (self->readers <= 0 && self->writers <= 0) {
+	if (self != NULL && self->readers <= 0 && self->writers <= 0) {
 		remove_vnode(self);
 		free_vnode(self);
 		self = NULL;
