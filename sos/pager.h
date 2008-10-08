@@ -41,7 +41,7 @@ void frames_free(pid_t pid);
 
 void pager_init(void);
 void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
-void sos_pager_handler(L4_Word_t addr, L4_Word_t ip);
+void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg);
 char *pager_buffer(L4_ThreadId_t tid);
 
 int sos_moremem(uintptr_t *base, unsigned int nb);

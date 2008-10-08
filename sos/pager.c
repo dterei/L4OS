@@ -1017,14 +1017,17 @@ static void virtualPagerHandler(void) {
 	}
 }
 
-void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
-	dprintf(3, "*** sos_pager_handler: addr=%p ip=%p sender=%ld\n",
-			addr, ip, L4_SpaceNo(L4_SenderSpace()));
-	addr &= PAGEALIGN;
+void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg) {
+	int addr = L4_MsgWord(msg, 0);
+	dprintf(3, "*** sos_pager_handler: addr=%p tid=%ld sender=%ld\n",
+			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
 
 	if (addr == 0) {
-		printf("Segmentation fault in sos_pager_handler\n");
+		printf("Segmentation fault in sos_pager_handler, tid=%ld addr=%p\n",
+				L4_ThreadNo(tid), (void*) addr);
 	}
+
+	addr &= PAGEALIGN;
 
 	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
@@ -1032,7 +1035,7 @@ void sos_pager_handler(L4_Word_t addr, L4_Word_t ip) {
 
 	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys)) { 
 		sos_print_error(L4_ErrorCode());
-		dprintf(0, "!!! sos_pager: failed at addr %lx ip %lx\n", addr, ip);
+		dprintf(0, "!!! sos_pager_handler: failed at addr=%p\n", (void*) addr);
 	}  
 }
 

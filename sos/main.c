@@ -80,9 +80,6 @@ syscall_loop(void)
 {
 	dprintf(3, "Entering %s\n", __FUNCTION__);
 
-	// Set up which messages we will receive
-	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor,L4_NotifyMsgAcceptor));
-
 	int send = 0;
 	L4_Msg_t msg;
 	L4_ThreadId_t tid = L4_nilthread;
@@ -107,12 +104,6 @@ syscall_loop(void)
 
 		// At this point we have, probably, recieved an IPC
 		L4_MsgStore(tag, &msg); /* Get the tag */
-
-		/*
-		printf("tid is %p (%ld) - real tid %ld vs %ld\n",
-				(void*) tid.raw, L4_ThreadNo(tid),
-				tid.raw & 0xfff, L4_SpaceNo(L4_SenderSpace()));
-				*/
 
 		if (L4_IsNilThread(tid)) {
 			L4_Word_t notify_bits = L4_MsgWord(&msg, 0);
@@ -144,7 +135,7 @@ syscall_loop(void)
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				sos_pager_handler(L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+				sos_pager_handler(sos_cap2tid(tid), &msg);
 				L4_Set_MsgTag(L4_Niltag);
 				break;
 
@@ -260,6 +251,11 @@ main (void)
 
 	// Rootserver needs a PCB for opening files (e.g. the swap file)
 	process_add_rootserver();
+
+	// Set up which messages we will receive in preparation for the syscall
+	// loop - needs to be done here because the setup thread needs to be
+	// able to IPC the rootserver
+	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor,L4_NotifyMsgAcceptor));
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
