@@ -78,7 +78,7 @@ struct command sosh_commands[] = {
 };
 
 int
-main(void)
+main(int sosh_argc, char *sosh_argv[])
 {
 	char buf[BUF_SIZ];
 	char *argv[MAX_ARGS];
