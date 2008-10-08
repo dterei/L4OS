@@ -405,6 +405,7 @@ void pager_init(void) {
 	// Start the real pager process
 	Process *pager = process_init();
 
+	process_set_name(pager, "virtual_pager");
 	process_prepare(pager, RUN_AS_THREAD);
 	process_set_ip(pager, (void*) virtualPagerHandler);
 	process_set_sp(pager, virtualPagerStack + PAGER_STACK_SIZE - 1);

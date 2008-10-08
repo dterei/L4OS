@@ -6,7 +6,7 @@ happen on my laptop to some extent, so it's worth going over the console to see
 if there is a bug that might cause this behaviour.
 
 - Update crt (whatever that is) to kill a process when it finishes.  At the
-moment it just pagefaults like crazy.  Apparently this is a mystery funtion
+moment it just pagefaults like crazy.  Apparently this is a mystery function
 somewhere, possibly written in assembler (?).
 
 - Very frequently SOS hangs on bootup on "waiting for PHY to become ready", we
@@ -43,4 +43,10 @@ a critical error or obvious bug occurs.
 - investigate moving the kernel heap size setting to constants.h
 
 - have the init_thread finish instead of just constantly sleeping.
+
+- Improve syscall interface. Have a generic IPC library which provides our var arg
+handle functions and use that for making system calls on both the user space side
+and kernel side rather then duplicating code on both side like currently. Also
+use jump table/function pointer array handling on receive side instead of giant
+switch.
 

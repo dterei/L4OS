@@ -137,10 +137,44 @@ find_vnode(const char *path) {
 	return NULL;
 }
 
+static
+VNode
+new_vnode(void) {
+	VNode vn = (VNode) malloc(sizeof(struct VNode_t));
+
+	if (vn == NULL) {
+		dprintf(0, "!!! vfs_new_vnode: malloc failed!\n");
+		return NULL;
+	}
+
+	// stats
+	vn->path[0] = '\0';
+	vn->Max_Readers = VFS_UNLIMITED_RW;
+	vn->Max_Writers = VFS_UNLIMITED_RW;
+	vn->readers = 0;
+	vn->writers = 0;
+	vn->extra = NULL;
+
+	// list pointers
+	vn->previous = NULL;
+	vn->next = NULL;
+
+	// function pointers
+	vn->open = NULL;
+	vn->close = NULL;
+	vn->read = NULL;
+	vn->write = NULL;
+	vn->getdirent = NULL;
+	vn->stat = NULL;
+	vn->remove = NULL;
+	return vn;
+}
+
 /* Free a vnode */
 static
 void
 free_vnode(VNode vnode) {
+	dprintf(1, "free_vnode (%p)\n", vnode);
 	if (vnode == NULL) {
 		return;
 	}
@@ -149,7 +183,7 @@ free_vnode(VNode vnode) {
 		vnode->extra = NULL;
 	}
 	free(vnode);
-	vnode = NULL;
+	dprintf(2, "vnode free'd (%p)\n", vnode);
 }
 
 /* Handles updating the ref counts */
@@ -241,7 +275,7 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// Not an open file so open nfs file
 	if (vnode == NULL) {
-		vnode = (VNode) malloc(sizeof(struct VNode_t));
+		vnode = new_vnode();
 		if (vnode == NULL) {
 			dprintf(0, "!!! vfs_open: Malloc Failed! cant create new vnode !!!\n");
 			vfs_open_done(tid, vnode, mode, SOS_VFS_NOMEM);
@@ -264,7 +298,6 @@ vfs_open_err(VNode self) {
 	if (self != NULL && self->readers <= 0 && self->writers <= 0) {
 		remove_vnode(self);
 		free_vnode(self);
-		self = NULL;
 	}
 }
 

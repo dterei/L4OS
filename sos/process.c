@@ -213,6 +213,8 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
+	L4_KDB_SetThreadName(tid, p->info.command);
+
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
 	assert(L4_ThreadNo(tid) == p->info.pid);
 

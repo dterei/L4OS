@@ -294,6 +294,36 @@ cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
 }
 
+/* Create the extra struct for an nfs file */
+static
+NFS_File *
+new_nfsfile(VNode vnode) {
+	if (vnode == NULL) {
+		return NULL;
+	}
+
+	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
+	if (nf == NULL) {
+		dprintf(0, "!!! new_nfsfile: malloc failed!\n");
+		return NULL;
+	}
+
+	nf->vnode = vnode;
+	vnode->extra = (void *) nf;
+}
+
+/* Free the extra struct for an nfs file */
+static
+void
+free_nfsfile(VNode vnode) {
+	if (vnode == NULL) {
+		return;
+	}
+
+	free((NFS_File *) vnode->extra);
+	vnode->extra = NULL;
+}
+
 /* Change an NFS Error into a VFS Error */
 static
 L4_Word_t
@@ -354,7 +384,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	// error
 	else {
 		dprintf(0, "!!! nfsfs: lookup_cb: Error occured! (%d)\n", status);
-		free((NFS_File *) rq->p.vnode->extra);
+		free_nfsfile(rq->p.vnode);
 		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, status_nfs2vfs(status));
 		remove_request((NFS_BaseRequest *) rq);
 	}
@@ -375,9 +405,11 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->next = NULL;
 	self->previous = NULL;
 
-	NFS_File *nf = (NFS_File *) malloc(sizeof(NFS_File));
-	nf->vnode = self;
-	self->extra = (void *) nf;
+	if (new_nfsfile(self) == NULL) {
+		dprintf(0, "!!! nfsfs_open: malloc failed!\n");
+		open_done(tid, self, mode, SOS_VFS_NOMEM);
+		return;
+	}
 
 	self->open = nfsfs_open;
 	self->close = nfsfs_close;
@@ -414,9 +446,7 @@ nfsfs_close(L4_ThreadId_t tid, VNode self, fildes_t file, fmode_t mode,
 		return;
 	}
 
-	free((NFS_File *) self->extra);
-	self->extra = NULL;
-
+	free_nfsfile(self);
 	close_done(tid, self, file, mode, SOS_VFS_OK);
 }
 
