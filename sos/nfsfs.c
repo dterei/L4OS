@@ -355,8 +355,7 @@ lookup_cb(uintptr_t token, int status, struct cookie *fh, fattr_t *attr) {
 	else {
 		dprintf(0, "!!! nfsfs: lookup_cb: Error occured! (%d)\n", status);
 		free((NFS_File *) rq->p.vnode->extra);
-		free(rq->p.vnode);
-		rq->open_done(rq->p.tid, NULL, rq->mode, status_nfs2vfs(status));
+		rq->open_done(rq->p.tid, rq->p.vnode, rq->mode, status_nfs2vfs(status));
 		remove_request((NFS_BaseRequest *) rq);
 	}
 }
