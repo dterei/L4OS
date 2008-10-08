@@ -81,9 +81,7 @@ true_str_size(char * s, size_t n)
 
 /** @todo FIXME: Break this function down into smaller functions - awiggins. */
 int
-bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks,
-        void * user_data)
-{
+bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks) {
     char * this_rec = (char *)buffer;
     bi_user_data_t data;
     int ret = 1; /* Assume that we'll return an error. */
@@ -95,7 +93,7 @@ bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks,
     data.total_caps    = 0;
     data.total_zones   = 0;
     data.rec_num       = 0;
-    data.user_data     = user_data;
+    data.user_data     = NULL;
 
     /* 1) Check for the header record. */
     if (((bi_hdr_t *)this_rec)->op != BI_OP_HEADER) {

@@ -230,8 +230,7 @@ typedef struct
 }
 
 
-int bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks,
-        void * user_data);
+int bootinfo_parse(void * buffer, const bi_callbacks_t * callbacks);
 
 
 #endif /* !__BOOTINFO__BOOTINFO_H__ */
