@@ -31,7 +31,19 @@ some way to prevent it from showing up in dirent.  Maybe just hide all hidden
 files, Unix-style.  That's not really a hack (and we could even argue it's a
 policy) but it's pretty restrictive.
 
-- Somehow startRequest is being called when allocLimit > 0.  Need to fix.
+- Associate a value with every syscall reply indicating where it came from.
+For example, if replying from a VFS_OPEN then the tag should be VFS_REPLY and
+the first value should be VFS_OPEN.  We need either this, or a different way of
+handling the Send-not-Reply to pager (which is kind of hard).  For now, only
+need it for the VFS functions (seek, open, read, write).
+
+- Killing processes is now causing all sorts of problems, quite a range - from
+crashing SOS to crashing the user to failed assertions.  Doesn't make sense to
+fix this until the thing above has been dealt with.
+
+- Need to free the resources from L4 as well as those from sos (when deleting
+processes).  By L4 resources I mean those made in sos_process_create, probably
+implies we should have a sos_process_delete.
 
 - investigate moving the kernel heap size setting to constants.h
 
