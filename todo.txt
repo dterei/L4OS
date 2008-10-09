@@ -18,3 +18,15 @@ should get called too.
 
 - Free L4's resources when deleting process.
 
+- ELF loading.  Note that we should aim to load everything by setting the
+relevant memory sections of whichever process as being on disk, and then having
+a (potentially) different swap file for each one.  This will require (at least):
+   - That swapfile.c doesn't act with a global swapfile, but rather some sort
+   of swapfile struct containing a vnode and the available sections.  Could
+   combine this in to a single allocated frame pretty easily, just use 32 bytes
+   for the pointer and the remaining for the usual stuff.
+   - A swapfile struct in the PCB.
+   - That we figure out how to create ELF files that are formatted in nice ways
+   (page aligned to something would be ideal).  Either that or the pager/regions
+   need to be changed to support non-pagealigned addresses where necessary.
+
