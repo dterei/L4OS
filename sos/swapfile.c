@@ -22,7 +22,6 @@
 
 #define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
-#define NULL_SLOT ((L4_Word_t) (-1))
 
 fildes_t swapfile;
 
@@ -77,7 +76,7 @@ swapslot_alloc(void)
 {
 	if (SlotsFree <= 0)
 	{
-		return NULL_SLOT;
+		return ADDRESS_NONE;
 	}
 
 	L4_Word_t r = FileSlots[NextSlot];

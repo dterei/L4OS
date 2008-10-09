@@ -17,8 +17,6 @@
 // For (demand and otherwise) paging
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
 
-#define ANY_FRAME ((L4_Word_t) -1)
-
 #define ONDISK_MASK  0x00000001
 #define PINNED_MASK  0x00000002
 #define REFBIT_MASK  0x00000004
@@ -519,6 +517,11 @@ static void pagerContinue(PagerRequest *pr) {
 static L4_Word_t pagerSwapslotAlloc(Process *p) {
 	L4_Word_t diskAddr = swapslot_alloc();
 
+	if (diskAddr == ADDRESS_NONE) {
+		dprintf(0, "!!! pagerSwapslotAlloc: none available\n");
+		return ADDRESS_NONE;
+	}
+
 	WordList *new = (WordList*) malloc(sizeof(WordList));
 	new->pid = process_get_pid(p);
 	new->word = diskAddr;
@@ -537,7 +540,7 @@ static void pagerSwapslotFree(Process *p, L4_Word_t frame) {
 
 	while (curr != NULL) {
 		if ((curr->pid == process_get_pid(p)) &&
-				((curr->word == frame) || (curr->word == ANY_FRAME))) {
+				((curr->word == frame) || (curr->word == ADDRESS_ALL))) {
 			if (prev == NULL) {
 				swapped = curr->next;
 			} else {
@@ -571,7 +574,7 @@ static int processDelete(L4_Word_t pid) {
 
 	// Free all resources
 	framesFree(p);
-	pagerSwapslotFree(p, ANY_FRAME);
+	pagerSwapslotFree(p, ADDRESS_ALL);
 	pagetableFree(p);
 	regionsFree(p);
 
