@@ -41,6 +41,7 @@ typedef enum {
 	SOS_GETDIRENT,
 	SOS_STAT,
 	SOS_REMOVE,
+	SOS_FLUSH,
 	SOS_PROCESS_CREATE,
 	SOS_PROCESS_DELETE,
 	SOS_MY_ID,
@@ -198,6 +199,11 @@ int stat(const char *path, stat_t *buf);
  * Returns - if successful, -1 otherwise (invalid name).
  */
 int fremove(const char *path);
+
+/*
+ * Flush stdout
+ */
+void flush(void);
 
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting

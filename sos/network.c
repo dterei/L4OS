@@ -45,9 +45,7 @@ int network_irq(L4_ThreadId_t *tP, int *sendP)
 }
 
 
-void
-network_init(void)
-{
+void network_init(void) {
     printf("\nStarting %s\n", __FUNCTION__);
 
     // Initialise the nslu2 hardware
@@ -107,44 +105,29 @@ network_init(void)
     printf("Finished %s\n\n", __FUNCTION__);
 }
 
-int
-network_sendstring_char(int len, char *contents) {
-	int i;
-	char c;
+#define NS_BUFSIZ 64
 
-	dprintf(1, "*** network_sendstring: ");
+static char nsBuf[NS_BUFSIZ + 1];
+static int nsBufpos = 0;
 
-	for (i = 0; i < len; i++) {
-		c = contents[i];
-		serial_send(serial, &c, 1);
-		dprintf(1, "%c", c);
+void network_flush(void) {
+	serial_send(serial, nsBuf, nsBufpos);
+	nsBufpos = 0;
+}
+
+int network_puts(char *s, int len) {
+	for (int i = 0; i < len; i++) {
+		nsBuf[nsBufpos++] = s[i];
+		if ((s[i] == '\n') || (nsBufpos == NS_BUFSIZ)) {
+			network_flush();
+		}
 	}
-
-	dprintf(1, "\n");
 
 	return len;
 }
 
-int
-network_sendstring_int(int len, int *contents) {
-	int i;
-	char c;
-
-	dprintf(1, "*** network_sendstring: ");
-
-	for (i = 0; i < len; i++) {
-		c = (char) contents[i];
-		serial_send(serial, &c, 1);
-		dprintf(1, "%c", c);
-	}
-
-	dprintf(1, "\n");
-
-	return len;
-}
-
-int
-network_register_serialhandler(void (*handler)(struct serial *serial, char c)) {
+int network_register_serialhandler(
+		void (*handler)(struct serial *serial, char c)) {
 	dprintf(1, "*** network_register_serialhandler\n");
 	if (serial == NULL) {
 		dprintf(1, "*** serial not started yet ***\n");

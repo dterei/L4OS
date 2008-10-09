@@ -29,6 +29,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
 		case SOS_REMOVE: return "SOS_REMOVE";
+		case SOS_FLUSH: return "SOS_FLUSH";
 		case SOS_PROCESS_CREATE: return "SOS_PROCESS_CREATE";
 		case SOS_PROCESS_DELETE: return "SOS_PROCESS_DELETE";
 		case SOS_MY_ID: return "SOS_MY_ID";
@@ -273,6 +274,12 @@ int fremove(const char *path) {
 	rval = syscall(L4_rootserver, SOS_REMOVE, YES_REPLY, &msg);
 
 	return rval;
+}
+
+void flush(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	syscall(L4_rootserver, SOS_FLUSH, YES_REPLY, &msg);
 }
 
 /* 
