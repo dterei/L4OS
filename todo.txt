@@ -11,16 +11,10 @@ instead of having each fs handle it.
 
 - Update crt (whatever that is) to kill a process when it finishes.  At the
 moment it just pagefaults like crazy.  Apparently this is a mystery funtion
-somewhere, possibly written in assembler (?).
+somewhere, possibly written in assembler (?), or alternatively _Exit or _Abort
+should get called too.
 
-- Need internal synchronisation of NFS, and it would make sense (compared to
-what we already have) to use events.  It also would be easier to implement it
-at the VFS level so may as well do it there.  I.e. VFS read and write (and who
-knows maybe more?) requests get put on a queue and executed sequentially.
-Incidentally we should try to produce this error before bothering to fix it.
+- Bugcheck the process waiting and deleting.
 
-- Fill in the missing bits from M7 we couldn't do due to not having a working
-M6 - freeing allocated frames, freeing allocated slots in the swap file, and
-freeing pager requests.  And freeing L4's resources (from sos_process_create).
-(Btw this is pretty much done now, just need to bugcheck).
+- Free L4's resources when deleting process.
 

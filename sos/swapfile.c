@@ -18,7 +18,7 @@
 #include "pager.h"
 #include "swapfile.h"
 
-#define verbose 3
+#define verbose 1
 
 #define SWAPFILE_FN ".swap"
 #define SWAPSIZE (PAGESIZE / sizeof(L4_Word_t))
@@ -54,7 +54,7 @@ void swapfile_open(void) {
 	dprintf(2, "*** swapfile_init: opening swap file\n");
 	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
 	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) FM_READ | FM_WRITE );
+	L4_MsgAppendWord(&msg, (L4_Word_t) FM_READ | FM_WRITE);
 	swapfile = syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
 	dprintf(2, "*** swapfile_init: opened swapfile, fd=%d\n", swapfile);
 }
