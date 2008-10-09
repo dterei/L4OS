@@ -58,7 +58,7 @@ int
 serial_send(struct serial *serial, char *data, int len)
 {
 	int slen = len;
-	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len + 8, PBUF_RAM);
+	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
 	assert(p);
 	memcpy(p->payload, data, len);
 	if (slen&1) ((char *) p->payload)[slen++] = '\0';

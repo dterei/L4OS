@@ -16,7 +16,7 @@
 #include "libsos.h"
 #include "constants.h"
 
-#define verbose 2
+#define verbose 1
 
 // Needs to be called every 100ms by somebody
 extern void nfs_timeout(void);

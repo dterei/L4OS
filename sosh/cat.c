@@ -4,12 +4,13 @@
 #include "cat.h"
 #include "sosh.h"
 
-#define cat_verbose 2
+#define cat_verbose 1
 
 int cat(int argc, char **argv) {
 	fildes_t fd;
 	char buf[BUF_SIZ];
 	int num_read, num_written = 0, read_tot = 0, write_tot = 0;
+	int ret = 0;
 
 	if (argc != 2) {
 		printf("Usage: cat filename\n");
@@ -39,18 +40,22 @@ int cat(int argc, char **argv) {
 
 	if (num_read == -1) {
 		printf( "error on read\n" );
-		return 1;
+		kprint( "error on read\n" );
+		ret = 1;
 	}
 
 	if (num_written == -1) {
 		printf( "error on write\n" );
-		return 1;
+		kprint( "error on write\n" );
+		ret = 1;
 	}
 
 	if (cat_verbose > 1) {
-		printf("Total Read: %d, Total Write: %d\n", read_tot, write_tot);
+		sprintf(buf, "Total Read: %d, Total Write: %d\n", read_tot, write_tot);
+		printf("%s", buf);
+		kprint(buf);
 	}
 
-	return 0;
+	return ret;
 }
 

@@ -14,7 +14,7 @@
 #define WAIT_ANYBODY (-1)
 #define WAIT_NOBODY (-2)
 
-#define verbose 2
+#define verbose 1
 
 // The equivalent of a PCB
 struct Process_t {
