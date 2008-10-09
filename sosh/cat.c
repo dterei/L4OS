@@ -4,10 +4,12 @@
 #include "cat.h"
 #include "sosh.h"
 
+#define cat_verbose 2
+
 int cat(int argc, char **argv) {
 	fildes_t fd;
 	char buf[BUF_SIZ];
-	int num_read, num_written = 0;
+	int num_read, num_written = 0, read_tot = 0, write_tot = 0;
 
 	if (argc != 2) {
 		printf("Usage: cat filename\n");
@@ -22,12 +24,15 @@ int cat(int argc, char **argv) {
 
 	//printf("<%s>\n", argv[1]);
 
-	while ((num_read = read(fd, buf, BUF_SIZ)) > 0 ) {
+	while ((num_read = read(fd, buf, BUF_SIZ - 1)) > 0 ) {
 		buf[num_read] = '\0';
-		// print char by char as printf has a bug printing some of the weirder chars
-		for (int i = 0; i < num_read; i++) {
-			printf("%c", buf[i]);
+		// use write instead of printf as printf has some bugs with
+		// printing weird chars
+		if ((num_written = write(stdout_fd, buf, num_read)) < 0) {
+			break;
 		}
+		read_tot += num_read;
+		write_tot += num_written;
 	}
 
 	close(fd);
@@ -40,6 +45,10 @@ int cat(int argc, char **argv) {
 	if (num_written == -1) {
 		printf( "error on write\n" );
 		return 1;
+	}
+
+	if (cat_verbose > 1) {
+		printf("Total Read: %d, Total Write: %d\n", read_tot, write_tot);
 	}
 
 	return 0;

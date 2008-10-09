@@ -516,35 +516,35 @@ pbuf_free(struct pbuf *p)
   q = NULL;
   /* If reference count == 0, actually deallocate pbuf. */
   if(p->ref == 0) {
-    while(p != NULL) {
-      /* Check if this is a pbuf from the pool. */
-      if(p->flags == PBUF_FLAG_POOL) {
-	p->len = p->tot_len = PBUF_POOL_BUFSIZE;
-	p->payload = (void *)((u8_t *)p + sizeof(struct pbuf));
-	q = p->next;
-	PBUF_POOL_FREE(p);
+	  while(p != NULL) {
+		  /* Check if this is a pbuf from the pool. */
+		  if(p->flags == PBUF_FLAG_POOL) {
+			  p->len = p->tot_len = PBUF_POOL_BUFSIZE;
+			  p->payload = (void *)((u8_t *)p + sizeof(struct pbuf));
+			  q = p->next;
+			  PBUF_POOL_FREE(p);
 #ifdef PBUF_STATS
-	--stats.pbuf.used;
+			  --stats.pbuf.used;
 #endif /* PBUF_STATS */
-      } else if(p->flags == PBUF_FLAG_ROM) {
-	q = p->next;
-	memp_freep(MEMP_PBUF, p);
-      } else if(p->flags == PBUF_FLAG_EXT) {
-	q = p->next;
+		  } else if(p->flags == PBUF_FLAG_ROM) {
+			  q = p->next;
+			  memp_freep(MEMP_PBUF, p);
+		  } else if(p->flags == PBUF_FLAG_EXT) {
+			  q = p->next;
 
-	/* call back the free function for external memory */
-	if(p->free!=NULL)
-	  p->free(p);
+			  /* call back the free function for external memory */
+			  if(p->free!=NULL)
+				  p->free(p);
 
-	memp_freep(MEMP_PBUF, p);
-      } else {
-	q = p->next;
-	mem_free(p);
-      }
-      p = q;
-      count++;
-    }
-    pbuf_refresh();
+			  memp_freep(MEMP_PBUF, p);
+		  } else {
+			  q = p->next;
+			  mem_free(p);
+		  }
+		  p = q;
+		  count++;
+	  }
+	  pbuf_refresh();
   }
 
   PERF_STOP("pbuf_free");
@@ -626,6 +626,10 @@ struct pbuf *
 pbuf_dechain(struct pbuf *p)
 {
   struct pbuf *q;
+
+  if (p == NULL) {
+	  return NULL;
+  }
   
   q = p->next;
   if (q != NULL) {

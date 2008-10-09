@@ -280,72 +280,76 @@ udp_input(struct pbuf *p, struct netif *inp)
 err_t
 udp_send(struct udp_pcb *pcb, struct pbuf *p)
 {
-  struct udp_hdr *udphdr;
-  struct netif *netif;
-  struct ip_addr *src_ip;
-  err_t err;
-  struct pbuf *q;
-  
-  if(pbuf_header(p, UDP_HLEN)) {
-    q = pbuf_alloc(PBUF_IP, UDP_HLEN, PBUF_RAM);
-    if(q == NULL) {
-      return ERR_MEM;
-    }
-    pbuf_chain(q, p);
-    p = q;
-  }
+	struct udp_hdr *udphdr;
+	struct netif *netif;
+	struct ip_addr *src_ip;
+	err_t err;
+	struct pbuf *q = NULL;
 
-  udphdr = p->payload;
-  udphdr->src = htons(pcb->local_port);
-  udphdr->dest = htons(pcb->remote_port);
-  udphdr->chksum = 0x0000;
+	if(pbuf_header(p, UDP_HLEN)) {
+		q = pbuf_alloc(PBUF_IP, UDP_HLEN, PBUF_RAM);
+		if(q == NULL) {
+			return ERR_MEM;
+		}
+		pbuf_chain(q, p);
+		p = q;
+	}
 
-  if((netif = ip_route(&(pcb->remote_ip))) == NULL) {
-    DEBUGF(UDP_DEBUG, ("udp_send: No route to 0x%lx\n", pcb->remote_ip.addr));
+	udphdr = p->payload;
+	udphdr->src = htons(pcb->local_port);
+	udphdr->dest = htons(pcb->remote_port);
+	udphdr->chksum = 0x0000;
+
+	if((netif = ip_route(&(pcb->remote_ip))) == NULL) {
+		DEBUGF(UDP_DEBUG, ("udp_send: No route to 0x%lx\n", pcb->remote_ip.addr));
 #ifdef UDP_STATS
-    ++stats.udp.rterr;
+		++stats.udp.rterr;
 #endif /* UDP_STATS */
-    return ERR_RTE;
-  }
+		p = pbuf_dechain(q);
+		pbuf_free(q);
+		return ERR_RTE;
+	}
 
-  if(ip_addr_isany(&pcb->local_ip)) {
-    src_ip = &(netif->ip_addr);
-  } else {
-    src_ip = &(pcb->local_ip);
-  }
-  
-  DEBUGF(UDP_DEBUG, ("udp_send: sending datagram of length %d\n", p->tot_len));
-  
-  if(pcb->flags & UDP_FLAGS_UDPLITE) {
-    udphdr->len = htons(pcb->chksum_len);
+	if(ip_addr_isany(&pcb->local_ip)) {
+		src_ip = &(netif->ip_addr);
+	} else {
+		src_ip = &(pcb->local_ip);
+	}
+
+	DEBUGF(UDP_DEBUG, ("udp_send: sending datagram of length %d\n", p->tot_len));
+
+	if(pcb->flags & UDP_FLAGS_UDPLITE) {
+		udphdr->len = htons(pcb->chksum_len);
 #if CHECKSUM_GEN_UDP
-    /* calculate checksum */
-    udphdr->chksum = inet_chksum_pseudo(p, src_ip, &(pcb->remote_ip),
-					IP_PROTO_UDP, pcb->chksum_len);
-    if(udphdr->chksum == 0x0000) {
-      udphdr->chksum = 0xffff;
-    }
+		/* calculate checksum */
+		udphdr->chksum = inet_chksum_pseudo(p, src_ip, &(pcb->remote_ip),
+				IP_PROTO_UDP, pcb->chksum_len);
+		if(udphdr->chksum == 0x0000) {
+			udphdr->chksum = 0xffff;
+		}
 #endif
-    err = ip_output_if(p, src_ip, &pcb->remote_ip, UDP_TTL, IP_PROTO_UDPLITE, netif);    
-  } else {
-    udphdr->len = htons(p->tot_len);
-    /* calculate checksum */
-    if((pcb->flags & UDP_FLAGS_NOCHKSUM) == 0) {
+		err = ip_output_if(p, src_ip, &pcb->remote_ip, UDP_TTL, IP_PROTO_UDPLITE, netif);    
+	} else {
+		udphdr->len = htons(p->tot_len);
+		/* calculate checksum */
+		if((pcb->flags & UDP_FLAGS_NOCHKSUM) == 0) {
 #if CHECKSUM_GEN_UDP
-      udphdr->chksum = inet_chksum_pseudo(p, src_ip, &pcb->remote_ip,
-					  IP_PROTO_UDP, p->tot_len);
-      if(udphdr->chksum == 0x0000) {
-	udphdr->chksum = 0xffff;
-      }
+			udphdr->chksum = inet_chksum_pseudo(p, src_ip, &pcb->remote_ip,
+					IP_PROTO_UDP, p->tot_len);
+			if(udphdr->chksum == 0x0000) {
+				udphdr->chksum = 0xffff;
+			}
 #endif
-    }
-    err = ip_output_if(p, src_ip, &pcb->remote_ip, UDP_TTL, IP_PROTO_UDP, netif);    
-  }
-  
+		}
+		err = ip_output_if(p, src_ip, &pcb->remote_ip, UDP_TTL, IP_PROTO_UDP, netif);    
+	}
+
 #ifdef UDP_STATS
-  ++stats.udp.xmit;
+	++stats.udp.xmit;
 #endif /* UDP_STATS */
-  return err;
+	p = pbuf_dechain(q);
+	pbuf_free(q);
+	return err;
 }
 /*-----------------------------------------------------------------------------------*/
 err_t

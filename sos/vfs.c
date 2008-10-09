@@ -434,6 +434,12 @@ vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte) {
 		syscall_reply(tid, SOS_VFS_PERM);
 		return;
 	}
+	
+	// restrict max buffer size
+	if (nbyte > IO_MAX_BUFFER) {
+		dprintf(2, "vfs_read: tried to read too much data at once: %d\n", nbyte);
+		nbyte = IO_MAX_BUFFER;
+	}
 
 	vnode->read(tid, vnode, file, vf[file].fp, buf, nbyte, vfs_read_done);
 }
@@ -497,6 +503,12 @@ vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte) {
 				file, vnode->path, vf[file].fmode);
 		syscall_reply(tid, SOS_VFS_PERM);
 		return;
+	}
+
+	// restrict max buffer size
+	if (nbyte > IO_MAX_BUFFER) {
+		dprintf(2, "vfs_write: tried to write too much data at once: %d\n", nbyte);
+		nbyte = IO_MAX_BUFFER;
 	}
 
 	vnode->write(tid, vnode, file, vf[file].fp, buf, nbyte, vfs_write_done);

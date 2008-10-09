@@ -491,11 +491,6 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 		return;
 	}
 
-	if (nbyte > MAX_IO_BUF) {
-		dprintf(2, "nfsfs_read: tried to read too much data at once: %d\n", nbyte);
-		nbyte = MAX_IO_BUF;
-	}
-
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid);
 	rq->file = file;
 	rq->buf = buf;
@@ -542,12 +537,6 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 				L4_ThreadNo(tid), file);
 		write_done(tid, self, file, offset, buf, 0, SOS_VFS_NOFILE);
 		return;
-	}
-
-	if (nbyte > MAX_IO_BUF) {
-		dprintf(2, "!!! nfsfs_write: request too large! (tid %d) (file %d) (size %d) (max %d)!\n",
-				L4_ThreadNo(tid), file, nbyte, MAX_IO_BUF);
-		nbyte = MAX_IO_BUF;
 	}
 
 	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid);
@@ -600,7 +589,7 @@ getdirent_cb(uintptr_t token, int status, int num_entries, struct nfs_filename *
 	else if (next_cookie > 0) {
 		dprintf(2, "Need more dir entries to get file\n");
 		rq->cpos += num_entries;
-		nfs_readdir(&nfs_mnt, next_cookie, MAX_IO_BUF, getdirent_cb, rq->p.token);
+		nfs_readdir(&nfs_mnt, next_cookie, IO_MAX_BUFFER, getdirent_cb, rq->p.token);
 	}
 	// error case, just return SOS_VFS_OK to say nothing read, its not an error just eof
 	else {
@@ -621,7 +610,7 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	rq->nbyte = nbyte;
 	rq->cpos = 0;
 
-	nfs_readdir(&nfs_mnt, 0, MAX_IO_BUF, getdirent_cb, rq->p.token);
+	nfs_readdir(&nfs_mnt, 0, IO_MAX_BUFFER, getdirent_cb, rq->p.token);
 }
 
 /* NFS Callback for NFS_Stat */

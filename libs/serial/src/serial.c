@@ -58,17 +58,17 @@ int
 serial_send(struct serial *serial, char *data, int len)
 {
 	int slen = len;
-	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
+	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len + 8, PBUF_RAM);
 	assert(p);
 	memcpy(p->payload, data, len);
 	if (slen&1) ((char *) p->payload)[slen++] = '\0';
 	p->tot_len = p->len = slen;
 	int r = udp_send(serial->fUpcb, p);
+	pbuf_free(p);
 	if (r != ERR_OK) {
 		dprintf(0, "!!! udp_send failed (len %d) (p %p) (r %d)\n", len, p, r);	
 		assert(!"udp_send");
 	}
-	pbuf_free(p);
 
 	return len;
 }
