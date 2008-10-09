@@ -162,15 +162,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
 			break;
 
-		case SOS_PROCESS_DELETE:
-			if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-				rval = process_kill(process_lookup(L4_MsgWord(msg, 0)));
-				syscall_reply(tid, rval);
-			} else {
-				dprintf(0, "!!! syscall_handle: illegal SOS_PROCESS_DELETE\n");
-			}
-			break;
-
 		case SOS_MY_ID:
 			rval = process_get_pid(process_lookup(L4_ThreadNo(tid)));
 			syscall_reply(tid, rval);
@@ -183,6 +174,15 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			} else {
 				process_wait_for(process_lookup(word),
 						process_lookup(L4_ThreadNo(tid)));
+			}
+			break;
+
+		case SOS_PROCESS_NOTIFY_ALL:
+			if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
+				process_wake_all(L4_MsgWord(msg, 0));
+				syscall_reply(tid, 0);
+			} else {
+				syscall_reply(tid, -1);
 			}
 			break;
 
