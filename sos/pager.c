@@ -151,7 +151,9 @@ void region_append(Region *r, Region *toAppend) {
 	r->next = toAppend;
 }
 
-void region_free_all(Region *r) {
+static void regionsFree(Process *p) {
+	Region *r = process_get_regions(p);
+
 	while (r != NULL) {
 		Region *next = r->next;
 		free(r);
@@ -198,14 +200,10 @@ static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 	return &level1->pages2[offset1]->pages[offset2];
 }
 
-static void pagerFrameFree(L4_Word_t frame) {
-	assert((frame & ~PAGEALIGN) == 0);
-	frame_free(frame);
-	allocLimit++;
-}
-
-void pagetable_free(Pagetable *pt) {
-	Pagetable1 *pt1 = (Pagetable1*) pt;
+static void pagetableFree(Process *p) {
+	assert(p != NULL);
+	Pagetable1 *pt1 = (Pagetable1*) process_get_pagetable(p);
+	assert(pt1 != NULL);
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		if (pt1->pages2[i] != NULL) {
@@ -216,16 +214,34 @@ void pagetable_free(Pagetable *pt) {
 	frame_free((L4_Word_t) pt1);
 }
 
-void frames_free(pid_t pid) {
-	(void) pagerFrameFree;
+static void pagerFrameFree(L4_Word_t frame) {
+	assert((frame & ~PAGEALIGN) == 0);
+	frame_free(frame);
+	allocLimit++;
+}
 
-	/*
+static void framesFree(Process *p) {
+	FrameList *prev = NULL;
+	Pagetable *pt = process_get_pagetable(p);
+
 	for (FrameList *list = allocHead; list != NULL; list = list->next) {
-		if (list->p != NULL && process_get_pid(list->p) == pid) {
-			pagerFrameFree(list->frame);
+		if (list->pid == process_get_pid(p)) {
+			if (prev == NULL) {
+				allocHead = list->next;
+			} else {
+				prev->next = list->next;
+			}
+
+			pagerFrameFree(*(pagetableLookup(pt, list->page)) & ADDRESS_MASK);
+			free(list);
+		} else {
+			prev = list;
 		}
 	}
-	*/
+
+	if (allocHead == NULL) {
+		allocLast = NULL;
+	}
 }
 
 static int isPageAligned(void *ptr) {
@@ -943,6 +959,43 @@ void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 	}
 }
 
+static void swapslotsFree(Process *p) {
+	;
+}
+
+static int processDelete(L4_Word_t pid) {
+	// This needs to go through the pager in order to achieve
+	// some implicit synchronisation between the rootserver and the pager
+	Process *p;
+	L4_Msg_t msg;
+	int result;
+
+	// Store the address of the PCB before the rootserver hides it
+	p = process_lookup(pid);
+
+	// Firstly need to kill the process from the rootservers perspecive
+	// and free all the resources associated with it there
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, pid);
+	result = syscall(L4_rootserver, SOS_PROCESS_DELETE, YES_REPLY, &msg);
+
+	if (result != 0) {
+		return result;
+	}
+
+	// Now we can free the resources associated with it here
+	framesFree(p);
+	swapslotsFree(p);
+	pagetableFree(p);
+	regionsFree(p);
+
+	// The rootserver wasn't actually able to free the PCB itself
+	// (for obvious reasons) so we need to do it here
+	free(p);
+
+	return 0;
+}
+
 static void virtualPagerHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 	virtual_pager = sos_my_tid();
@@ -1000,6 +1053,10 @@ static void virtualPagerHandler(void) {
 			case SOS_MEMLOC:
 				syscall_reply(tid, *(pagetableLookup(process_get_pagetable(p),
 								L4_MsgWord(&msg, 0) & PAGEALIGN)));
+				break;
+
+			case SOS_PROCESS_DELETE:
+				syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
 				break;
 
 			case L4_EXCEPTION:
