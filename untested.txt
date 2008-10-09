@@ -1,1 +1,4 @@
-- copyin/copyout over a page boundary when the pages are on disk.
+- Copyin/Copyout over a page boundary when the pages are on disk.
+
+- Simultaneous use of NFS across different threads (either in the demand pager
+or just normally).

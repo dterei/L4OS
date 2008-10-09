@@ -294,7 +294,7 @@ int process_delete(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) pid);
 
-	return syscall(L4_rootserver, SOS_PROCESS_DELETE, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_PROCESS_DELETE, YES_REPLY, &msg);
 }
 
 /* Returns ID of caller's process. */

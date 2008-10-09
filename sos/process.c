@@ -276,6 +276,7 @@ int process_kill(Process *p) {
 	 * 	- free up the pid for another process
 	 * 	- free the PCB
 	 * 	- wake up waiting processes
+	 * 	! free L4's associated resources
 	 *
 	 * Points marked with (!) are ones that haven't been
 	 * done yet.
@@ -300,23 +301,16 @@ int process_kill(Process *p) {
 				vfs_close(process_get_tid(p), fd);
 			}
 		}
-				
 	}
 
-	// Free the used frames, page table, and regions
-	//frames_free(p->info.pid);
-	pagetable_free(p->pagetable);
-	region_free_all(p->regions);
-
-	// Freeing the PCB and setting to NULL is enough to
-	// free the pid as well
-	pid_t ghostPid = p->info.pid;
-	free(p);
-	sosProcs[ghostPid] = NULL;
+	// Hide the PCB (it will actually be freed when the pager has
+	// its turn at this)
+	// Should really hide all threads (if we had thread mgmt)
+	sosProcs[process_get_pid(p)] = NULL;
 
 	// Wake all process waiting on this process (or any)
-	wakeAll(ghostPid, ghostPid);
-	wakeAll(WAIT_ANYBODY, ghostPid);
+	wakeAll(process_get_pid(p), process_get_pid(p));
+	wakeAll(WAIT_ANYBODY, process_get_pid(p));
 
 	return 0;
 }
