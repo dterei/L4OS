@@ -68,6 +68,10 @@ void swapfile_close(void) {
 	swapfile = (-1);
 }
 
+int swapfile_usage(void) {
+	return SWAPSIZE - SlotsFree;
+}
+
 L4_Word_t
 swapslot_alloc(void)
 {
@@ -97,4 +101,5 @@ swapslot_free(L4_Word_t slot)
 
 	return 0;
 }
+
 

@@ -285,10 +285,6 @@ int process_kill(Process *p) {
 int process_write_status(process_t *dest, int n) {
 	int count = 0;
 
-	// Firstly, update the size of sos
-	assert(sosProcs[L4_rootserverno] != NULL);
-	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
-
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
@@ -299,6 +295,10 @@ int process_write_status(process_t *dest, int n) {
 			count++;
 		}
 	}
+
+	// SOS doesn't get dynamically updated, so update its size manually
+	assert(sosProcs[L4_rootserverno] != NULL);
+	sosProcs[L4_rootserverno]->info.size = frames_allocated() - memory_usage();
 
 	return count;
 }

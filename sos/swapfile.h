@@ -13,6 +13,8 @@ void swapfile_init(void);
 void swapfile_open(void);
 void swapfile_close(void);
 
+int swapfile_usage(void);
+
 // Allocate a new slow in the swapfile
 L4_Word_t swapslot_alloc(void);
 

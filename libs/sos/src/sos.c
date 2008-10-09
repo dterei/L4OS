@@ -39,6 +39,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_MEMUSE: return "SOS_MEMUSE";
+		case SOS_SWAPUSE: return "SOS_SWAPUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
 		case SOS_MEMLOC: return "SOS_MEMLOC";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
@@ -375,7 +376,13 @@ void usleep(int usec) {
 int memuse(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall(L4_rootserver, SOS_MEMUSE, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_MEMUSE, YES_REPLY, &msg);
+}
+
+int swapuse(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	return syscall(L4_rootserver, SOS_SWAPUSE, YES_REPLY, &msg);
 }
 
 L4_Word_t memloc(L4_Word_t addr) {
@@ -390,9 +397,17 @@ L4_Word_t memloc(L4_Word_t addr) {
 }
 
 L4_ThreadId_t vpager(void) {
-	L4_Msg_t msg;
-	syscall_prepare(&msg);
-	return L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
+	static int knowTid = 0;
+	static L4_ThreadId_t tid;
+
+	if (!knowTid) {
+		L4_Msg_t msg;
+		syscall_prepare(&msg);
+		tid = L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
+		knowTid = 1;
+	}
+
+	return tid;
 }
 
 /* 

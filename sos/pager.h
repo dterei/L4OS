@@ -41,8 +41,8 @@ void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg);
 char *pager_buffer(L4_ThreadId_t tid);
 
+int memory_usage(void);
 int sos_moremem(uintptr_t *base, unsigned int nb);
-int sos_memuse(void);
 
 #endif // _PAGER_H
 

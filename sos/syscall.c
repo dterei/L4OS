@@ -196,11 +196,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			syscall_reply(tid, rval);
 			break;
 
-		case SOS_MEMUSE:
-			rval = sos_memuse();
-			syscall_reply(tid, rval);
-			break;
-
 		case SOS_VPAGER:
 			rval = L4_ThreadNo(virtual_pager);
 			syscall_reply(tid, rval);

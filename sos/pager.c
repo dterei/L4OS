@@ -476,7 +476,7 @@ int sos_moremem(uintptr_t *base, unsigned int nb) {
 	return 1;
 }
 
-int sos_memuse(void) {
+int memory_usage(void) {
 	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
@@ -1095,6 +1095,14 @@ static void virtualPagerHandler(void) {
 			case SOS_MEMLOC:
 				syscall_reply(tid, *(pagetableLookup(process_get_pagetable(p),
 								L4_MsgWord(&msg, 0) & PAGEALIGN)));
+				break;
+
+			case SOS_MEMUSE:
+				syscall_reply(tid, memory_usage());
+				break;
+
+			case SOS_SWAPUSE:
+				syscall_reply(tid, swapfile_usage());
 				break;
 
 			case SOS_PROCESS_DELETE:

@@ -4,7 +4,8 @@
 #include "sosh.h"
 
 int top(int argc, char **argv) {
-	printf("memory in use: %d pages\n", memuse());
+	printf("Mem: %d pages\n", memuse());
+	printf("Swap: %d pages\n", swapuse());
 	return 1;
 }
 

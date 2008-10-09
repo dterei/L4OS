@@ -51,6 +51,7 @@ typedef enum {
 	SOS_TIME_STAMP,
 	SOS_USLEEP,
 	SOS_MEMUSE,
+	SOS_SWAPUSE,
 	SOS_VPAGER,
 	SOS_MEMLOC,
 	SOS_SHARE_VM,
@@ -247,6 +248,9 @@ void usleep(int msec);
 
 /* Get the number of frames in use by user processes */
 int memuse(void);
+
+/* Get the number of pages in use by the swap file */
+int swapuse(void);
 
 /* Look up the process' page table for a given virtual address */
 L4_Word_t memloc(L4_Word_t addr);
