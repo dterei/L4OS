@@ -50,8 +50,13 @@ Pagetable *process_get_pagetable(Process *p);
 // Get the regions of a process
 Region *process_get_regions(Process *p);
 
-// Kill a process and free its resources
-// Returns 0 if successful, -1 otherwise
+// Wake all processes waiting on a process
+void process_wake_all(pid_t pid);
+
+// Close all files opened by a process
+void process_close_files(Process *p);
+
+// Kill a process and hide its PCB
 int process_kill(Process *p);
 
 // Write the status of the first n processes to dest

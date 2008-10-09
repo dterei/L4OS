@@ -50,6 +50,7 @@ typedef enum {
 	SOS_MY_ID,
 	SOS_PROCESS_STATUS,
 	SOS_PROCESS_WAIT,
+	SOS_PROCESS_NOTIFY_ALL,
 	SOS_TIME_STAMP,
 	SOS_USLEEP,
 	SOS_MEMUSE,
@@ -226,6 +227,14 @@ int process_status(process_t *processes, unsigned max);
  * to exit. Returns the pid of the process which exited.
  */
 pid_t process_wait(pid_t pid);
+
+/*
+ * Wake all processes waiting on a certain pid (those that called
+ * process_wait with a relevant value.
+ * Note that only privileged threads can call this.
+ * Returns 0 on success, anything else on failure.
+ */
+int process_notify_all(pid_t pid);
 
 /* Returns time in microseconds since booting.
  */

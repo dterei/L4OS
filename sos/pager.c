@@ -507,6 +507,60 @@ static void pagerContinue(PagerRequest *pr) {
 	pagerReply(replyTo);
 }
 
+static void swapslotsFree(Process *p) {
+	// Oh, crap...
+}
+
+static int processDelete(L4_Word_t pid) {
+	/*
+	 * Will need to:
+	 * 	- kill thread
+	 * 	- close all files
+	 * 	! free all frames allocted by the process
+	 * 	! free all swapped frames
+	 * 	- free page table
+	 * 	- free regions
+	 * 	- free up the pid for another process
+	 * 	- free the PCB
+	 * 	- wake up waiting processes
+	 * 	! free L4's associated resources
+	 *
+	 * Points marked with (!) are ones that haven't been
+	 * done yet.
+	 *
+	 * Won't need to:
+	 * 	- free the pager request (will happen by itself)
+	 * 	- worry about stray messages (sycall_reply is ok)
+	 */
+	Process *p;
+	int result;
+
+	// Store the address of the PCB before the rootserver hides it
+	p = process_lookup(pid);
+
+	// Kill and hide the process
+	result = process_kill(p);
+
+	if (result != 0) {
+		return result; // error
+	}
+
+	// Free all resources
+	framesFree(p);
+	swapslotsFree(p);
+	pagetableFree(p);
+	regionsFree(p);
+
+	// Wake all waiting processes - needs to be done by the rootserver
+	// (because the pager doesn't have permission) so need a syscall
+	process_notify_all(process_get_pid(p));
+
+	// Can finally do this
+	free(p);
+
+	return 0;
+}
+
 static int pagerAction(PagerRequest *pr) {
 	Process *p;
 	L4_Word_t addr = pr->addr & PAGEALIGN;
@@ -529,7 +583,7 @@ static int pagerAction(PagerRequest *pr) {
 
 	if (r == NULL) {
 		printf("Segmentation fault\n");
-		process_delete(process_get_pid(p));
+		processDelete(process_get_pid(p));
 		return 0;
 	}
 
@@ -958,43 +1012,6 @@ void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
 	}
-}
-
-static void swapslotsFree(Process *p) {
-	;
-}
-
-static int processDelete(L4_Word_t pid) {
-	// This needs to go through the pager in order to achieve
-	// some implicit synchronisation between the rootserver and the pager
-	Process *p;
-	L4_Msg_t msg;
-	int result;
-
-	// Store the address of the PCB before the rootserver hides it
-	p = process_lookup(pid);
-
-	// Firstly need to kill the process from the rootservers perspecive
-	// and free all the resources associated with it there
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, pid);
-	result = syscall(L4_rootserver, SOS_PROCESS_DELETE, YES_REPLY, &msg);
-
-	if (result != 0) {
-		return result;
-	}
-
-	// Now we can free the resources associated with it here
-	framesFree(p);
-	swapslotsFree(p);
-	pagetableFree(p);
-	regionsFree(p);
-
-	// The rootserver wasn't actually able to free the PCB itself
-	// (for obvious reasons) so we need to do it here
-	free(p);
-
-	return 0;
 }
 
 static void virtualPagerHandler(void) {
