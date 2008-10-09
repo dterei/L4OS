@@ -30,3 +30,5 @@ a (potentially) different swap file for each one.  This will require (at least):
    (page aligned to something would be ideal).  Either that or the pager/regions
    need to be changed to support non-pagealigned addresses where necessary.
 
+- Move pager-related syscalls to pager.
+

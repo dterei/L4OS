@@ -37,7 +37,6 @@ void region_append(Region *r, Region *toAppend);
 Pagetable *pagetable_init(void);
 
 void pager_init(void);
-void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg);
 char *pager_buffer(L4_ThreadId_t tid);
 

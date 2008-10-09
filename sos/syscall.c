@@ -98,10 +98,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			printf("%s", pager_buffer(tid));
 			break;
 
-		case SOS_DEBUG_FLUSH:
-			pager_flush(tid, msg);
-			break;
-
 		case SOS_MOREMEM:
 			syscall_reply(tid,
 					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));

@@ -92,7 +92,7 @@ void kprint(char *str) {
 void debug_flush(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	syscall(L4_rootserver, SOS_DEBUG_FLUSH, NO_REPLY, &msg);
+	syscall(vpager(), SOS_DEBUG_FLUSH, NO_REPLY, &msg);
 }
 
 void thread_block(void) {

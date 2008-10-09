@@ -1031,10 +1031,7 @@ static void demandPager(int vfsRval) {
 	}
 }
 
-void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP) {
-	// There is actually a magic fpage that we can use to unmap
-	// the whole address space - and I assume we're meant to
-	// unmap it from the sender space.
+static void pagerFlush(void) {
 	if (!L4_UnmapFpage(L4_SenderSpace(), L4_CompleteAddressSpace)) {
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
@@ -1110,6 +1107,11 @@ static void virtualPagerHandler(void) {
 
 			case SOS_PROCESS_DELETE:
 				syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
+				break;
+
+			case SOS_DEBUG_FLUSH:
+				pagerFlush();
+				syscall_reply(tid, 0);
 				break;
 
 			case L4_EXCEPTION:
