@@ -29,6 +29,7 @@ List *list_empty(void) {
 }
 
 int list_null(List *list) {
+	assert(list != NULL);
 	if (list->head == NULL) {
 		assert(list->last == NULL);
 		return 1;
@@ -38,10 +39,12 @@ int list_null(List *list) {
 }
 
 void *list_peek(List *list) {
+	assert(list != NULL);
 	return list->head->contents;
 }
 
 void list_shift(List *list, void *contents) {
+	assert(list != NULL);
 	Node *node = nodeAlloc(contents);
 	node->next = list->head;
 	list->head = node;
@@ -52,6 +55,7 @@ void list_shift(List *list, void *contents) {
 }
 
 void *list_unshift(List *list) {
+	assert(list != NULL);
 	assert(list->head != NULL);
 
 	Node *tmp = list->head;
@@ -68,6 +72,7 @@ void *list_unshift(List *list) {
 }
 
 void list_push(List *list, void *contents) {
+	assert(list != NULL);
 	Node *node = nodeAlloc(contents);
 
 	if (list->head == NULL) {
@@ -82,6 +87,7 @@ void list_push(List *list, void *contents) {
 }
 
 void *list_pop(List *list) {
+	assert(list != NULL);
 	assert(list->last != NULL);
 
 	void *contents = list->last->contents;
@@ -117,6 +123,7 @@ void *list_find(List *list, int (*f)(void *contents, void *data),
 
 void list_delete(List *list, int (*f)(void *contents, void *data),
 		void *data) {
+	assert(list != NULL);
 	Node *curr, *prev, *tmp;
 
 	curr = list->head;
@@ -142,6 +149,8 @@ void list_delete(List *list, int (*f)(void *contents, void *data),
 
 	if (list->head == NULL) {
 		list->last = NULL;
+	} else if (prev->next == NULL) {
+		list->last = prev;
 	}
 }
 
