@@ -49,7 +49,7 @@ void swapfile_open(void) {
 	L4_Msg_t msg;
 
 	dprintf(2, "*** swapfile_init: opening swap file\n");
-	strcpy(pager_buffer(virtual_pager), SWAPFILE_FN);
+	strcpy(pager_buffer(pager_get_tid()), SWAPFILE_FN);
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) FM_READ | FM_WRITE);
 	swapfile = syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);

@@ -208,10 +208,10 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 
 	if (asThread == RUN_AS_THREAD) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
-	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
+	} else if (pager_is_active()) {
+		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	}
 
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));

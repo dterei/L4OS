@@ -51,23 +51,18 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 
 	L4_MsgLoad(&msg);
 
-	int send = L4_IsThreadEqual(tid, virtual_pager);
-
-	if (send) {
-		// this isn't a very nice way of doing it, but all calls to the pager
-		// need to be sent (since they are nonblocking).  ideally this will
-		// be set up by the caller not as a hack to syscall_reply.
-		dprintf(2, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
+	if (L4_IsThreadEqual(tid, pager_get_tid())) {
+		// TODO Do this nicely (either set up by the caller, or generically)
 		tag = L4_Send(tid);
 	} else {
-		dprintf(2, "*** syscall_reply: reply to %ld\n", L4_ThreadNo(tid));
 		tag = L4_Reply(tid);
 	}
 
 	if (L4_IpcFailed(tag)) {
-		dprintf(1, "!!! syscall_reply (%s) to %ld failed: ",
-				send ? "send" : "reply", L4_ThreadNo(tid));
+		dprintf(1, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
 		sos_print_error(L4_ErrorCode());
+	} else {
+		dprintf(2, "*** syscall_reply to %ld success\n", L4_ThreadNo(tid));
 	}
 }
 
@@ -156,7 +151,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_VPAGER:
-			syscall_reply(tid, L4_ThreadNo(virtual_pager));
+			syscall_reply(tid, L4_ThreadNo(pager_get_tid()));
 			break;
 
 		default:

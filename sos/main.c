@@ -36,6 +36,7 @@
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
 
 // Stack for the initialisation thread
+// TODO Use frame_alloc?
 #define STACK_SIZE PAGESIZE
 static L4_Word_t init_stack_s[STACK_SIZE];
 
@@ -50,6 +51,27 @@ init_thread(void) {
 
 	for (;;)
 		sos_usleep(30 * 1000 * 1000);
+}
+
+static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
+	int addr = L4_MsgWord(msg, 0);
+	dprintf(3, "*** sosPagerHandler: addr=%p tid=%ld sender=%ld\n",
+			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
+
+	if (addr == 0) {
+		printf("SOS Segmentation fault (tid=%ld)\n", L4_ThreadNo(tid));
+	}
+
+	addr &= PAGEALIGN;
+
+	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
+	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
+	L4_PhysDesc_t phys = L4_PhysDesc(addr, L4_DefaultMemory);
+
+	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys)) { 
+		sos_print_error(L4_ErrorCode());
+		dprintf(0, "!!! sosPagerHandler: failed at addr=%p\n", (void*) addr);
+	}  
 }
 
 static __inline__ void 
@@ -111,7 +133,7 @@ syscall_loop(void) {
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				sos_pager_handler(sos_cap2tid(tid), &msg);
+				sosPagerHandler(sos_cap2tid(tid), &msg);
 				L4_Set_MsgTag(L4_Niltag);
 				break;
 

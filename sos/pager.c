@@ -55,7 +55,7 @@ static void queueRequest(PagerRequest *pr);
 #define PAGER_STACK_SIZE PAGESIZE // DO NOT CHANGE
 
 static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
-L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
+static L4_ThreadId_t virtualPager; // automatically L4_nilthread
 static void virtualPagerHandler(void);
 
 // For copyin/copyout
@@ -86,6 +86,14 @@ Pagetable *pagetable_init(void) {
 	}
 
 	return (Pagetable*) pt;
+}
+
+L4_ThreadId_t pager_get_tid(void) {
+	return virtualPager;
+}
+
+int pager_is_active(void) {
+	return !L4_IsThreadEqual(virtualPager, L4_nilthread);
 }
 
 static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
@@ -311,9 +319,7 @@ void pager_init(void) {
 	process_run(pager, RUN_AS_THREAD);
 
 	// Wait until it has actually started
-	while (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		L4_Yield();
-	}
+	while (!pager_is_active()) L4_Yield();
 }
 
 static int findHeap(void *contents, void *data) {
@@ -339,7 +345,7 @@ static int heapGrow(uintptr_t *base, unsigned int nb) {
 	return 1;
 }
 
-int memory_usage(void) {
+static int memoryUsage(void) {
 	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
@@ -835,7 +841,7 @@ static void demandPager(int vfsRval) {
 		} else {
 			// Still swapping out, continue the vfs write
 			memcpy(
-					pager_buffer(virtual_pager),
+					pager_buffer(virtualPager),
 					((char*) swapoutRequest.addr) + swapoutRequest.offset,
 					SWAP_BUFSIZ);
 
@@ -857,7 +863,7 @@ static void demandPager(int vfsRval) {
 
 			memcpy(
 					((char*) pinnedFrame) + request->offset - vfsRval,
-					pager_buffer(virtual_pager),
+					pager_buffer(virtualPager),
 					SWAP_BUFSIZ);
 		}
 
@@ -882,14 +888,12 @@ static void pagerFlush(void) {
 
 static void virtualPagerHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
-	virtual_pager = sos_my_tid();
 
-	dprintf(1, "*** virtualPagerHandler: started, tid %ld\n",
-			L4_ThreadNo(virtual_pager));
+	virtualPager = sos_my_tid();
+	dprintf(1, "*** virtualPagerHandler: tid=%ld\n", L4_ThreadNo(virtualPager));
 
-	// Initialise the swap file
 	swapfile_init();
-	dprintf(1, "*** virtualPagerHandler: swapfile opened at %d\n", swapfile);
+	dprintf(1, "*** virtualPagerHandler: swapfile=%d\n", swapfile);
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
@@ -946,7 +950,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_MEMUSE:
-				syscall_reply(tid, memory_usage());
+				syscall_reply(tid, memoryUsage());
 				break;
 
 			case SOS_SWAPUSE:
@@ -996,27 +1000,6 @@ static void virtualPagerHandler(void) {
 		dprintf(2, "*** virtualPagerHandler: finished %s from %d\n",
 				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
 	}
-}
-
-void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg) {
-	int addr = L4_MsgWord(msg, 0);
-	dprintf(3, "*** sos_pager_handler: addr=%p tid=%ld sender=%ld\n",
-			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
-
-	if (addr == 0) {
-		printf("SOS Segmentation fault (tid=%ld)\n", L4_ThreadNo(tid));
-	}
-
-	addr &= PAGEALIGN;
-
-	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
-	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
-	L4_PhysDesc_t phys = L4_PhysDesc(addr, L4_DefaultMemory);
-
-	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys)) { 
-		sos_print_error(L4_ErrorCode());
-		dprintf(0, "!!! sos_pager_handler: failed at addr=%p\n", (void*) addr);
-	}  
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {

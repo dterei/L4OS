@@ -302,9 +302,8 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	assert(res);
 
 	// And the pager
-	if (L4_IsThreadEqual(pager, virtual_pager)) {
-		res = L4_CreateIpcCap(pager, L4_rootclist,
-				pager, clistId);
+	if (pager_is_active()) {
+		res = L4_CreateIpcCap(pager, L4_rootclist, pager, clistId);
 		assert(res);
 	}
 
