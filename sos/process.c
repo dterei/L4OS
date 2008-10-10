@@ -296,10 +296,6 @@ int process_write_status(process_t *dest, int n) {
 		}
 	}
 
-	// SOS doesn't get dynamically updated, so update its size manually
-	assert(sosProcs[L4_rootserverno] != NULL);
-	sosProcs[L4_rootserverno]->info.size = frames_allocated() - memory_usage();
-
 	return count;
 }
 

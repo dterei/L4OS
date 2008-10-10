@@ -98,11 +98,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			printf("%s", pager_buffer(tid));
 			break;
 
-		case SOS_MOREMEM:
-			syscall_reply(tid,
-					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
-			break;
-
 		case SOS_OPEN:
 			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0));
 			break;
@@ -197,11 +192,9 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			syscall_reply(tid, rval);
 			break;
 
-		case SOS_PROCESS_CREATE:
-
 		default:
-			// Unknown system call, so we don't want to reply to this thread
-			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
+			dprintf(0, "!!! rootserver: unhandled syscall tid=%ld id=%d name=%s\n",
+					L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 			sos_print_l4memory(msg, L4_UntypedWords(tag) * sizeof(uint32_t));
 			break;
 	}

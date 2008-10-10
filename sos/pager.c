@@ -442,8 +442,8 @@ void pager_init(void) {
 	}
 }
 
-int sos_moremem(uintptr_t *base, unsigned int nb) {
-	dprintf(2, "*** sos_moremem(%p, %lx)\n", base, nb);
+static int heapGrow(uintptr_t *base, unsigned int nb) {
+	dprintf(2, "*** heapGrow(%p, %lx)\n", base, nb);
 
 	// Find the current heap section.
 	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
@@ -466,9 +466,9 @@ int sos_moremem(uintptr_t *base, unsigned int nb) {
 	*base = heap->base + heap->size;
 
 	// Move the heap region so SOS knows about it.
-	dprintf(3, "*** sos_moremem: was %p %lx\n", heap->base, heap->size);
+	dprintf(3, "*** heapGrow: was %p %lx\n", heap->base, heap->size);
 	heap->size += nb;
-	dprintf(3, "*** sos_moremem: now %p %lx\n", heap->base, heap->size);
+	dprintf(3, "*** heapGrow: now %p %lx\n", heap->base, heap->size);
 
 	// Have the option of returning 0 to signify no more memory.
 	return 1;
@@ -533,14 +533,13 @@ static L4_Word_t pagerSwapslotAlloc(Process *p) {
 
 static void pagerSwapslotFree(Process *p, L4_Word_t frame) {
 	WordList *prev, *curr, *tmp;
-	assert(!"check the other linked list code");
 
 	prev = NULL;
 	curr = swapped;
 
 	while (curr != NULL) {
 		if ((curr->pid == process_get_pid(p)) &&
-				((curr->word == frame) || (curr->word == ADDRESS_ALL))) {
+				((curr->word == frame) || (frame == ADDRESS_ALL))) {
 			if (prev == NULL) {
 				swapped = curr->next;
 			} else {
@@ -744,7 +743,7 @@ static void lseekNonblocking(fildes_t file, int offset, int whence) {
 }
 
 static void startSwapout(void) {
-	dprintf(1, "*** startSwapout\n");
+	dprintf(2, "*** startSwapout\n");
 
 	Process *p;
 	WordList *swapout;
@@ -798,7 +797,7 @@ static void startSwapout(void) {
 }
 
 static void startSwapin(void) {
-	dprintf(1, "*** startSwapin\n");
+	dprintf(2, "*** startSwapin\n");
 
 	// pin a frame to copy in to (although "pinned" is somewhat of a misnomer
 	// since really it's just a temporary frame and nothing is really pinned)
@@ -817,10 +816,9 @@ static void startSwapin(void) {
 static void startRequest(void) {
 	dprintf(1, "*** startRequest\n");
 
-	// this is called when a frame is needed, either to back a page that is
-	// on disk, or just because a process has started using a page for the
-	// first time
-	assert(allocLimit == 0);
+	// This is called when some kind of request is needed - this is either
+	// when a frame is needed but there are none left (i.e. a swapout) or
+	// when something is on disk and we need a swapin
 	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(process_lookup(requestsHead->pid)),
 			requestsHead->addr & PAGEALIGN);
@@ -851,7 +849,12 @@ static void dequeueRequest(void) {
 	} else {
 		assert(requestsLast != NULL);
 		dprintf(1, "*** dequeueRequest: more items\n");
-		startRequest();
+
+		if (allocLimit == 0) {
+			startRequest();
+		} else {
+			pager(tmp);
+		}
 	}
 }
 
@@ -1092,6 +1095,11 @@ static void virtualPagerHandler(void) {
 				}
 				break;
 
+			case SOS_MOREMEM:
+				syscall_reply(tid, heapGrow(
+						(uintptr_t*) pager_buffer(tid), L4_MsgWord(&msg, 0)));
+				break;
+
 			case SOS_MEMLOC:
 				syscall_reply(tid, *(pagetableLookup(process_get_pagetable(p),
 								L4_MsgWord(&msg, 0) & PAGEALIGN)));
@@ -1103,6 +1111,10 @@ static void virtualPagerHandler(void) {
 
 			case SOS_SWAPUSE:
 				syscall_reply(tid, swapfile_usage());
+				break;
+
+			case SOS_PHYSUSE:
+				syscall_reply(tid, frames_allocated());
 				break;
 
 			case SOS_PROCESS_DELETE:
@@ -1122,8 +1134,8 @@ static void virtualPagerHandler(void) {
 				break;
 
 			default:
-				dprintf(0, "!!! virtualPagerHandler: unhandled %s from %d\n",
-						syscall_show(TAG_SYSLAB(tag)), L4_SpaceNo(L4_SenderSpace()));
+				dprintf(0, "!!! pager: unhandled syscall tid=%ld id=%d name=%s\n",
+						L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 		}
 
 		dprintf(2, "*** virtualPagerHandler: finished %s from %d\n",

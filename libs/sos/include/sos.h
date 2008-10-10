@@ -52,6 +52,7 @@ typedef enum {
 	SOS_USLEEP,
 	SOS_MEMUSE,
 	SOS_SWAPUSE,
+	SOS_PHYSUSE,
 	SOS_VPAGER,
 	SOS_MEMLOC,
 	SOS_SHARE_VM,
@@ -251,6 +252,9 @@ int memuse(void);
 
 /* Get the number of pages in use by the swap file */
 int swapuse(void);
+
+/* Get the total number of physical frames in use */
+int physuse(void);
 
 /* Look up the process' page table for a given virtual address */
 L4_Word_t memloc(L4_Word_t addr);

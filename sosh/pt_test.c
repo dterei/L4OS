@@ -20,7 +20,7 @@ int pt_test(int argc, char **argv) {
 
 	// Test heap
 
-	printf("allocating heap: ");
+	printf("allocating heap\n");
 
 	buf = (test_t**) malloc(NUM_SLOTS * sizeof(test_t*));
 
@@ -29,6 +29,16 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
+			flush();
+		}
+	}
+
+	printf("\nfilling heap with first test values\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush();
 		}
 
 		for (j = 0; j < SLOTSIZE; j++) {
@@ -36,7 +46,7 @@ int pt_test(int argc, char **argv) {
 		}
 	}
 
-	printf("\ntesting heap: ");
+	printf("\ntesting heap\n");
 
 	// Do in two rounds in case memory is going crazy
 
@@ -45,6 +55,7 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
+			flush();
 		}
 
 		for (j = 0; j < SLOTSIZE; j++) {
@@ -56,11 +67,46 @@ int pt_test(int argc, char **argv) {
 		}
 	}
 
-	printf("\n done\n");
+	// Try a different touch value
+
+	printf("\ntesting for a second time\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		for (j = 0; j < SLOTSIZE; j++) {
+			buf[i][j] = (i - 1) * (i - 2) * (j + 1);
+		}
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush();
+		}
+	}
+
+	// And again
+
+	printf("\nverifing\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		passed = 1;
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush();
+		}
+
+		for (j = 0; j < SLOTSIZE; j++) {
+			if (buf[i][j] != (i - 1) * (i - 2) * (j + 1)) {
+				printf("pt_test: failed for i=%d j=%d (%d vs %d)\n",
+						i, j, buf[i][i], (i - 1) * (i - 2) * (j + 1));
+				passed = 0;
+			}
+		}
+	}
+
 
 	// Test stack
 
-	printf("testing stack\n");
+	printf("\ntesting stack\n");
 
 	for (i = 0; i < STACKSIZE; i++) {
 		stack[i] = i*i - i;
@@ -72,7 +118,7 @@ int pt_test(int argc, char **argv) {
 		}
 	}
 
-	printf("done test\n");
+	printf("\ndone\n");
 
 	return 0;
 }

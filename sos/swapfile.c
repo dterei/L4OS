@@ -25,24 +25,22 @@
 
 fildes_t swapfile;
 
-static L4_Word_t *FileSlots;
-static L4_Word_t NextSlot;
-static L4_Word_t LastSlot;
-static L4_Word_t SlotsFree;
+static L4_Word_t *fileSlots;
+static L4_Word_t firstFree;
+static L4_Word_t totalInUse;
 
 void
 swapfile_init(void)
 {
-	dprintf(1, "*** swapfile_init: Initialising swapfile ***\n");
-	FileSlots = (L4_Word_t *) frame_alloc();
-	NextSlot = 0;
-	LastSlot = 0;
-	SlotsFree = SWAPSIZE;
+	fileSlots = (L4_Word_t*) frame_alloc();
 
-	for (L4_Word_t i = 0, j = 0; i < SWAPSIZE; i++, j+= PAGESIZE)
-	{
-		FileSlots[i] = j;
+	for (int i = 0; i < SWAPSIZE - 1; i++) {
+		fileSlots[i] = i + 1;
 	}
+
+	fileSlots[SWAPSIZE - 1] = ADDRESS_NONE;
+	firstFree = 0;
+	totalInUse = 0;
 
 	swapfile_open();
 }
@@ -68,37 +66,29 @@ void swapfile_close(void) {
 }
 
 int swapfile_usage(void) {
-	return SWAPSIZE - SlotsFree;
+	return totalInUse;
 }
 
-L4_Word_t
-swapslot_alloc(void)
-{
-	if (SlotsFree <= 0)
-	{
-		return ADDRESS_NONE;
-	}
+L4_Word_t swapslot_alloc(void) {
+	assert(totalInUse <= SWAPSIZE);
 
-	L4_Word_t r = FileSlots[NextSlot];
-	NextSlot = ((NextSlot + 1) % SWAPSIZE);
-	SlotsFree--;
+	L4_Word_t slot = firstFree;
+	firstFree = fileSlots[slot];
+	totalInUse++;
 
-	return r;
+	return slot * PAGESIZE;
 }
 
-int
-swapslot_free(L4_Word_t slot)
-{
-	if (SlotsFree == SWAPSIZE || slot > PAGESIZE * (SWAPSIZE - 1))
-	{
-		return -1;
-	}
+int swapslot_free(L4_Word_t slot) {
+	assert((slot & ~PAGEALIGN) == 0);
+	assert(totalInUse > 0);
 
-	FileSlots[LastSlot] = slot;
-	LastSlot = ((LastSlot + 1) % SWAPSIZE);
-	SlotsFree++;
+	slot /= PAGESIZE;
+
+	fileSlots[slot] = firstFree;
+	firstFree = slot;
+	totalInUse--;
 
 	return 0;
 }
-
 
