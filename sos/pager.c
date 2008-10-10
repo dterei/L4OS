@@ -77,21 +77,6 @@ typedef struct Pagetable1_t {
 	Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
 
-// XXX do we still need this?
-static void pagerReply(L4_ThreadId_t tid) {
-	dprintf(2, "*** pagerReply: replying to %ld\n", L4_ThreadNo(tid));
-
-	L4_Msg_t msg;
-	L4_MsgClear(&msg);
-	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
-	L4_MsgLoad(&msg);
-
-	if (L4_IpcFailed(L4_Reply(tid))) {
-		dprintf(0, "!!! pagerReply to %ld failed: ", L4_ThreadNo(tid));
-		sos_print_error(L4_ErrorCode());
-	}
-}
-
 Pagetable *pagetable_init(void) {
 	assert(sizeof(Pagetable1) == PAGESIZE);
 	Pagetable1 *pt = (Pagetable1*) frame_alloc();
@@ -209,9 +194,9 @@ static int unmapPage(L4_SpaceId_t sid, L4_Word_t virt) {
 }
 
 static void prepareDataIn(Process *p, L4_Word_t vaddr) {
-	// Prepare for some data from a user program to be fiddled with
-	// by the pager.  This involves flushing the user programs cache on
-	// this address, and invalidating our own cache.
+	// Prepare for some data from a user program to be fiddled with by
+	// the pager.  This involves flushing the user programs cache on this
+	// address, and invalidating our own cache.
 	vaddr &= PAGEALIGN;
 	L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), vaddr);
 	L4_Word_t frame = *entry & ADDRESS_MASK;
@@ -313,8 +298,6 @@ void pager_init(void) {
 	assert((PAGESIZE % MAX_IO_BUF) == 0);
 	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
 
-	dprintf(1, "*** pager_init: grabbing %d frames\n", numFrames);
-
 	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) allocFrames(numFrames);
 
@@ -327,19 +310,14 @@ void pager_init(void) {
 
 	process_run(pager, RUN_AS_THREAD);
 
-	// Wait until it has actually started, or nasty things will
-	// happen to user processes
+	// Wait until it has actually started
 	while (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
 		L4_Yield();
 	}
 }
 
 static int findHeap(void *contents, void *data) {
-	if (region_get_type((Region*) contents) == REGION_HEAP) {
-		return 1;
-	} else {
-		return 0;
-	}
+	return (region_get_type((Region*) contents) == REGION_HEAP);
 }
 
 static int heapGrow(uintptr_t *base, unsigned int nb) {
@@ -369,12 +347,8 @@ static int findRegion(void *contents, void *data) {
 	Region *r = (Region*) contents;
 	L4_Word_t addr = (L4_Word_t) data;
 
-	if ((addr >= region_get_base(r)) &&
-			(addr < region_get_base(r) + region_get_size(r))) {
-		return 1;
-	} else {
-		return 0;
-	}
+	return ((addr >= region_get_base(r)) &&
+			(addr < region_get_base(r) + region_get_size(r)));
 }
 
 static PagerRequest *allocPagerRequest(
@@ -394,7 +368,7 @@ static void pagerContinue(PagerRequest *pr) {
 
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(pr->pid));
 	free(pr);
-	pagerReply(replyTo);
+	syscall_reply_m(replyTo, 0);
 }
 
 static L4_Word_t pagerSwapslotAlloc(Process *p) {
@@ -462,9 +436,9 @@ static int processDelete(L4_Word_t pid) {
 
 static int pagerAction(PagerRequest *pr) {
 	Process *p;
-	L4_Word_t addr = pr->addr & PAGEALIGN;
-	L4_Word_t frame;
-	L4_Word_t *entry;
+	L4_Word_t addr, frame, *entry;
+
+	addr = pr->addr & PAGEALIGN;
 
 	dprintf(2, "*** pagerAction: fault on ss=%d, addr=%p (%p)\n",
 			L4_SpaceNo(L4_SenderSpace()), pr->addr, addr);
@@ -478,7 +452,6 @@ static int pagerAction(PagerRequest *pr) {
 	// Find region it belongs in.
 	dprintf(3, "*** pagerAction: finding region\n");
 	Region *r = list_find(process_get_regions(p), findRegion, (void*) addr);
-	dprintf(3, "*** pagerAction: found region %p\n", r);
 
 	if (r == NULL) {
 		printf("Segmentation fault\n");
@@ -620,9 +593,7 @@ static void startSwapout(void) {
 
 	Process *p;
 	PidWord *swapout;
-	L4_Word_t *entry;
-	L4_Word_t frame;
-	L4_Word_t addr;
+	L4_Word_t *entry, frame, addr;
 
 	// Choose the next page to swap out
 	swapout = deleteAllocList();
@@ -739,18 +710,15 @@ static void queueRequest(PagerRequest *pr) {
 }
 
 static void memzero(char *addr, L4_Word_t size) {
-	for (int i = 0; i < size; i++) {
-		addr[i] = 0x00;
-	}
+	for (int i = 0; i < size; i++) addr[i] = 0x00;
 }
 
 static void finishedSwapout(void) {
 	dprintf(1, "*** finishedSwapout\n");
+
 	Process *p;
 	PagerRequest *request;
-	L4_Word_t *entry;
-	L4_Word_t frame;
-	L4_Word_t addr;
+	L4_Word_t *entry, frame, addr;
 
 	// Either the swapout was just for a free frame, or it was for
 	// a frame with existing contents (in which case there would be
@@ -801,8 +769,7 @@ static void finishedSwapin(void) {
 	Process *p;
 	PagerRequest *request;
 	PidWord *args;
-	L4_Word_t *entry;
-	L4_Word_t addr;
+	L4_Word_t *entry, addr;
 
 	request = (PagerRequest*) list_peek(requests);
 	p = process_lookup(request->pid);
@@ -1037,8 +1004,7 @@ void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
 
 	if (addr == 0) {
-		printf("Segmentation fault in sos_pager_handler, tid=%ld addr=%p\n",
-				L4_ThreadNo(tid), (void*) addr);
+		printf("SOS Segmentation fault (tid=%ld)\n", L4_ThreadNo(tid));
 	}
 
 	addr &= PAGEALIGN;
@@ -1054,8 +1020,7 @@ void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {
-	int threadOffset = (L4_ThreadNo(tid) * MAX_IO_BUF);
-	return &copyInOutBuffer[threadOffset];
+	return &copyInOutBuffer[L4_ThreadNo(tid) * MAX_IO_BUF];
 }
 
 static void copyInContinue(PagerRequest *pr) {
@@ -1107,7 +1072,7 @@ static void copyInContinue(PagerRequest *pr) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyInContinue: finished\n");
-		pagerReply(tid);
+		syscall_reply_m(tid, 0);
 	} else {
 		pr->addr = (L4_Word_t) src;
 		dprintf(3, "*** copyInContinue: continuing\n");
@@ -1171,7 +1136,7 @@ static void copyOutContinue(PagerRequest *pr) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyOutContinue: finished\n");
-		pagerReply(tid);
+		syscall_reply_m(tid, 0);
 	} else {
 		pr->addr = (L4_Word_t) dest;
 		dprintf(3, "*** copyOutContinue: continuing\n");

@@ -29,13 +29,25 @@ a (potentially) different swap file for each one.  This will require (at least):
    need to be changed to support non-pagealigned addresses where necessary.
 
 - Check memory leaks in pager
-- Consolidate comments in pager
-- Consolidate variable declarations in pager
-- Just, clean it up... especially some debugging stuff
 
-- Complete the conversion in pager to using the linked list code in list.c/h.
-Then it would be a good idea to convert all code using a linked list to this -
-regions, processes, filesystem stuff, etc.
+- More test cases for the linked list.  Needs to be absolutely rock solid.
 
-- Put regions stuff in its own file.
+- Move more things to the generic linked list implementation.
+	- Timer driver
+	- Filesystem stuff
+	- ...
+
+- This has been around for ages, but there is a security bug in copyin/out
+where the user can violate read/write access permissions.  Need to write a
+program to show this but won't be too hard.  Also won't be a hard fix.
+
+- Clean up copyin/out as well, there is a lot of repetition across the two
+functions and they aren't so nice anyway.
+
+- A more intelligent way of giving tids - not using the caps.  Force all system
+calls to include the calling thread as the somethingth argument in the message.
+Perhaps, the 31st (something like that).  This info is kept in the user defined
+TCR.  For security (not letting a process spoof another one) check this tid
+against the sender space when it arrives.
+Note that this is just a nice thing to do, it's not a problem as such.
 
