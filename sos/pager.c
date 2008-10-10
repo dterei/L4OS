@@ -11,6 +11,7 @@
 #include "process.h"
 #include "swapfile.h"
 #include "syscall.h"
+#include "wordlist.h"
 
 #define verbose 1
 
@@ -22,17 +23,8 @@
 #define REFBIT_MASK  0x00000004
 #define ADDRESS_MASK 0xfffff000
 
-typedef struct WordList_t WordList;
-struct WordList_t {
-	pid_t pid;
-	L4_Word_t word;
-	WordList *next;
-};
-
 static int allocLimit;
-static WordList *allocHead;
-static WordList *allocLast;
-
+static WordList *alloced;
 static WordList *swapped;
 
 // Asynchronous pager requests
@@ -55,7 +47,7 @@ static L4_Word_t pinnedFrame;
 static void queueRequest(PagerRequest *pr);
 
 // For the pager process
-#define PAGER_STACK_SIZE PAGESIZE
+#define PAGER_STACK_SIZE PAGESIZE // DO NOT CHANGE
 
 static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 L4_ThreadId_t virtual_pager; // automatically initialised to 0 (L4_nilthread)
@@ -72,8 +64,6 @@ static char *copyInOutBuffer;
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
 static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);
 
-// Page table structures
-// Each level of the page table is assumed to be of size PAGESIZE
 typedef struct Pagetable2_t {
 	L4_Word_t pages[PAGEWORDS];
 } Pagetable2;
@@ -82,7 +72,6 @@ typedef struct Pagetable1_t {
 	Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
 
-// Region structure
 struct Region_t {
 	region_type type; // type of region (heap? stack?)
 	uintptr_t base;   // base of the region
@@ -223,16 +212,17 @@ static void pagerFrameFree(L4_Word_t frame) {
 }
 
 static void framesFree(Process *p) {
-	WordList *prev, *curr, *tmp;
-	Pagetable *pt = process_get_pagetable(p);
+	Pagetable *pt;
+	WordNode *prev, *curr, *tmp;
 
+	pt = process_get_pagetable(p);
 	prev = NULL;
-	curr = allocHead;
+	curr = alloced->head;
 
 	while (curr != NULL) {
 		if (curr->pid == process_get_pid(p)) {
 			if (prev == NULL) {
-				allocHead = curr->next;
+				alloced->head = curr->next;
 			} else {
 				prev->next = curr->next;
 			}
@@ -247,10 +237,10 @@ static void framesFree(Process *p) {
 		}
 	}
 
-	if (allocHead == NULL) {
-		allocLast = NULL;
-	} else if (allocHead->next == NULL) {
-		allocLast = allocHead;
+	if (alloced->head == NULL) {
+		alloced->last = NULL;
+	} else if (alloced->head->next == NULL) {
+		alloced->last = alloced->head;
 	}
 }
 
@@ -329,69 +319,38 @@ static void prepareDataOut(Process *p, L4_Word_t vaddr) {
 				process_get_sid(p), vaddr, vaddr + PAGESIZE));
 }
 
-static void addAllocList(pid_t pid, L4_Word_t page) {
-	WordList *new = (WordList*) malloc(sizeof(WordList));
-
-	new->pid = pid;
-	new->word = page;
-	new->next = NULL;
-
-	if (allocHead == NULL) {
-		assert(allocLast == NULL);
-		allocLast = new;
-		allocHead = new;
-	} else {
-		new->next = NULL;
-		allocLast->next = new;
-		allocLast = new;
-	}
-}
-
-static WordList *deleteAllocList(void) {
+static WordNode *deleteAllocList(void) {
 	dprintf(1, "*** deleteAllocList\n");
 
-	assert(allocHead != NULL);
-	assert(allocLast != NULL);
+	assert(alloced->head != NULL);
+	assert(alloced->last != NULL);
 
 	Process *p;
-	WordList *tmp;
-	WordList *found = NULL;
+	WordNode *found = NULL;
 
 	// Second-chance algorithm
 	while (found == NULL) {
-		p = process_lookup(allocHead->pid);
+		p = process_lookup(alloced->head->pid);
 		assert(p != NULL);
+
 		L4_Word_t *entry = pagetableLookup(
-				process_get_pagetable(p), allocHead->word);
+				process_get_pagetable(p), alloced->head->word);
 
 		dprintf(3, "*** deleteAllocList: p=%d page=%p frame=%p\n",
-				process_get_pid(p), (void*) allocHead->word,
+				process_get_pid(p), (void*) alloced->head->word,
 				(void*) (*entry & ADDRESS_MASK));
 
 		if ((*entry & REFBIT_MASK) == 0) {
 			// Not been referenced, this is the frame to swap
-			found = allocHead;
-			allocHead = allocHead->next;
-			if (allocHead == NULL) allocLast = NULL;
+			found = alloced->head;
+			wordlist_unshift(alloced);
 		} else {
-			// Been referenced, clear it...
+			// Been referenced: clear refbit, unmap to give it a chance
+			// of being reset again, and move to back
 			*entry &= ~REFBIT_MASK;
-
-			// unmap (so if it gets referenced again the pager will be
-			// called and the refbit will be reset)...
-			unmapPage(process_get_sid(p), allocHead->word);
-
-			// and move to back
-			if (allocHead->next != NULL) {
-				assert(allocHead != allocLast);
-				tmp = allocHead;
-				allocHead = allocHead->next;
-				allocLast->next = tmp;
-				tmp->next = NULL;
-				allocLast = tmp;
-			} else {
-				assert(allocHead == allocLast);
-			}
+			unmapPage(process_get_sid(p), alloced->head->word);
+			wordlist_push(alloced, alloced->head->word, alloced->head->pid);
+			wordlist_unshift(alloced);
 		}
 	}
 
@@ -419,10 +378,10 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 }
 
 void pager_init(void) {
-	// Set up alloc frame list
+	// Set up word lists
 	allocLimit = FRAME_ALLOC_LIMIT;
-	allocHead = NULL;
-	allocLast = NULL;
+	alloced = wordlist_empty();
+	swapped = wordlist_empty();
 
 	// Grab a bunch of frames to use for copyin/copyout
 	assert((PAGESIZE % MAX_IO_BUF) == 0);
@@ -752,7 +711,7 @@ static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
 	Process *p;
-	WordList *swapout;
+	WordNode *swapout;
 	L4_Word_t *entry;
 	L4_Word_t frame;
 	L4_Word_t addr;
