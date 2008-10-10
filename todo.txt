@@ -14,8 +14,6 @@ moment it just pagefaults like crazy.  Apparently this is a mystery funtion
 somewhere, possibly written in assembler (?), or alternatively _Exit or _Abort
 should get called too.
 
-- Bugcheck the process waiting and deleting.
-
 - Free L4's resources when deleting process.
 
 - ELF loading.  Note that we should aim to load everything by setting the
@@ -30,5 +28,12 @@ a (potentially) different swap file for each one.  This will require (at least):
    (page aligned to something would be ideal).  Either that or the pager/regions
    need to be changed to support non-pagealigned addresses where necessary.
 
-- Still bug(s) in linked list code within pager.  Thank you assertions.
+- Check memory leaks in pager
+- Consolidate comments in pager
+- Consolidate variable declarations in pager
+- Just, clean it up... especially some debugging stuff
+
+- Complete the conversion in pager to using the linked list code in list.c/h.
+Then it would be a good idea to convert all code using a linked list to this -
+regions, processes, filesystem stuff, etc.
 
