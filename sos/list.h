@@ -2,9 +2,7 @@
 #define _SOS_LIST_H_
 
 /**
- * A generic linked list that (most importantly) has the list_delete function
- * which is basically a list iteration function that deletes nodes that it is
- * told to.
+ * A generic linked list with some more interesting functions.
  *
  * Note that list_pop is O(n).
  */
@@ -32,9 +30,23 @@ void list_push(List *list, void *contents);
 // Remove the node at the end
 void *list_pop(List *list);
 
+// Iterate over a list with a given function, and return as
+// soon as the function returns 1
+void *list_find(List *list, int (*f)(void *contents, void *data),
+		void *data);
+
 // Iterate over a list with a given function, and delete any
 // nodes for which the function returns 1
-void list_delete(List *list, int (*f)(void *contents, void *data), void *data);
+void list_delete(List *list, int (*f)(void *contents, void *data),
+		void *data);
+
+// Reduce a list to a single returned value
+void *list_reduce(List *list, void *(*f)(void *contents, void *data),
+		void *data);
+
+// Iterate over a list
+void list_iterate(List *list, void (*f)(void *contents, void *data),
+		void *data);
 
 #endif
 

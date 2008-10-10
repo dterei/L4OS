@@ -1,6 +1,8 @@
 #ifndef _PROCESS_H_
 #define _PROCESS_H_
 
+#include "list.h"
+#include "region.h"
 #include "pager.h"
 #include "vfs.h"
 
@@ -48,7 +50,7 @@ L4_SpaceId_t process_get_sid(Process *p);
 Pagetable *process_get_pagetable(Process *p);
 
 // Get the regions of a process
-Region *process_get_regions(Process *p);
+List *process_get_regions(Process *p);
 
 // Wake all processes waiting on a process
 void process_wake_all(pid_t pid);

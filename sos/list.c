@@ -104,7 +104,19 @@ void *list_pop(List *list) {
 	return contents;
 }
 
-void list_delete(List *list, int (*f)(void *contents, void *data), void *data) {
+void *list_find(List *list, int (*f)(void *contents, void *data),
+		void *data) {
+	for (Node *curr = list->head; curr != NULL; curr = curr->next) {
+		if (f(curr->contents, data)) {
+			return curr->contents;
+		}
+	}
+
+	return NULL;
+}
+
+void list_delete(List *list, int (*f)(void *contents, void *data),
+		void *data) {
 	Node *curr, *prev, *tmp;
 
 	curr = list->head;
@@ -130,6 +142,23 @@ void list_delete(List *list, int (*f)(void *contents, void *data), void *data) {
 
 	if (list->head == NULL) {
 		list->last = NULL;
+	}
+}
+
+void *list_reduce(List *list, void *(*f)(void *contents, void *data),
+		void *data) {
+
+	for (Node *curr = list->head; curr != NULL; curr = curr->next) {
+		data = f(curr->contents, data);
+	}
+
+	return data;
+}
+
+void list_iterate(List *list, void (*f)(void *contents, void *data),
+		void *data) {
+	for (Node *curr = list->head; curr != NULL; curr = curr->next) {
+		f(curr->contents, data);
 	}
 }
 

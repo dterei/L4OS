@@ -1,0 +1,195 @@
+// build with "gcc -std=c99 -Wall -O -g listtest.c list.c -o test"
+
+#include <assert.h>
+#include <stdio.h>
+
+#include "list.h"
+
+#define RANGE 20
+
+static int deleteAll(void *contents, void *data) {
+	return 1;
+}
+
+static int deleteNone(void *contents, void *data) {
+	return 0;
+}
+
+static int deleteOdd(void *contents, void *data) {
+	return ((int) contents % 2 == 1);
+}
+
+static int deleteEven(void *contents, void *data) {
+	return ((int) contents % 2 == 0);
+}
+
+static void *sum(void *contents, void *data) {
+	return (void*) ((int) data) + ((int) contents);
+}
+
+static void *sub(void *contents, void *data) {
+	return (void*) ((int) data) - ((int) contents);
+}
+
+int main(int argc, char *argv[]) {
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		for (int i = 0; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			assert(list_pop(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			list_shift(list, (void*) i);
+		}
+
+		for (int i = 0; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			list_shift(list, (void*) i);
+		}
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			assert(list_pop(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		for (int i = 0; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			list_shift(list, (void*) i);
+		}
+
+		for (int i = RANGE - 1; i >= 0; i--) {
+			assert(list_pop(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete(list, deleteNone, NULL);
+
+		for (int i = 0; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete(list, deleteEven, NULL);
+
+		for (int i = 1; i < RANGE; i += 2) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete(list, deleteOdd, NULL);
+
+		for (int i = 0; i < RANGE; i += 2) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete(list, deleteAll, NULL);
+
+		assert(list_null(list));
+	}
+
+	{
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		int tmp1 = (int) list_reduce(list, sum, 0);
+		int tmp2 = (RANGE * (RANGE - 1)) / 2;
+
+		assert(tmp1 == tmp2);
+
+		tmp1 = (int) list_reduce(list, sub, 0);
+		tmp2 = -tmp2;
+
+		assert(tmp1 == tmp2);
+	}
+
+	return 0;
+}
+

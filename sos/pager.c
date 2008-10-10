@@ -10,6 +10,7 @@
 #include "list.h"
 #include "pager.h"
 #include "process.h"
+#include "region.h"
 #include "swapfile.h"
 #include "syscall.h"
 
@@ -19,8 +20,7 @@
 #define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
 
 #define ONDISK_MASK  0x00000001
-#define PINNED_MASK  0x00000002
-#define REFBIT_MASK  0x00000004
+#define REFBIT_MASK  0x00000002
 #define ADDRESS_MASK 0xfffff000
 
 typedef struct PidWord_t PidWord;
@@ -77,16 +77,7 @@ typedef struct Pagetable1_t {
 	Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
 
-struct Region_t {
-	region_type type; // type of region (heap? stack?)
-	uintptr_t base;   // base of the region
-	uintptr_t size;   // size of region
-	int rights;       // access rights of region (read, write, execute)
-	int mapDirectly;  // do we directly (1:1) map it?
-	int id;           // what bootinfo uses to identify the region
-	struct Region_t *next;
-};
-
+// XXX do we still need this?
 static void pagerReply(L4_ThreadId_t tid) {
 	dprintf(2, "*** pagerReply: replying to %ld\n", L4_ThreadNo(tid));
 
@@ -111,49 +102,6 @@ static void memdump(char *addr, int size) {
 			printf(" %02x%02x", addr[row + col], addr[row + col + 1]);
 		}
 		printf("\n");
-	}
-}
-
-Region *region_init(region_type type, uintptr_t base,
-		uintptr_t size, int rights, int dirmap) {
-	Region *new = (Region*) malloc(sizeof(Region));
-
-	new->type = type;
-	new->base = base;
-	new->size = size;
-	new->rights = rights;
-	new->mapDirectly = dirmap;
-
-	return new;
-}
-
-uintptr_t region_base(Region *r) {
-	return r->base;
-}
-
-uintptr_t region_size(Region *r) {
-	return r->size;
-}
-
-Region *region_next(Region *r) {
-	return r->next;
-}
-
-void region_set_rights(Region *r, int rights) {
-	r->rights = rights;
-}
-
-void region_append(Region *r, Region *toAppend) {
-	r->next = toAppend;
-}
-
-static void regionsFree(Process *p) {
-	Region *r = process_get_regions(p);
-
-	while (r != NULL) {
-		Region *next = r->next;
-		free(r);
-		r = next;
 	}
 }
 
@@ -399,33 +347,28 @@ void pager_init(void) {
 	}
 }
 
+static int findHeap(void *contents, void *data) {
+	if (region_get_type((Region*) contents) == REGION_HEAP) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 static int heapGrow(uintptr_t *base, unsigned int nb) {
 	dprintf(2, "*** heapGrow(%p, %lx)\n", base, nb);
 
 	// Find the current heap section.
 	Process *p = process_lookup(L4_SpaceNo(L4_SenderSpace()));
-	Region *heap;
-
-	for (heap = process_get_regions(p); heap != NULL; heap = heap->next) {
-		if (heap->type == REGION_HEAP) {
-			break;
-		}
-	}
-
-	if (heap == NULL) {
-		// No heap!?
-		dprintf(0, "!!! sos_more_heap: no heap region found!\n");
-		return 0;
-	}
+	Region *heap = list_find(process_get_regions(p), findHeap, NULL);
+	assert(heap != NULL);
 
 	// Top of heap is the (new) start of the free region, this is
 	// what morecore/malloc expect.
-	*base = heap->base + heap->size;
+	*base = region_get_base(heap) + region_get_size(heap);
 
 	// Move the heap region so SOS knows about it.
-	dprintf(3, "*** heapGrow: was %p %lx\n", heap->base, heap->size);
-	heap->size += nb;
-	dprintf(3, "*** heapGrow: now %p %lx\n", heap->base, heap->size);
+	region_set_size(heap, nb + region_get_size(heap));
 
 	// Have the option of returning 0 to signify no more memory.
 	return 1;
@@ -435,19 +378,16 @@ int memory_usage(void) {
 	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
-static Region* findRegion(Region *regions, L4_Word_t addr) {
-	Region *r;
+static int findRegion(void *contents, void *data) {
+	Region *r = (Region*) contents;
+	L4_Word_t addr = (L4_Word_t) data;
 
-	for (r = regions; r != NULL; r = r->next) {
-		if (addr >= r->base && addr < r->base + r->size) {
-			break;
-		} else {
-			dprintf(3, "*** findRegion: %p not %p - %p (%d)\n",
-					addr, r->base, r->base + r->size, r->type);
-		}
+	if ((addr >= region_get_base(r)) &&
+			(addr < region_get_base(r) + region_get_size(r))) {
+		return 1;
+	} else {
+		return 0;
 	}
-
-	return r;
 }
 
 static PagerRequest *allocPagerRequest(
@@ -495,6 +435,10 @@ static int pagerSwapslotFree(void *contents, void *data) {
 	}
 }
 
+static void regionsFree(void *contents, void *data) {
+	region_free((Region*) contents);
+}
+
 static int processDelete(L4_Word_t pid) {
 	Process *p;
 	PidWord *args;
@@ -516,7 +460,7 @@ static int processDelete(L4_Word_t pid) {
 	list_delete(alloced, framesFree, p);
 	list_delete(swapped, pagerSwapslotFree, args);
 	pagetableFree(p);
-	regionsFree(p);
+	list_iterate(process_get_regions(p), regionsFree, NULL);
 
 	free(args);
 
@@ -546,7 +490,7 @@ static int pagerAction(PagerRequest *pr) {
 
 	// Find region it belongs in.
 	dprintf(3, "*** pagerAction: finding region\n");
-	Region *r = findRegion(process_get_regions(p), addr);
+	Region *r = list_find(process_get_regions(p), findRegion, (void*) addr);
 	dprintf(3, "*** pagerAction: found region %p\n", r);
 
 	if (r == NULL) {
@@ -570,7 +514,7 @@ static int pagerAction(PagerRequest *pr) {
 		// Already appears in page table as a frame, just got unmapped
 		// (probably to update the refbit)
 		dprintf(3, "*** pagerAction: got unmapped\n");
-	} else if (r->mapDirectly) {
+	} else if (region_map_directly(r)) {
 		// Wants to be mapped directly (code/data probably).
 		dprintf(3, "*** pagerAction: mapping directly\n");
 		frame = addr;
@@ -592,8 +536,8 @@ static int pagerAction(PagerRequest *pr) {
 	*entry = frame | REFBIT_MASK;
 
 	dprintf(3, "*** pagerAction: mapping vaddr=%p pid=%d frame=%p rights=%d\n",
-			(void*) addr, process_get_pid(p), (void*) frame, r->rights);
-	mapPage(process_get_sid(p), addr, frame, r->rights);
+			(void*) addr, process_get_pid(p), (void*) frame, region_get_rights(r));
+	mapPage(process_get_sid(p), addr, frame, region_get_rights(r));
 
 	return 1;
 }

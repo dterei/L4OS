@@ -37,3 +37,5 @@ a (potentially) different swap file for each one.  This will require (at least):
 Then it would be a good idea to convert all code using a linked list to this -
 regions, processes, filesystem stuff, etc.
 
+- Put regions stuff in its own file.
+
