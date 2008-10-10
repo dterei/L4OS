@@ -32,3 +32,8 @@ a (potentially) different swap file for each one.  This will require (at least):
 
 - Move pager-related syscalls to pager.
 
+- Put all process_related system calls in pager, get rid of that proess_wake
+stuff.
+
+- Still bug(s) in linked list code within pager.  Thank you assertions.
+

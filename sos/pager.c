@@ -249,6 +249,8 @@ static void framesFree(Process *p) {
 
 	if (allocHead == NULL) {
 		allocLast = NULL;
+	} else if (allocHead->next == NULL) {
+		allocLast = allocHead;
 	}
 }
 
@@ -327,11 +329,12 @@ static void prepareDataOut(Process *p, L4_Word_t vaddr) {
 				process_get_sid(p), vaddr, vaddr + PAGESIZE));
 }
 
-static void addWordList(pid_t pid, L4_Word_t page) {
+static void addAllocList(pid_t pid, L4_Word_t page) {
 	WordList *new = (WordList*) malloc(sizeof(WordList));
 
 	new->pid = pid;
 	new->word = page;
+	new->next = NULL;
 
 	if (allocHead == NULL) {
 		assert(allocLast == NULL);
@@ -344,7 +347,9 @@ static void addWordList(pid_t pid, L4_Word_t page) {
 	}
 }
 
-static WordList *deleteWordList(void) {
+static WordList *deleteAllocList(void) {
+	dprintf(1, "*** deleteAllocList\n");
+
 	assert(allocHead != NULL);
 	assert(allocLast != NULL);
 
@@ -359,7 +364,7 @@ static WordList *deleteWordList(void) {
 		L4_Word_t *entry = pagetableLookup(
 				process_get_pagetable(p), allocHead->word);
 
-		dprintf(3, "*** deleteWordList: p=%d page=%p frame=%p\n",
+		dprintf(3, "*** deleteAllocList: p=%d page=%p frame=%p\n",
 				process_get_pid(p), (void*) allocHead->word,
 				(void*) (*entry & ADDRESS_MASK));
 
@@ -384,6 +389,8 @@ static WordList *deleteWordList(void) {
 				allocLast->next = tmp;
 				tmp->next = NULL;
 				allocLast = tmp;
+			} else {
+				assert(allocHead == allocLast);
 			}
 		}
 	}
@@ -405,7 +412,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 
 		process_get_info(p)->size++;
 		allocLimit--;
-		addWordList(process_get_pid(p), page);
+		addAllocList(process_get_pid(p), page);
 	}
 
 	return frame;
@@ -752,7 +759,7 @@ static void startSwapout(void) {
 	L4_Word_t addr;
 
 	// Choose the next page to swap out
-	swapout = deleteWordList();
+	swapout = deleteAllocList();
 	p = process_lookup(swapout->pid);
 	assert(p != NULL);
 
