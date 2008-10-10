@@ -101,19 +101,6 @@ static void pagerReply(L4_ThreadId_t tid) {
 	}
 }
 
-static void memdump(char *addr, int size) {
-	(void) memdump;
-	int perRow = 32;
-
-	for (int row = 0; row < size; row += perRow) {
-		printf("%04x:", row);
-		for (int col = 0; col < perRow; col += 2) {
-			printf(" %02x%02x", addr[row + col], addr[row + col + 1]);
-		}
-		printf("\n");
-	}
-}
-
 Region *region_init(region_type type, uintptr_t base,
 		uintptr_t size, int rights, int dirmap) {
 	Region *new = (Region*) malloc(sizeof(Region));
@@ -358,7 +345,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	} else {
 		frame = frame_alloc();
 		dprintf(1, "*** pagerFrameAlloc: allocated frame %p\n", frame);
-		list_push(alloced, allocPidWord(process_get_pid(p), frame));
+		list_push(alloced, allocPidWord(process_get_pid(p), page));
 
 		process_get_info(p)->size++;
 		allocLimit--;
@@ -484,7 +471,7 @@ static L4_Word_t pagerSwapslotAlloc(Process *p) {
 
 static int pagerSwapslotFree(void *contents, void *data) {
 	PidWord *curr = (PidWord*) contents;
-	PidWord *args = (PidWord*) contents;
+	PidWord *args = (PidWord*) data;
 
 	if ((curr->pid == args->pid) &&
 			((curr->word == args->word) || (curr->word == ADDRESS_ALL))) {
@@ -713,8 +700,6 @@ static void startSwapout(void) {
 			(void*) swapout->word, (void*) addr,
 			process_get_pid(p), (void*) frame);
 
-	if (verbose > 2) memdump((char*) frame, PAGESIZE);
-
 	// Set up the swapout
 	swapoutRequest.pid = swapout->pid;
 	swapoutRequest.addr = frame;
@@ -861,8 +846,6 @@ static void finishedSwapout(void) {
 
 	dprintf(2, "*** finishedSwapout: addr=%p for pid=%d now %p\n",
 			(void*) addr, process_get_pid(p), (void*) frame);
-
-	if (verbose > 2) memdump((char*) frame, PAGESIZE);
 
 	prepareDataOut(p, addr);
 	request->callback(request);
