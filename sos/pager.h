@@ -33,19 +33,14 @@ uintptr_t region_size(Region *r);
 Region *region_next(Region *r);
 void region_set_rights(Region *r, int rights);
 void region_append(Region *r, Region *toAppend);
-void region_free_all(Region *r);
 
 Pagetable *pagetable_init(void);
-void pagetable_free(Pagetable *pt);
-void frames_free(pid_t pid);
 
 void pager_init(void);
-void pager_flush(L4_ThreadId_t tid, L4_Msg_t *msgP);
 void sos_pager_handler(L4_ThreadId_t tid, L4_Msg_t *msg);
 char *pager_buffer(L4_ThreadId_t tid);
 
-int sos_moremem(uintptr_t *base, unsigned int nb);
-int sos_memuse(void);
+int memory_usage(void);
 
 #endif // _PAGER_H
 

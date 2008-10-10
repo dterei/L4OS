@@ -20,7 +20,6 @@ int main(int argc, char *argv[]) {
 	sprintf(buf, ">>> memcheck: there are now %d frames in use\n", memuse());
 	kprint(buf);
 
-	process_delete(my_id());
 	return 0;
 }
 

@@ -203,13 +203,10 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 	p->startedAt = time_stamp();
 
 	if (asThread == RUN_AS_THREAD) {
-		printf("as thread\n");
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		printf("as raw task\n");
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	} else {
-		printf("as virtual task\n");
 		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
 	}
 
@@ -254,43 +251,16 @@ static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	}
 }
 
-int process_kill(Process *p) {
-	printf("process_kill on %p\n", p);
+void process_wake_all(pid_t pid) {
+	wakeAll(pid, pid);
+	wakeAll(WAIT_ANYBODY, pid);
+}
 
-	if (p == NULL) {
-		return (-1);
-	} else {
-		printf("pid is %d\n", p->info.pid);
-	}
-
-	/*
-	 * Will need to:
-	 * 	- kill thread
-	 * 	- close all files
-	 * 	! free all frames allocted by the process
-	 * 	! free all swapped frames
-	 * 	- free page table
-	 * 	- free regions
-	 * 	- free up the pid for another process
-	 * 	- free the PCB
-	 * 	- wake up waiting processes
-	 *
-	 * Points marked with (!) are ones that haven't been
-	 * done yet.
-	 *
-	 * Won't need to:
-	 * 	- free the pager request (will happen by itself)
-	 * 	- worry about stray messages (sycall_reply is ok)
-	 */
-
-	// Kill all threads associated with the process
-	L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
-			L4_nilthread, L4_nilthread, 0, NULL);
-
-	// Close all files opened by it
+void process_close_files(Process *p) {
 	VFile *pfiles = process_get_files(p);
+
 	if (pfiles == NULL) {
-		dprintf(0, "!!! Process we are trying to kill has NULL open file table (%d)\n",
+		dprintf(0, "!!! process_close_files: %p has NULL open file table\n",
 				process_get_pid(p));
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
@@ -298,33 +268,22 @@ int process_kill(Process *p) {
 				vfs_close(process_get_tid(p), fd);
 			}
 		}
-				
 	}
+}
 
-	// Free the used frames, page table, and regions
-	//frames_free(p->info.pid);
-	pagetable_free(p->pagetable);
-	region_free_all(p->regions);
-
-	// Freeing the PCB and setting to NULL is enough to
-	// free the pid as well
-	pid_t ghostPid = p->info.pid;
-	free(p);
-	sosProcs[ghostPid] = NULL;
-
-	// Wake all process waiting on this process (or any)
-	wakeAll(ghostPid, ghostPid);
-	wakeAll(WAIT_ANYBODY, ghostPid);
-
-	return 0;
+int process_kill(Process *p) {
+	if (p == NULL) {
+		return (-1);
+	} else {
+		L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
+				L4_nilthread, L4_nilthread, 0, NULL);
+		sosProcs[process_get_pid(p)] = NULL;
+		return 0;
+	}
 }
 
 int process_write_status(process_t *dest, int n) {
 	int count = 0;
-
-	// Firstly, update the size of sos
-	assert(sosProcs[L4_rootserverno] != NULL);
-	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
 
 	// Everything else has size dynamically updated, so just
 	// write them all out

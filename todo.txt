@@ -1,40 +1,34 @@
+- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", with
+*** sos_pager_handler: addr=0x0000000c ip=0x001488e4 sender=0
+This might be our problem, not sure.  Not the same as the other unhandled page
+fault that often happens (on a high address) which everybody gets and certainly
+isn't our fault.
+
 - Move MaxReader, MaxWriter and the reader, writer counters out of consolefs
 into the vfs and then handle opening already open vnodes in the vfs layer
 instead of having each fs handle it.
 (Undecided, changes live in vfs-exp branch)
 
-- There is a really weird bug (or otherwise) causing mangled output on the
-computers at uni.  But not on my laptop.  Just run "ps" from sosh.  I hope and
-assume that this is some kind of communication problem (and not from SOS) but
-Nick seemed a little mistrusting.  So it could be a bug.  By the way, this does
-happen on my laptop to some extent, so it's worth going over the console to see
-if there is a bug that might cause this behaviour.
-
 - Update crt (whatever that is) to kill a process when it finishes.  At the
 moment it just pagefaults like crazy.  Apparently this is a mystery funtion
-somewhere, possibly written in assembler (?).
+somewhere, possibly written in assembler (?), or alternatively _Exit or _Abort
+should get called too.
 
-- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", we
-really need to fix this if possible.  It's irritating and probably a SOS bug.
-I assume some kind of race condition since it's somewhat random.
-*** sos_pager_handler: addr=0x0000000c ip=0x001488e4 sender=0
-(That is the last pager-debug message that prints).
+- Bugcheck the process waiting and deleting.
 
-- Need internal synchronisation of NFS, and it would make sense (compared to
-what we already have) to use events.  It also would be easier to implement it
-at the VFS level so may as well do it there.  I.e. VFS read and write (and who
-knows maybe more?) requests get put on a queue and executed sequentially.
+- Free L4's resources when deleting process.
 
-- Fill in the missing bits from M7 we couldn't do due to not having a working
-M6 - freeing allocated frames, freeing allocated slots in the swap file, and
-freeing pager requests.
+- ELF loading.  Note that we should aim to load everything by setting the
+relevant memory sections of whichever process as being on disk, and then having
+a (potentially) different swap file for each one.  This will require (at least):
+   - That swapfile.c doesn't act with a global swapfile, but rather some sort
+   of swapfile struct containing a vnode and the available sections.  Could
+   combine this in to a single allocated frame pretty easily, just use 32 bytes
+   for the pointer and the remaining for the usual stuff.
+   - A swapfile struct in the PCB.
+   - That we figure out how to create ELF files that are formatted in nice ways
+   (page aligned to something would be ideal).  Either that or the pager/regions
+   need to be changed to support non-pagealigned addresses where necessary.
 
-- Hide swap file.  A nice way I can think of doing this is by adding it as a
-special file, making all the callbacks NULL except for open which is just a
-callback which returns SOS_VFS_NOFILE.  Oh and hmm there will also need to be
-some way to prevent it from showing up in dirent.  Maybe just hide all hidden
-files, Unix-style.  That's not really a hack (and we could even argue it's a
-policy) but it's pretty restrictive.
-
-- Somehow startRequest is being called when allocLimit > 0.  Need to fix.
+- Move pager-related syscalls to pager.
 

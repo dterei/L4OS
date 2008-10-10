@@ -41,14 +41,18 @@ typedef enum {
 	SOS_GETDIRENT,
 	SOS_STAT,
 	SOS_REMOVE,
+	SOS_FLUSH,
 	SOS_PROCESS_CREATE,
 	SOS_PROCESS_DELETE,
 	SOS_MY_ID,
 	SOS_PROCESS_STATUS,
 	SOS_PROCESS_WAIT,
+	SOS_PROCESS_NOTIFY_ALL,
 	SOS_TIME_STAMP,
 	SOS_USLEEP,
 	SOS_MEMUSE,
+	SOS_SWAPUSE,
+	SOS_PHYSUSE,
 	SOS_VPAGER,
 	SOS_MEMLOC,
 	SOS_SHARE_VM,
@@ -198,6 +202,11 @@ int stat(const char *path, stat_t *buf);
  */
 int fremove(const char *path);
 
+/*
+ * Flush stdout
+ */
+void flush(void);
+
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
  * file).
@@ -222,6 +231,14 @@ int process_status(process_t *processes, unsigned max);
  */
 pid_t process_wait(pid_t pid);
 
+/*
+ * Wake all processes waiting on a certain pid (those that called
+ * process_wait with a relevant value.
+ * Note that only privileged threads can call this.
+ * Returns 0 on success, anything else on failure.
+ */
+int process_notify_all(pid_t pid);
+
 /* Returns time in microseconds since booting.
  */
 uint64_t uptime(void);
@@ -232,6 +249,12 @@ void usleep(int msec);
 
 /* Get the number of frames in use by user processes */
 int memuse(void);
+
+/* Get the number of pages in use by the swap file */
+int swapuse(void);
+
+/* Get the total number of physical frames in use */
+int physuse(void);
 
 /* Look up the process' page table for a given virtual address */
 L4_Word_t memloc(L4_Word_t addr);

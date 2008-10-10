@@ -8,8 +8,8 @@
 // Always call network_irq if an interrupt occurs that you are not interested in
 int network_irq(L4_ThreadId_t *tP, int *sendP);
 void network_init(void);
-int network_sendstring_int(int, int*);
-int network_sendstring_char(int len, char *contents);
+void network_flush(void);
+int network_puts(char *s, int len);
 int network_register_serialhandler(void (*handler)(struct serial *serial, char c));
 struct cookie mnt_point;
 

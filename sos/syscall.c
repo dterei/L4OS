@@ -98,15 +98,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			printf("%s", pager_buffer(tid));
 			break;
 
-		case SOS_DEBUG_FLUSH:
-			pager_flush(tid, msg);
-			break;
-
-		case SOS_MOREMEM:
-			syscall_reply(tid,
-					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
-			break;
-
 		case SOS_OPEN:
 			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0));
 			break;
@@ -152,6 +143,11 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			vfs_remove(tid, pager_buffer(tid));
 			break;
 
+		case SOS_FLUSH:
+			network_flush();
+			syscall_reply_m(tid, 0);
+			break;
+
 		case SOS_TIME_STAMP:
 			rval = (L4_Word_t) time_stamp();
 			word = (L4_Word_t) (time_stamp() >> 32);
@@ -160,11 +156,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_USLEEP:
 			register_timer((uint64_t) L4_MsgWord(msg, 0), tid);
-			break;
-
-		case SOS_PROCESS_DELETE:
-			rval = process_kill(process_lookup(L4_MsgWord(msg, 0)));
-			syscall_reply(tid, rval);
 			break;
 
 		case SOS_MY_ID:
@@ -182,13 +173,17 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			}
 			break;
 
-		case SOS_PROCESS_STATUS:
-			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
-			syscall_reply(tid, rval);
+		case SOS_PROCESS_NOTIFY_ALL:
+			if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
+				process_wake_all(L4_MsgWord(msg, 0));
+				syscall_reply(tid, 0);
+			} else {
+				syscall_reply(tid, -1);
+			}
 			break;
 
-		case SOS_MEMUSE:
-			rval = sos_memuse();
+		case SOS_PROCESS_STATUS:
+			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
 			syscall_reply(tid, rval);
 			break;
 
@@ -197,11 +192,9 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			syscall_reply(tid, rval);
 			break;
 
-		case SOS_PROCESS_CREATE:
-
 		default:
-			// Unknown system call, so we don't want to reply to this thread
-			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
+			dprintf(0, "!!! rootserver: unhandled syscall tid=%ld id=%d name=%s\n",
+					L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 			sos_print_l4memory(msg, L4_UntypedWords(tag) * sizeof(uint32_t));
 			break;
 	}
