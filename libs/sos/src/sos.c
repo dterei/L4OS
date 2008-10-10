@@ -35,7 +35,6 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_MY_ID: return "SOS_MY_ID";
 		case SOS_PROCESS_STATUS: return "SOS_PROCESS_STATUS";
 		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
-		case SOS_PROCESS_NOTIFY_ALL: return "SOS_PROCESS_NOTIFY_ALL";
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_MEMUSE: return "SOS_MEMUSE";
@@ -324,7 +323,7 @@ int process_status(process_t *processes, unsigned max) {
 
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) max);
-	rval = syscall(L4_rootserver, SOS_PROCESS_STATUS, YES_REPLY, &msg);
+	rval = syscall(vpager(), SOS_PROCESS_STATUS, YES_REPLY, &msg);
 
 	copyout(processes, rval * sizeof(process_t), 0);
 
@@ -341,16 +340,7 @@ pid_t process_wait(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, pid);
 
-	return syscall(L4_rootserver, SOS_PROCESS_WAIT, YES_REPLY, &msg);
-}
-
-int process_notify_all(pid_t pid) {
-	L4_Msg_t msg;
-
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, pid);
-
-	return syscall(L4_rootserver, SOS_PROCESS_NOTIFY_ALL, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_PROCESS_WAIT, YES_REPLY, &msg);
 }
 
 /* Returns time in microseconds since booting. */

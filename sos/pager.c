@@ -584,11 +584,10 @@ static int processDelete(L4_Word_t pid) {
 	pagetableFree(p);
 	regionsFree(p);
 
-	// Wake all waiting processes - needs to be done by the rootserver
-	// (because the pager doesn't have permission) so need a syscall
-	process_notify_all(process_get_pid(p));
+	// Wake all waiting processes
+	process_wake_all(process_get_pid(p));
 
-	// Can finally do this
+	// And done
 	free(p);
 
 	return 0;
@@ -1063,6 +1062,7 @@ static void virtualPagerHandler(void) {
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
 	Process *p;
+	L4_Word_t tmp;
 
 	for (;;) {
 		tag = L4_Wait(&tid);
@@ -1124,13 +1124,28 @@ static void virtualPagerHandler(void) {
 				syscall_reply(tid, frames_allocated());
 				break;
 
+			case SOS_PROCESS_WAIT:
+				tmp = L4_MsgWord(&msg, 0);
+				if (tmp == ((L4_Word_t) -1)) {
+					process_wait_any(process_lookup(L4_ThreadNo(tid)));
+				} else {
+					process_wait_for(process_lookup(tmp),
+							process_lookup(L4_ThreadNo(tid)));
+				}
+				break;
+
+			case SOS_PROCESS_STATUS:
+				syscall_reply(tid, process_write_status(
+							(process_t*) pager_buffer(tid), L4_MsgWord(&msg, 0)));
+				break;
+
 			case SOS_PROCESS_DELETE:
 				syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
 				break;
 
 			case SOS_DEBUG_FLUSH:
 				pagerFlush();
-				syscall_reply(tid, 0);
+				syscall_reply_m(tid, 0);
 				break;
 
 			case L4_EXCEPTION:

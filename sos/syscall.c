@@ -71,10 +71,6 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 	}
 }
 
-static L4_Word_t *buffer(L4_ThreadId_t tid) {
-	return (L4_Word_t*) pager_buffer(tid);
-}
-
 static char *wordAlign(char *s) {
 	unsigned int x = (unsigned int) s;
 	x--;
@@ -85,10 +81,7 @@ static char *wordAlign(char *s) {
 int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
-	char *buf; (void) buf;
-	L4_Word_t rval, word;
-
-	//L4_CacheFlushAll();
+	char *buf;
 
 	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
@@ -149,9 +142,9 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_TIME_STAMP:
-			rval = (L4_Word_t) time_stamp();
-			word = (L4_Word_t) (time_stamp() >> 32);
-			syscall_reply_m(tid, 2, rval, word);
+			syscall_reply_m(tid, 2,
+					(L4_Word_t) time_stamp(),
+					(L4_Word_t) (time_stamp() >> 32));
 			break;
 
 		case SOS_USLEEP:
@@ -159,37 +152,11 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_MY_ID:
-			rval = process_get_pid(process_lookup(L4_ThreadNo(tid)));
-			syscall_reply(tid, rval);
-			break;
-
-		case SOS_PROCESS_WAIT:
-			word = L4_MsgWord(msg, 0);
-			if (word == ((L4_Word_t) -1)) {
-				process_wait_any(process_lookup(L4_ThreadNo(tid)));
-			} else {
-				process_wait_for(process_lookup(word),
-						process_lookup(L4_ThreadNo(tid)));
-			}
-			break;
-
-		case SOS_PROCESS_NOTIFY_ALL:
-			if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-				process_wake_all(L4_MsgWord(msg, 0));
-				syscall_reply(tid, 0);
-			} else {
-				syscall_reply(tid, -1);
-			}
-			break;
-
-		case SOS_PROCESS_STATUS:
-			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
-			syscall_reply(tid, rval);
+			syscall_reply(tid, process_get_pid(process_lookup(L4_ThreadNo(tid))));
 			break;
 
 		case SOS_VPAGER:
-			rval = L4_ThreadNo(virtual_pager);
-			syscall_reply(tid, rval);
+			syscall_reply(tid, L4_ThreadNo(virtual_pager));
 			break;
 
 		default:
