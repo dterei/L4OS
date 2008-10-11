@@ -51,10 +51,5 @@ TCR.  For security (not letting a process spoof another one) check this tid
 against the sender space when it arrives.
 Note that this is just a nice thing to do, it's not a problem as such.
 
-- The virtual pager can (kind of) be killed at userspace!  Need security checks
-for this.  In general: move the processDelete from the pager to the process
-again.  Check in there that it's legal.  Also give the pager a name.
-Oh and apparently so can SOS... fun.
-
 - The count for size-of-processes isn't being set properly.  Need to fix.
 

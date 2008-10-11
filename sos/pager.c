@@ -255,7 +255,7 @@ static Pair *deleteAllocList(void) {
 			// Been referenced: clear refbit, unmap to give it a chance
 			// of being reset again, and move to back
 			*entry &= ~REFBIT_MASK;
-			unmapPage(process_get_sid(p), tmp->snd);
+			unmapPage(process_get_sid(p), found->snd);
 			list_push(alloced, found);
 		}
 	}
@@ -397,16 +397,15 @@ static void regionsFree(void *contents, void *data) {
 static int processDelete(L4_Word_t pid) {
 	Process *p;
 	Pair args; // (pid, word)
-	int result;
 
-	// Store the address of the PCB before the rootserver hides it
 	p = process_lookup(pid);
 
-	// Kill and hide the process
-	result = process_kill(p);
-
-	if (result != 0) {
-		return result; // error
+	if (p == NULL) {
+		// Already killed?
+		return 1;
+	} else if (process_kill(p) != 0) {
+		// Invalid process
+		return (-1);
 	}
 
 	// Free all resources

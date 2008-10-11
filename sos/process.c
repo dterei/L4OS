@@ -276,13 +276,17 @@ void process_close_files(Process *p) {
 }
 
 int process_kill(Process *p) {
-	if (p == NULL) {
-		return (-1);
-	} else {
-		L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
-				L4_nilthread, L4_nilthread, 0, NULL);
+	assert(p != NULL);
+
+	if (process_get_pid(p) > tidOffset) {
+		// Isn't a kernel-allocated process, and isn't the pager
+		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
+					L4_nilthread, L4_nilthread, 0, NULL));
 		sosProcs[process_get_pid(p)] = NULL;
 		return 0;
+	} else {
+		// Invalid process
+		return (-1);
 	}
 }
 
