@@ -18,7 +18,8 @@ a (potentially) different swap file for each one.  This will require (at least):
    of swapfile struct containing a vnode and the available sections.  Could
    combine this in to a single allocated frame pretty easily, just use 32 bytes
    for the pointer and the remaining for the usual stuff.
-   - A swapfile struct for every region (just every process isn't enough).
+   - A swapfile struct for every region (just every process isn't enough).  This
+   now exists but all through the code it is assumed to be the default one.
    - That we figure out how to create ELF files that are formatted in nice ways
    (page aligned to something would be ideal).  Either that or the pager/regions
    need to be changed to support non-pagealigned addresses where necessary.
@@ -76,4 +77,7 @@ we can get rid of one.  Probably mine, since it's a buffer-hack to network_puts
 
 - Move process deleting back to process.c (from pager.c) if possible.  Still
 want to minimise the interface to the pager though.
+
+- Make use of the region containing its own swapfile struct rather than just
+using swapfile_default all the time.
 
