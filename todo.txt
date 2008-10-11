@@ -35,6 +35,9 @@ a (potentially) different swap file for each one.  This will require (at least):
 - Move more things to the generic linked list implementation.
 	- Timer driver
 	- Filesystem stuff
+	- Process management (with threads)
+	- irq
+	- Bootinfo
 	- ...
 
 - This has been around for ages, but there is a security bug in copyin/out
