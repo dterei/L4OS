@@ -56,3 +56,5 @@ for this.  In general: move the processDelete from the pager to the process
 again.  Check in there that it's legal.  Also give the pager a name.
 Oh and apparently so can SOS... fun.
 
+- The count for size-of-processes isn't being set properly.  Need to fix.
+
