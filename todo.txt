@@ -14,15 +14,16 @@ should get called too.
 - ELF loading.  Note that we should aim to load everything by setting the
 relevant memory sections of whichever process as being on disk, and then having
 a (potentially) different swap file for each one.  This will require (at least):
-   - That swapfile.c doesn't act with a global swapfile, but rather some sort
-   of swapfile struct containing a vnode and the available sections.  Could
-   combine this in to a single allocated frame pretty easily, just use 32 bytes
-   for the pointer and the remaining for the usual stuff.
    - A swapfile struct for every region (just every process isn't enough).  This
    now exists but all through the code it is assumed to be the default one.
    - That we figure out how to create ELF files that are formatted in nice ways
    (page aligned to something would be ideal).  Either that or the pager/regions
    need to be changed to support non-pagealigned addresses where necessary.
+   - That the swapfiles are checked for access permissions.  Obviously we
+   shouldn't be able to write back to the ELF files or we'll destroy them, and
+   it's easy enough to open these as read only, but the pager code should
+   account for this.  A function in VFS to quickly get permissions?  Or a hack
+   to only write to the default swapfile?
 
 - Check memory leaks in pager
 
@@ -30,11 +31,11 @@ a (potentially) different swap file for each one.  This will require (at least):
 
 - Move more things to the generic linked list implementation.
 	- Timer driver
-	- Filesystem stuff
 	- Process management (with threads)
 	- irq
 	- Bootinfo
 	- ...
+	- Filesystem stuff?
 
 - This has been around for ages, but there is a security bug in copyin/out
 where the user can violate read/write access permissions.  Need to write a
@@ -55,14 +56,15 @@ Note that this is just a nice thing to do, it's not a problem as such.
 - investigate moving the kernel heap size setting to constants.h
 
 - have the init_thread finish instead of just constantly sleeping.
+- And use frame_alloc as a stack for its stack rather than a static array.
 
 - Improve syscall interface. Have a generic IPC library which provides our var arg
 handle functions and use that for making system calls on both the user space side
 and kernel side rather then duplicating code on both side like currently. Also
 use jump table/function pointer array handling on receive side instead of giant
 switch.
-
-- Use frame_alloc as a stack for the init thread rather than a static array.
+- (Comment) I agree, the libsos stuff would be nicer with varargs.  However the
+switch is compiled as a jump table already so that's not really an issue.
 
 - There are comments in the code about not blocking SOS for too long on (what I
 assume is) console writing.  It's pretty negligible but yeah I can see that the
@@ -78,6 +80,6 @@ we can get rid of one.  Probably mine, since it's a buffer-hack to network_puts
 - Move process deleting back to process.c (from pager.c) if possible.  Still
 want to minimise the interface to the pager though.
 
-- Make use of the region containing its own swapfile struct rather than just
-using swapfile_default all the time.
+- More testing of killing processes at awkward times, for example in the middle
+of swapping in or swapping out.
 
