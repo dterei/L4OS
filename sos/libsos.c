@@ -25,6 +25,7 @@
 #include "libsos.h"
 #include "pager.h"
 #include "process.h"
+#include "region.h"
 #include "vfs.h"
 
 #define VIRTPOOL_MAP_DIRECTLY 0x3
@@ -302,9 +303,8 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	assert(res);
 
 	// And the pager
-	if (L4_IsThreadEqual(pager, virtual_pager)) {
-		res = L4_CreateIpcCap(pager, L4_rootclist,
-				pager, clistId);
+	if (pager_is_active()) {
+		res = L4_CreateIpcCap(pager, L4_rootclist, pager, clistId);
 		assert(res);
 	}
 
@@ -360,7 +360,7 @@ bootinfo_new_ms(bi_name_t owner, uintptr_t base, uintptr_t size,
 
 	// Create new region.
 	int dirmap = (virtpool == VIRTPOOL_MAP_DIRECTLY);
-	Region *new = region_init(REGION_OTHER, base, size, 0, dirmap);
+	Region *new = region_alloc(REGION_OTHER, base, size, 0, dirmap);
 	addRegion(bip, new, bootinfo_id);
 
 	return ++bootinfo_id;

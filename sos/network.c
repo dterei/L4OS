@@ -46,114 +46,97 @@ int network_irq(L4_ThreadId_t *tP, int *sendP)
 }
 
 
-void
-network_init(void)
-{
-    dprintf(1, "\nStarting %s\n", __FUNCTION__);
+void network_init(void) {
+	dprintf(1, "\nStarting %s\n", __FUNCTION__);
 
-    // Initialise the nslu2 hardware
-    ixOsalOemInit(); 
+	// Initialise the nslu2 hardware
+	ixOsalOemInit(); 
 
-    /* Initialise lwIP */
-    mem_init();
-    memp_init();
-    pbuf_init();
-    netif_init();
-    udp_init();
-    etharp_init();
+	/* Initialise lwIP */
+	mem_init();
+	memp_init();
+	pbuf_init();
+	netif_init();
+	udp_init();
+	etharp_init();
 
-    /* Setup the network interface */
-    struct ip_addr netmask, ipaddr, gw;
-    IP4_ADDR(&netmask, 255, 255, 255, 0);	// Standard net mask
+	/* Setup the network interface */
+	struct ip_addr netmask, ipaddr, gw;
+	IP4_ADDR(&netmask, 255, 255, 255, 0);	// Standard net mask
 #if defined(CUST_ETHZ)
-    IP4_ADDR(&gw,      192, 168, 0, 1);		// Your host system
-    IP4_ADDR(&ipaddr,  192, 168, 0, 2);		// The Slug's IP address
+	IP4_ADDR(&gw,      192, 168, 0, 1);		// Your host system
+	IP4_ADDR(&ipaddr,  192, 168, 0, 2);		// The Slug's IP address
 #else
-    /* UNSW */
-    IP4_ADDR(&gw,      192, 168, 168, 1);		// Your host system
-    IP4_ADDR(&ipaddr,  192, 168, 168, 2);		// The Slug's IP address
+	/* UNSW */
+	IP4_ADDR(&gw,      192, 168, 168, 1);		// Your host system
+	IP4_ADDR(&ipaddr,  192, 168, 168, 2);		// The Slug's IP address
 #endif
 
-    struct netif *netif = netif_add(&ipaddr,&netmask,&gw, sosIfInit, ip_input);
-    netif_set_default(netif);
+	struct netif *netif = netif_add(&ipaddr,&netmask,&gw, sosIfInit, ip_input);
+	netif_set_default(netif);
 
-    // Generate an arp entry for our gateway
-    // We should only need to do this once, but Linux seems to love ignoring
-    // ARP queries (why??!), so we keep trying until we get a response
-    struct pbuf *p = etharp_query(netif, &netif->gw, NULL);
-    do {
-        (*netif_default->linkoutput)(netif, p);	// Direct output
-        sos_usleep(100000);	// Wait a while for a reply
-    } while (!etharp_entry_present(&netif->gw));
-    pbuf_free(p);
+	// Generate an arp entry for our gateway
+	// We should only need to do this once, but Linux seems to love ignoring
+	// ARP queries (why??!), so we keep trying until we get a response
+	struct pbuf *p = etharp_query(netif, &netif->gw, NULL);
+	do {
+		(*netif_default->linkoutput)(netif, p);	// Direct output
+		sos_usleep(100000);	// Wait a while for a reply
+	} while (!etharp_entry_present(&netif->gw));
+	pbuf_free(p);
 
-    // Finish the initialisation of the nslu2 hardware
-    ixOsalOSServicesFinaliseInit();
+	// Finish the initialisation of the nslu2 hardware
+	ixOsalOSServicesFinaliseInit();
 
-    /* Initialise NFS */
-    int r = nfs_init(gw); assert(!r);
+	/* Initialise NFS */
+	int r = nfs_init(gw); assert(!r);
 
-    mnt_get_export_list();	// Print out the exports on this server
+	mnt_get_export_list();	// Print out the exports on this server
 
-	 const char *msg;
-	 if (mnt_mount(NFS_DIR, &mnt_point))		// Mount aos_nfs
-		 msg = "%s: Error mounting path '%s'!\n";
-	 else
-		 msg = "%s: Successfully mounted '%s'\n";
-	 dprintf(2, msg, __FUNCTION__, NFS_DIR);
+	const char *msg;
+	if (mnt_mount(NFS_DIR, &mnt_point))		// Mount aos_nfs
+		msg = "%s: Error mounting path '%s'!\n";
+	else
+		msg = "%s: Successfully mounted '%s'\n";
+	dprintf(2, msg, __FUNCTION__, NFS_DIR);
 
-	 // Initialise the serial driver
-	 serial = serial_init();
+	// Initialise the serial driver
+	serial = serial_init();
 
-    dprintf(2, "Finished %s\n\n", __FUNCTION__);
+	dprintf(2, "Finished %s\n\n", __FUNCTION__);
 }
 
-int
-network_sendstring_char(int len, char *contents) {
-	dprintf(2, "*** network_sendstring: ");
+#define NS_BUFSIZ 64
 
-	for (int i = 0; i < len; ) {
-		int send = len - i > SERIAL_SEND_SIZE ? SERIAL_SEND_SIZE : len - i;
-		serial_send(serial, &contents[i], send);
-		if (verbose > 2) {
-			for (int j = i; j < i + send; j++) {
-				printf("%c", contents[j]);
-			}
+static char nsBuf[NS_BUFSIZ + 1];
+static int nsBufpos = 0;
+
+void network_flush(void) {
+	serial_send(serial, nsBuf, nsBufpos);
+	nsBufpos = 0;
+}
+
+int network_puts(char *s, int len) {
+	for (int i = 0; i < len; i++) {
+		nsBuf[nsBufpos++] = s[i];
+
+		if ((s[i] == '\n') || (nsBufpos == NS_BUFSIZ)) {
+			network_flush();
 		}
-		i += send;
 	}
-
-	dprintf(3, "\n");
 
 	return len;
 }
 
-int
-network_sendstring_int(int len, int *contents) {
-	int i;
-	char c;
-
-	dprintf(2, "*** network_sendstring: ");
-
-	for (i = 0; i < len; i++) {
-		c = (char) contents[i];
-		serial_send(serial, &c, 1);
-		dprintf(3, "%c", c);
-	}
-
-	dprintf(3, "\n");
-
-	return len;
-}
-
-int
-network_register_serialhandler(void (*handler)(struct serial *serial, char c)) {
+int network_register_serialhandler(
+		void (*handler)(struct serial *serial, char c)) {
 	dprintf(2, "*** network_register_serialhandler\n");
+
 	if (serial == NULL) {
 		dprintf(2, "*** serial not started yet ***\n");
 		return -1;
 	}
-	
+
 	return serial_register_handler(serial, handler);
 }
 

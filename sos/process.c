@@ -6,7 +6,9 @@
 #include "frames.h"
 #include "l4.h"
 #include "libsos.h"
+#include "list.h"
 #include "process.h"
+#include "region.h"
 #include "syscall.h"
 
 #define STDOUT_FN "console"
@@ -20,7 +22,7 @@
 struct Process_t {
 	process_t     info;
 	Pagetable    *pagetable;
-	Region       *regions;
+	List         *regions;
 	void         *sp;
 	void         *ip;
 	timestamp_t   startedAt;
@@ -55,7 +57,7 @@ static Process *processAlloc(void) {
 	p->info.command[0] = '\0';
 
 	p->pagetable = pagetable_init();
-	p->regions = NULL;
+	p->regions = list_empty();
 	p->sp = NULL;
 	p->ip = NULL;
 	vfiles_init(p->files);
@@ -79,8 +81,7 @@ Process *process_init(void) {
 }
 
 void process_add_region(Process *p, Region *r) {
-	region_append(r, p->regions);
-	p->regions = r;
+	list_push(p->regions, r);
 }
 
 void process_set_ip(Process *p, void *ip) {
@@ -102,22 +103,19 @@ void process_set_name(Process *p, char *name) {
 	strncpy(p->info.command, name, MAX_FILE_NAME);
 }
 
-static void addRegion(Process *p, region_type type,
-		uintptr_t base, uintptr_t size, int rights, int dirmap) {
-	Region *new = region_init(type, base, size, rights, dirmap);
-	region_append(new, p->regions);
-	p->regions = new;
+static void *regionFindHighest(void *contents, void *data) {
+	Region *r = (Region*) contents;
+	int top = region_get_base(r) + region_get_size(r);
+
+	if (top > (int) data) {
+		return (void*) top;
+	} else {
+		return data;
+	}
 }
 
 static void addBuiltinRegions(Process *p) {
-	uintptr_t base = 0;
-
-	// Find the highest address and put the heap above it
-	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
-		if ((region_base(r) + region_size(r)) > base) {
-			base = region_base(r) + region_size(r);
-		}
-	}
+	uintptr_t base = (uintptr_t) list_reduce(p->regions, regionFindHighest, 0);
 
 	if (base == 0) {
 		// No regions yet!  This must be some kind of special process
@@ -131,30 +129,36 @@ static void addBuiltinRegions(Process *p) {
 	base = ((base - 1) & PAGEALIGN) + PAGESIZE; // Page align up
 
 	// Size of the region is zero for now, expand as we get syscalls
-	addRegion(p, REGION_HEAP, base, 0, REGION_READ | REGION_WRITE, 0);
+	list_push(p->regions, region_alloc(REGION_HEAP,
+				base, 0, REGION_READ | REGION_WRITE, 0));
 
 	// Put the stack half way up the address space - at the top
 	// causes pagefaults, so halfway up seems like a nice compromise
 	base = (((unsigned int) -1) >> 1) & PAGEALIGN;
-	addRegion(p, REGION_STACK, base - ONE_MEG, ONE_MEG, REGION_READ | REGION_WRITE, 0);
+
+	list_push(p->regions, region_alloc(REGION_STACK,
+				base - ONE_MEG, ONE_MEG, REGION_READ | REGION_WRITE, 0));
 
 	// Some times, 3 words are popped unvoluntarily so may as well just
 	// always allow for this
 	p->sp = (void*) (base - (3 * sizeof(L4_Word_t)));
 }
 
+static void regionsDump(void *contents, void *data) {
+	Region *r = (Region*) contents;
+
+	printf("*** region %p -> %p (%p)\n",
+			(void*) region_get_base(r),
+			(void*) (region_get_base(r) + region_get_size(r)),
+			(void*) r);
+}
+
 void process_dump(Process *p) {
 	printf("*** %s on %d at %p\n", __FUNCTION__, p->info.pid, p);
-	printf("*** %s: pagetable: %p\n", __FUNCTION__, p->pagetable);
-
-	for (Region *r = p->regions; r != NULL; r = region_next(r)) {
-		printf("*** %s: region %p -> %p (%p)\n", __FUNCTION__,
-				(void*) region_base(r), (void*) (region_base(r) + region_size(r)),
-				(void*) r);
-	}
-
-	printf("*** %s: sp: %p\n", __FUNCTION__, p->sp);
-	printf("*** %s: ip: %p\n", __FUNCTION__, p->ip);
+	printf("*** pagetable: %p\n", p->pagetable);
+	list_iterate(p->regions, regionsDump, NULL);
+	printf("*** sp: %p\n", p->sp);
+	printf("*** ip: %p\n", p->ip);
 }
 
 static L4_Word_t getNextPid(void) {
@@ -204,10 +208,10 @@ L4_ThreadId_t process_run(Process *p, int asThread) {
 
 	if (asThread == RUN_AS_THREAD) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
-	} else if (L4_IsThreadEqual(virtual_pager, L4_nilthread)) {
-		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
+	} else if (pager_is_active()) {
+		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(p->info.pid, virtual_pager, p->ip, p->sp);
+		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	}
 
 	L4_KDB_SetThreadName(tid, p->info.command);
@@ -238,7 +242,7 @@ Pagetable *process_get_pagetable(Process *p) {
 	return p->pagetable;
 }
 
-Region *process_get_regions(Process *p) {
+List *process_get_regions(Process *p) {
 	if (p == NULL) return NULL;
 	return p->regions;
 }
@@ -274,22 +278,22 @@ void process_close_files(Process *p) {
 }
 
 int process_kill(Process *p) {
-	if (p == NULL) {
-		return (-1);
-	} else {
-		L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
-				L4_nilthread, L4_nilthread, 0, NULL);
+	assert(p != NULL);
+
+	if (process_get_pid(p) > tidOffset) {
+		// Isn't a kernel-allocated process, and isn't the pager
+		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
+					L4_nilthread, L4_nilthread, 0, NULL));
 		sosProcs[process_get_pid(p)] = NULL;
 		return 0;
+	} else {
+		// Invalid process
+		return (-1);
 	}
 }
 
 int process_write_status(process_t *dest, int n) {
 	int count = 0;
-
-	// Firstly, update the size of sos
-	assert(sosProcs[L4_rootserverno] != NULL);
-	sosProcs[L4_rootserverno]->info.size = frames_allocated() - sos_memuse();
 
 	// Everything else has size dynamically updated, so just
 	// write them all out

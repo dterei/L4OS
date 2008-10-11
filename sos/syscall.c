@@ -51,37 +51,22 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 
 	L4_MsgLoad(&msg);
 
-	int send = L4_IsThreadEqual(tid, virtual_pager);
-
-	if (send) {
-		// this isn't a very nice way of doing it, but all calls to the pager
-		// need to be sent (since they are nonblocking).  ideally this will
-		// be set up by the caller not as a hack to syscall_reply.
-		dprintf(2, "*** syscall_reply: send to %ld\n", L4_ThreadNo(tid));
+	if (L4_IsThreadEqual(tid, pager_get_tid())) {
+		// TODO Do this nicely (either set up by the caller, or generically)
 		tag = L4_Send(tid);
 	} else {
-		dprintf(2, "*** syscall_reply: reply to %ld\n", L4_ThreadNo(tid));
 		tag = L4_Reply(tid);
 	}
 
 	if (L4_IpcFailed(tag)) {
-		dprintf(1, "!!! syscall_reply (%s) to %ld failed: ",
-				send ? "send" : "reply", L4_ThreadNo(tid));
+		dprintf(1, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
 		sos_print_error(L4_ErrorCode());
+	} else {
+		dprintf(2, "*** syscall_reply to %ld success\n", L4_ThreadNo(tid));
 	}
 }
 
-static
-L4_Word_t *
-buffer(L4_ThreadId_t tid)
-{
-	return (L4_Word_t*) pager_buffer(tid);
-}
-
-static
-char *
-wordAlign(char *s)
-{
+static char *wordAlign(char *s) {
 	unsigned int x = (unsigned int) s;
 	x--;
 	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
@@ -91,10 +76,7 @@ wordAlign(char *s)
 int
 syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
-	char *buf; (void) buf;
-	L4_Word_t rval, word;
-
-	//L4_CacheFlushAll();
+	char *buf;
 
 	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
 
@@ -102,15 +84,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 		case SOS_KERNEL_PRINT:
 			pager_buffer(tid)[MAX_IO_BUF - 1] = '\0';
 			printf("%s", pager_buffer(tid));
-			break;
-
-		case SOS_DEBUG_FLUSH:
-			pager_flush(tid, msg);
-			break;
-
-		case SOS_MOREMEM:
-			syscall_reply(tid,
-					sos_moremem((uintptr_t*) buffer(tid), L4_MsgWord(msg, 0)));
 			break;
 
 		case SOS_OPEN:
@@ -158,10 +131,15 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			vfs_remove(tid, pager_buffer(tid));
 			break;
 
+		case SOS_FLUSH:
+			network_flush();
+			syscall_reply_m(tid, 0);
+			break;
+
 		case SOS_TIME_STAMP:
-			rval = (L4_Word_t) time_stamp();
-			word = (L4_Word_t) (time_stamp() >> 32);
-			syscall_reply_m(tid, 2, rval, word);
+			syscall_reply_m(tid, 2,
+					(L4_Word_t) time_stamp(),
+					(L4_Word_t) (time_stamp() >> 32));
 			break;
 
 		case SOS_USLEEP:
@@ -169,49 +147,16 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_MY_ID:
-			rval = process_get_pid(process_lookup(L4_ThreadNo(tid)));
-			syscall_reply(tid, rval);
-			break;
-
-		case SOS_PROCESS_WAIT:
-			word = L4_MsgWord(msg, 0);
-			if (word == ((L4_Word_t) -1)) {
-				process_wait_any(process_lookup(L4_ThreadNo(tid)));
-			} else {
-				process_wait_for(process_lookup(word),
-						process_lookup(L4_ThreadNo(tid)));
-			}
-			break;
-
-		case SOS_PROCESS_NOTIFY_ALL:
-			if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-				process_wake_all(L4_MsgWord(msg, 0));
-				syscall_reply(tid, 0);
-			} else {
-				syscall_reply(tid, -1);
-			}
-			break;
-
-		case SOS_PROCESS_STATUS:
-			rval = process_write_status((process_t*) buffer(tid), L4_MsgWord(msg, 0));
-			syscall_reply(tid, rval);
-			break;
-
-		case SOS_MEMUSE:
-			rval = sos_memuse();
-			syscall_reply(tid, rval);
+			syscall_reply(tid, process_get_pid(process_lookup(L4_ThreadNo(tid))));
 			break;
 
 		case SOS_VPAGER:
-			rval = L4_ThreadNo(virtual_pager);
-			syscall_reply(tid, rval);
+			syscall_reply(tid, L4_ThreadNo(pager_get_tid()));
 			break;
 
-		case SOS_PROCESS_CREATE:
-
 		default:
-			// Unknown system call, so we don't want to reply to this thread
-			dprintf(0, "!!! unrecognised syscall id=%d\n", TAG_SYSLAB(tag));
+			dprintf(0, "!!! rootserver: unhandled syscall tid=%ld id=%d name=%s\n",
+					L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 			sos_print_l4memory(msg, L4_UntypedWords(tag) * sizeof(uint32_t));
 			break;
 	}

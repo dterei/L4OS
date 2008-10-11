@@ -29,15 +29,17 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
 		case SOS_REMOVE: return "SOS_REMOVE";
+		case SOS_FLUSH: return "SOS_FLUSH";
 		case SOS_PROCESS_CREATE: return "SOS_PROCESS_CREATE";
 		case SOS_PROCESS_DELETE: return "SOS_PROCESS_DELETE";
 		case SOS_MY_ID: return "SOS_MY_ID";
 		case SOS_PROCESS_STATUS: return "SOS_PROCESS_STATUS";
 		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
-		case SOS_PROCESS_NOTIFY_ALL: return "SOS_PROCESS_NOTIFY_ALL";
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
 		case SOS_MEMUSE: return "SOS_MEMUSE";
+		case SOS_SWAPUSE: return "SOS_SWAPUSE";
+		case SOS_PHYSUSE: return "SOS_PHYSUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
 		case SOS_MEMLOC: return "SOS_MEMLOC";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
@@ -90,7 +92,7 @@ void kprint(char *str) {
 void debug_flush(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	syscall(L4_rootserver, SOS_DEBUG_FLUSH, NO_REPLY, &msg);
+	syscall(vpager(), SOS_DEBUG_FLUSH, NO_REPLY, &msg);
 }
 
 void thread_block(void) {
@@ -110,7 +112,7 @@ int moremem(uintptr_t *base, unsigned int nb) {
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) nb);
 
-	int rval = syscall(L4_rootserver, SOS_MOREMEM, YES_REPLY, &msg);
+	int rval = syscall(vpager(), SOS_MOREMEM, YES_REPLY, &msg);
 
 	if (rval == 0) {
 		return 0; // no memory
@@ -275,6 +277,12 @@ int fremove(const char *path) {
 	return rval;
 }
 
+void flush(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	syscall(L4_rootserver, SOS_FLUSH, YES_REPLY, &msg);
+}
+
 /* 
  * Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
@@ -315,7 +323,7 @@ int process_status(process_t *processes, unsigned max) {
 
 	syscall_prepare(&msg);
 	L4_MsgAppendWord(&msg, (L4_Word_t) max);
-	rval = syscall(L4_rootserver, SOS_PROCESS_STATUS, YES_REPLY, &msg);
+	rval = syscall(vpager(), SOS_PROCESS_STATUS, YES_REPLY, &msg);
 
 	copyout(processes, rval * sizeof(process_t), 0);
 
@@ -332,16 +340,7 @@ pid_t process_wait(pid_t pid) {
 
 	L4_MsgAppendWord(&msg, pid);
 
-	return syscall(L4_rootserver, SOS_PROCESS_WAIT, YES_REPLY, &msg);
-}
-
-int process_notify_all(pid_t pid) {
-	L4_Msg_t msg;
-
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, pid);
-
-	return syscall(L4_rootserver, SOS_PROCESS_NOTIFY_ALL, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_PROCESS_WAIT, YES_REPLY, &msg);
 }
 
 /* Returns time in microseconds since booting. */
@@ -368,7 +367,19 @@ void usleep(int usec) {
 int memuse(void) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
-	return syscall(L4_rootserver, SOS_MEMUSE, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_MEMUSE, YES_REPLY, &msg);
+}
+
+int swapuse(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	return syscall(vpager(), SOS_SWAPUSE, YES_REPLY, &msg);
+}
+
+int physuse(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	return syscall(vpager(), SOS_PHYSUSE, YES_REPLY, &msg);
 }
 
 L4_Word_t memloc(L4_Word_t addr) {
@@ -383,9 +394,17 @@ L4_Word_t memloc(L4_Word_t addr) {
 }
 
 L4_ThreadId_t vpager(void) {
-	L4_Msg_t msg;
-	syscall_prepare(&msg);
-	return L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
+	static int knowTid = 0;
+	static L4_ThreadId_t tid;
+
+	if (!knowTid) {
+		L4_Msg_t msg;
+		syscall_prepare(&msg);
+		tid = L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
+		knowTid = 1;
+	}
+
+	return tid;
 }
 
 /* 

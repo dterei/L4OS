@@ -16,6 +16,8 @@
  */
 #define PAGESIZE 4096
 
+#define ADDRESS_ALL ((L4_Word_t) (-1))
+#define ADDRESS_NONE ((L4_Word_t) (-2))
 #define MAX_ADDRSPACES 256
 #define MAX_IO_BUF PAGESIZE
 #define MAX_THREADS 1024
