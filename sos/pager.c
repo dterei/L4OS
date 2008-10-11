@@ -367,7 +367,7 @@ static void pagerContinue(PagerRequest *pr) {
 }
 
 static L4_Word_t pagerSwapslotAlloc(Process *p) {
-	L4_Word_t diskAddr = swapslot_alloc();
+	L4_Word_t diskAddr = swapslot_alloc(swapfile_default());
 
 	if (diskAddr == ADDRESS_NONE) {
 		dprintf(0, "!!! pagerSwapslotAlloc: none available\n");
@@ -384,7 +384,7 @@ static int pagerSwapslotFree(void *contents, void *data) {
 
 	if ((curr->fst == args->fst) &&
 			((curr->snd == args->snd) || (curr->snd == ADDRESS_ALL))) {
-		swapslot_free(curr->snd);
+		swapslot_free(swapfile_default(), curr->snd);
 		return 1;
 	} else {
 		return 0;
@@ -625,7 +625,7 @@ static void startSwapout(void) {
 
 	// Kick-start with an lseek, the pager message handler loop
 	// will start writing from then on
-	lseekNonblocking(swapfile, diskAddr, SEEK_SET);
+	lseekNonblocking(swapfile_get_fd(swapfile_default()), diskAddr, SEEK_SET);
 	pair_free(swapout);
 }
 
@@ -645,7 +645,8 @@ static void startSwapin(void) {
 			process_get_pagetable(process_lookup(nextPr->pid)),
 			nextPr->addr & PAGEALIGN);
 
-	lseekNonblocking(swapfile, *entry & ADDRESS_MASK, SEEK_SET);
+	lseekNonblocking(swapfile_get_fd(swapfile_default()),
+			*entry & ADDRESS_MASK, SEEK_SET);
 }
 
 static void startRequest(void) {
@@ -830,7 +831,7 @@ static void demandPager(int vfsRval) {
 					((char*) swapoutRequest.addr) + swapoutRequest.offset,
 					SWAP_BUFSIZ);
 
-			writeNonblocking(swapfile, SWAP_BUFSIZ);
+			writeNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
 			swapoutRequest.offset += SWAP_BUFSIZ; // FIXME use vfsRval
 		}
 	} else {
@@ -858,7 +859,7 @@ static void demandPager(int vfsRval) {
 			finishedSwapin();
 		} else {
 			// still swapping in
-			readNonblocking(swapfile, SWAP_BUFSIZ);
+			readNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
 			request->offset += SWAP_BUFSIZ;
 		}
 	}
@@ -877,8 +878,7 @@ static void virtualPagerHandler(void) {
 	virtualPager = sos_my_tid();
 	dprintf(1, "*** virtualPagerHandler: tid=%ld\n", L4_ThreadNo(virtualPager));
 
-	swapfile_init();
-	dprintf(1, "*** virtualPagerHandler: swapfile=%d\n", swapfile);
+	swapfile_init_default();
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
@@ -939,7 +939,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_SWAPUSE:
-				syscall_reply(tid, swapfile_usage());
+				syscall_reply(tid, swapfile_get_usage(swapfile_default()));
 				break;
 
 			case SOS_PHYSUSE:

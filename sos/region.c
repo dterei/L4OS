@@ -8,7 +8,7 @@ struct Region_t {
 	unsigned int size;
 	int rights;
 	int mapDirectly;
-	struct Region_t *next;
+	Swapfile *swapfile;
 };
 
 Region *region_alloc(region_type type, uintptr_t base,
@@ -20,6 +20,7 @@ Region *region_alloc(region_type type, uintptr_t base,
 	new->size = size;
 	new->rights = rights;
 	new->mapDirectly = dirmap;
+	new->swapfile = swapfile_default();
 
 	return new;
 }
@@ -42,6 +43,10 @@ unsigned int region_get_size(Region *r) {
 
 int region_get_rights(Region *r) {
 	return r->rights;
+}
+
+Swapfile *region_get_swapfile(Region *r) {
+	return r->swapfile;
 }
 
 int region_map_directly(Region *r) {

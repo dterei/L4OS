@@ -5,23 +5,27 @@
 
 #include "l4.h"
 
-// TODO one per process
-extern fildes_t swapfile;
+typedef struct Swapfile_t Swapfile;
 
-// Initialise swapfile, including opening it
-void swapfile_init(void);
+// Initialise the default swapfile
+void swapfile_init_default(void);
 
-// Open/close the swapfile TODO one per process
-void swapfile_open(void);
-void swapfile_close(void);
+// Get the default swapfile
+Swapfile *swapfile_default(void);
 
-// Get the number of slots currently in use TODO one per process
-int swapfile_usage(void);
+// Create a new swapfile bookkeeping struct
+Swapfile *swapfile_init(fildes_t fd);
 
-// Allocate a new slow in the swapfile
-L4_Word_t swapslot_alloc(void);
+// Get the slots in use by a swap file
+int swapfile_get_usage(Swapfile *sf);
 
-// Free an allocated slow in the swapfile
-int swapslot_free(L4_Word_t slot);
+// Get the file descriptor used by a swap file
+fildes_t swapfile_get_fd(Swapfile *sf);
+
+// Allocate a new slot in the swapfile
+L4_Word_t swapslot_alloc(Swapfile *sf);
+
+// Free an allocated slot in the swapfile
+void swapslot_free(Swapfile *sf, L4_Word_t slot);
 
 #endif // sos/swapfile.h
