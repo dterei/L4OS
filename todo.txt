@@ -68,3 +68,9 @@ assume is) console writing.  It's pretty negligible but yeah I can see that the
 problem does exist.  It's buffered now, so what we "need" (if we were to do it)
 is a thread to do the flushing.
 
+- There is a comment you made in the commit log ("Improve performance of console
+fs, sends more then one char at a time now") but I did this myself in the master
+branch a while ago.  They seem to have merged but it's worth looking to see if
+we can get rid of one.  Probably mine, since it's a buffer-hack to network_puts
+(aka network_sendstring_char).
+
