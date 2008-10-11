@@ -74,3 +74,6 @@ branch a while ago.  They seem to have merged but it's worth looking to see if
 we can get rid of one.  Probably mine, since it's a buffer-hack to network_puts
 (aka network_sendstring_char).
 
+- Move process deleting back to process.c (from pager.c) if possible.  Still
+want to minimise the interface to the pager though.
+
