@@ -9,6 +9,7 @@
 #include "libsos.h"
 #include "list.h"
 #include "pager.h"
+#include "pair.h"
 #include "process.h"
 #include "region.h"
 #include "swapfile.h"
@@ -23,15 +24,9 @@
 #define REFBIT_MASK  0x00000002
 #define ADDRESS_MASK 0xfffff000
 
-typedef struct PidWord_t PidWord;
-struct PidWord_t {
-	pid_t pid;
-	L4_Word_t word;
-};
-
 static int allocLimit;
-static List *alloced; // [PidWord]
-static List *swapped; // [PidWord]
+static List *alloced; // [(pid, word)]
+static List *swapped; // [(pid, word)]
 
 // Asynchronous pager requests
 #define SWAP_BUFSIZ 1024
@@ -145,11 +140,11 @@ static void pagerFrameFree(L4_Word_t frame) {
 }
 
 static int framesFree(void *contents, void *data) {
-	PidWord *curr = (PidWord*) contents;
-	Process *p = (Process*) data;
+	Pair *curr = (Pair*) contents; // (pid, word)
+	Process *p = (Process*) data;  // (pid, word)
 
-	if (curr->pid == process_get_pid(p)) {
-		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->word);
+	if ((pid_t) curr->fst == process_get_pid(p)) {
+		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
 		pagerFrameFree(*entry & ADDRESS_MASK);
 		return 1;
 	} else {
@@ -232,47 +227,40 @@ static void prepareDataOut(Process *p, L4_Word_t vaddr) {
 				process_get_sid(p), vaddr, vaddr + PAGESIZE));
 }
 
-static PidWord *deleteAllocList(void) {
+static Pair *deleteAllocList(void) {
 	dprintf(1, "*** deleteAllocList\n");
 
 	assert(!list_null(alloced));
 
 	Process *p;
-	PidWord *tmp, *found = NULL;
+	Pair *found = NULL; // (pid, word)
 	L4_Word_t *entry;
 
 	// Second-chance algorithm
-	while (found == NULL) {
-		tmp = (PidWord*) list_unshift(alloced);
+	for (;;) {
+		found = (Pair*) list_unshift(alloced);
 
-		p = process_lookup(tmp->pid);
+		p = process_lookup(found->fst);
 		assert(p != NULL);
-		entry = pagetableLookup(process_get_pagetable(p), tmp->word);
+		entry = pagetableLookup(process_get_pagetable(p), found->snd);
 
 		dprintf(3, "*** deleteAllocList: p=%d page=%p frame=%p\n",
-				process_get_pid(p), (void*) tmp->word, 
+				process_get_pid(p), (void*) found->snd, 
 				(void*) (*entry & ADDRESS_MASK));
 
 		if ((*entry & REFBIT_MASK) == 0) {
 			// Not been referenced, this is the frame to swap
-			found = tmp;
+			break;
 		} else {
 			// Been referenced: clear refbit, unmap to give it a chance
 			// of being reset again, and move to back
 			*entry &= ~REFBIT_MASK;
-			unmapPage(process_get_sid(p), tmp->word);
-			list_push(alloced, tmp);
+			unmapPage(process_get_sid(p), tmp->snd);
+			list_push(alloced, found);
 		}
 	}
 
 	return found;
-}
-
-static PidWord *allocPidWord(pid_t pid, L4_Word_t word) {
-	PidWord *pw = (PidWord*) malloc(sizeof(PidWord));
-	pw->pid = pid;
-	pw->word = word;
-	return pw;
 }
 
 static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
@@ -286,7 +274,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	} else {
 		frame = frame_alloc();
 		dprintf(1, "*** pagerFrameAlloc: allocated frame %p\n", frame);
-		list_push(alloced, allocPidWord(process_get_pid(p), page));
+		list_push(alloced, pair_alloc(process_get_pid(p), page));
 
 		process_get_info(p)->size++;
 		allocLimit--;
@@ -384,18 +372,18 @@ static L4_Word_t pagerSwapslotAlloc(Process *p) {
 		dprintf(0, "!!! pagerSwapslotAlloc: none available\n");
 		return ADDRESS_NONE;
 	} else {
-		list_push(swapped, allocPidWord(process_get_pid(p), diskAddr));
+		list_push(swapped, pair_alloc(process_get_pid(p), diskAddr));
 		return diskAddr;
 	}
 }
 
 static int pagerSwapslotFree(void *contents, void *data) {
-	PidWord *curr = (PidWord*) contents;
-	PidWord *args = (PidWord*) data;
+	Pair *curr = (Pair*) contents; // (pid, word)
+	Pair *args = (Pair*) data;     // (pid, word)
 
-	if ((curr->pid == args->pid) &&
-			((curr->word == args->word) || (curr->word == ADDRESS_ALL))) {
-		swapslot_free(curr->word);
+	if ((curr->fst == args->fst) &&
+			((curr->snd == args->snd) || (curr->snd == ADDRESS_ALL))) {
+		swapslot_free(curr->snd);
 		return 1;
 	} else {
 		return 0;
@@ -408,7 +396,7 @@ static void regionsFree(void *contents, void *data) {
 
 static int processDelete(L4_Word_t pid) {
 	Process *p;
-	PidWord *args;
+	Pair args; // (pid, word)
 	int result;
 
 	// Store the address of the PCB before the rootserver hides it
@@ -422,14 +410,12 @@ static int processDelete(L4_Word_t pid) {
 	}
 
 	// Free all resources
-	args = allocPidWord(process_get_pid(p), ADDRESS_ALL);
+	args = PAIR(process_get_pid(p), ADDRESS_ALL);
 
 	list_delete(alloced, framesFree, p);
-	list_delete(swapped, pagerSwapslotFree, args);
+	list_delete(swapped, pagerSwapslotFree, &args);
 	pagetableFree(p);
 	list_iterate(process_get_regions(p), regionsFree, NULL);
-
-	free(args);
 
 	// Wake all waiting processes
 	process_wake_all(process_get_pid(p));
@@ -598,31 +584,31 @@ static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
 	Process *p;
-	PidWord *swapout;
+	Pair *swapout; // (pid, word)
 	L4_Word_t *entry, frame, addr;
 
 	// Choose the next page to swap out
 	swapout = deleteAllocList();
-	p = process_lookup(swapout->pid);
+	p = process_lookup(swapout->fst);
 	assert(p != NULL);
 
-	entry = pagetableLookup(process_get_pagetable(p), swapout->word);
+	entry = pagetableLookup(process_get_pagetable(p), swapout->snd);
 	frame = *entry & ADDRESS_MASK;
 
 	// Make sure the frame reflects what is stored in the frame
-	assert((swapout->word & ~PAGEALIGN) == 0);
-	addr = swapout->word & PAGEALIGN;
+	assert((swapout->snd & ~PAGEALIGN) == 0);
+	addr = swapout->snd & PAGEALIGN;
 	prepareDataIn(p, addr);
 
 	// The page is no longer backed
 	unmapPage(process_get_sid(p), addr);
 
 	dprintf(1, "*** startSwapout: page=%p addr=%p for pid=%d was %p\n",
-			(void*) swapout->word, (void*) addr,
+			(void*) swapout->snd, (void*) addr,
 			process_get_pid(p), (void*) frame);
 
 	// Set up the swapout
-	swapoutRequest.pid = swapout->pid;
+	swapoutRequest.pid = swapout->fst;
 	swapoutRequest.addr = frame;
 	swapoutRequest.offset = 0;
 	swapoutRequest.callback = NULL;
@@ -640,7 +626,7 @@ static void startSwapout(void) {
 	// Kick-start with an lseek, the pager message handler loop
 	// will start writing from then on
 	lseekNonblocking(swapfile, diskAddr, SEEK_SET);
-	free(swapout);
+	pair_free(swapout);
 }
 
 static void startSwapin(void) {
@@ -774,7 +760,7 @@ static void finishedSwapin(void) {
 	dprintf(1, "*** finishedSwapin\n");
 	Process *p;
 	PagerRequest *request;
-	PidWord *args;
+	Pair args; // (pid, word)
 	L4_Word_t *entry, addr;
 
 	request = (PagerRequest*) list_peek(requests);
@@ -797,9 +783,8 @@ static void finishedSwapin(void) {
 	// In either case the page is no longer on disk
 	assert(*entry & ONDISK_MASK);
 
-	args = allocPidWord(process_get_pid(p), *entry & ADDRESS_MASK);
-	list_delete(swapped, pagerSwapslotFree, args);
-	free(args);
+	args = PAIR(process_get_pid(p), *entry & ADDRESS_MASK);
+	list_delete(swapped, pagerSwapslotFree, &args);
 	*entry &= ~ONDISK_MASK;
 	*entry &= ~ADDRESS_MASK;
 
