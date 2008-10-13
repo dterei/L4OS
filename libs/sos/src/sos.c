@@ -155,6 +155,15 @@ fildes_t open(const char *path, fmode_t mode) {
 	return syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
 }
 
+void openNonblocking(fmode_t mode) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
+
+	syscall(L4_rootserver, SOS_OPEN, NO_REPLY, &msg);
+}
+
 int close(fildes_t file) {
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
@@ -178,6 +187,17 @@ int read(fildes_t file, char *buf, size_t nbyte) {
 	return rval;
 }
 
+void readNonblocking(fildes_t file, size_t nbyte) {
+	L4_Msg_t msg;
+
+	// the actual buffer will be the normal copyin buffer
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+
+	syscall(L4_rootserver, SOS_READ, NO_REPLY, &msg);
+}
+
 int write(fildes_t file, const char *buf, size_t nbyte) {
 	copyin((void*) buf, nbyte, 0);
 
@@ -188,6 +208,17 @@ int write(fildes_t file, const char *buf, size_t nbyte) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
 
 	return syscall(L4_rootserver, SOS_WRITE, YES_REPLY, &msg);
+}
+
+void writeNonblocking(fildes_t file, size_t nbyte) {
+	L4_Msg_t msg;
+
+	// the actual buffer will be the normal copyin buffer
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
+
+	syscall(L4_rootserver, SOS_WRITE, NO_REPLY, &msg);
 }
 
 /* Lseek sets the file position indicator to the specified position "pos".
@@ -211,6 +242,18 @@ int lseek(fildes_t file, fpos_t pos, int whence) {
 	rval = syscall(L4_rootserver, SOS_LSEEK, YES_REPLY, &msg);
 
 	return rval;
+}
+
+void lseekNonblocking(fildes_t file, fpos_t pos, int whence) {
+	L4_Msg_t msg;
+
+	// the actual buffer will be the normal copyin buffer
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
+	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
+
+	syscall(L4_rootserver, SOS_LSEEK, NO_REPLY, &msg);
 }
 
 /* 

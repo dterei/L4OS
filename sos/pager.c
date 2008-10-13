@@ -543,44 +543,6 @@ static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
 	copyInOutData[L4_ThreadNo(tid)] = data;
 }
 
-static void writeNonblocking(fildes_t file, size_t nbyte) {
-	dprintf(1, "*** writeNonblocking file=%d nbyte=%d\n", file, nbyte);
-	L4_Msg_t msg;
-
-	// the actual buffer will be the normal copyin buffer
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
-
-	syscall(L4_rootserver, SOS_WRITE, NO_REPLY, &msg);
-}
-
-static void readNonblocking(fildes_t file, size_t nbyte) {
-	dprintf(1, "*** readNonblocking file=%d nbyte=%d\n", file, nbyte);
-	L4_Msg_t msg;
-	int rval;
-
-	// the actual buffer will be the normal copyin buffer
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) nbyte);
-
-	rval = syscall(L4_rootserver, SOS_READ, NO_REPLY, &msg);
-}
-
-static void lseekNonblocking(fildes_t file, int offset, int whence) {
-	dprintf(1, "*** lseekNonblocking: file=%d offset=0x%x\n", file, offset);
-	L4_Msg_t msg;
-
-	// the actual buffer will be the normal copyin buffer
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-	L4_MsgAppendWord(&msg, (L4_Word_t) offset);
-	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
-
-	syscall(L4_rootserver, SOS_LSEEK, NO_REPLY, &msg);
-}
-
 static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 

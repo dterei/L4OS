@@ -162,6 +162,11 @@ void copyout(void *data, size_t size, int append);
  */
 fildes_t open(const char *path, fmode_t mode);
 
+/* A nonblocking version of open which assumes a copyin call has already
+ * been made.  Use with caution.
+ */
+void openNonblocking(fmode_t mode);
+
 /* Closes an open file. Returns 0 if successful, -1 if not (invalid "file").
  */
 int close(fildes_t file);
@@ -173,11 +178,21 @@ int close(fildes_t file);
  */
 int read(fildes_t file, char *buf, size_t nbyte);
 
+/* A nonblocking version of read which assumes a copyout call will later
+ * be made.  Use with caution.
+ */
+void readNonblocking(fildes_t file, size_t nbyte);
+
 /* Write to an open file, from "buf", max "nbyte" bytes.
  * Returns the number of bytes written. <nbyte disk is full.
  * Returns -1 on error (invalid file).
  */
 int write(fildes_t file, const char *buf, size_t nbyte);
+
+/* A nonblocking version of write which assumes a copyin call has already
+ * been made.  Use with caution.
+ */
+void writeNonblocking(fildes_t file, size_t nbyte);
 
 /* Lseek sets the file position indicator to the specified position "pos".
  * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
@@ -189,6 +204,10 @@ int write(fildes_t file, const char *buf, size_t nbyte);
  * Returns 0 on success and -1 on error.
  */
 int lseek(fildes_t file, fpos_t pos, int whence);
+
+/* Nonblocking version of lseek, use with caution.
+ */
+void lseekNonblocking(fildes_t file, fpos_t pos, int whence); 
 
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,

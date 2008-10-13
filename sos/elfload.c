@@ -22,6 +22,11 @@ L4_ThreadId_t elfload_get_tid(void) {
 	return elfloadTid;
 }
 
+static void processCreate(char *path) {
+	// To start, open the file
+	openNonblocking(FM_READ);
+}
+
 static void elfloadHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 	elfloadTid = sos_my_tid();
@@ -35,10 +40,11 @@ static void elfloadHandler(void) {
 	for (;;) {
 		tag = L4_Wait(&tid);
 		L4_MsgStore(tag, &msg);
+		tid = sos_cap2tid(tid);
 
 		switch (TAG_SYSLAB(tag)) {
 			case SOS_PROCESS_CREATE:
-				printf("process create\n");
+				processCreate((char*) pager_buffer(tid));
 				break;
 				
 			case SOS_REPLY:
