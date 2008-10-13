@@ -873,6 +873,10 @@ static void pagerFlush(void) {
 	}
 }
 
+static void elfLoad(char *path) {
+	;
+}
+
 static void virtualPagerHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 
@@ -967,7 +971,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				printf("trying to create process!\n");
+				elfLoad((char*) pager_buffer(tid));
 				break;
 
 			case SOS_DEBUG_FLUSH:
