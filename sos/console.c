@@ -154,7 +154,8 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
 
-	int status = network_puts((char *) buf, nbyte);
+	//int status = network_puts((char *) buf, nbyte);
+	int status = network_sendstring((char *) buf, nbyte);
 	write_done(tid, self, file, offset, buf, 0, status);
 }
 

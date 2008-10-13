@@ -97,7 +97,6 @@ main(int sosh_argc, char *sosh_argv[])
 	while (!done) {
 		if (new) {
 			printf("$ ");
-			flush();
 		}
 		new   = 0;
 		found = 0;

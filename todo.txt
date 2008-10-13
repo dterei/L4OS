@@ -29,14 +29,6 @@ a (potentially) different swap file for each one.  This will require (at least):
 
 - More test cases for the linked list.  Needs to be absolutely rock solid.
 
-- Move more things to the generic linked list implementation.
-	- Timer driver
-	- Process management (with threads)
-	- irq
-	- Bootinfo
-	- ...
-	- Filesystem stuff?
-
 - This has been around for ages, but there is a security bug in copyin/out
 where the user can violate read/write access permissions.  Need to write a
 program to show this but won't be too hard.  Also won't be a hard fix.
@@ -44,38 +36,9 @@ program to show this but won't be too hard.  Also won't be a hard fix.
 - Clean up copyin/out as well, there is a lot of repetition across the two
 functions and they aren't so nice anyway.
 
-- A more intelligent way of giving tids - not using the caps.  Force all system
-calls to include the calling thread as the somethingth argument in the message.
-Perhaps, the 31st (something like that).  This info is kept in the user defined
-TCR.  For security (not letting a process spoof another one) check this tid
-against the sender space when it arrives.
-Note that this is just a nice thing to do, it's not a problem as such.
-
 - The count for size-of-processes isn't being set properly.  Need to fix.
 
-- investigate moving the kernel heap size setting to constants.h
-
-- have the init_thread finish instead of just constantly sleeping.
-- And use frame_alloc as a stack for its stack rather than a static array.
-
-- Improve syscall interface. Have a generic IPC library which provides our var arg
-handle functions and use that for making system calls on both the user space side
-and kernel side rather then duplicating code on both side like currently. Also
-use jump table/function pointer array handling on receive side instead of giant
-switch.
-- (Comment) I agree, the libsos stuff would be nicer with varargs.  However the
-switch is compiled as a jump table already so that's not really an issue.
-
-- There are comments in the code about not blocking SOS for too long on (what I
-assume is) console writing.  It's pretty negligible but yeah I can see that the
-problem does exist.  It's buffered now, so what we "need" (if we were to do it)
-is a thread to do the flushing.
-
-- There is a comment you made in the commit log ("Improve performance of console
-fs, sends more then one char at a time now") but I did this myself in the master
-branch a while ago.  They seem to have merged but it's worth looking to see if
-we can get rid of one.  Probably mine, since it's a buffer-hack to network_puts
-(aka network_sendstring_char).
+- Use frame_alloc as a stack for the init thread rather than a static array.
 
 - Move process deleting back to process.c (from pager.c) if possible.  Still
 want to minimise the interface to the pager though.

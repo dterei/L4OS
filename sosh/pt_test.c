@@ -29,7 +29,6 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
-			flush();
 		}
 	}
 
@@ -38,7 +37,6 @@ int pt_test(int argc, char **argv) {
 	for (i = 0; i < NUM_SLOTS; i++) {
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
-			flush();
 		}
 
 		for (j = 0; j < SLOTSIZE; j++) {
@@ -55,7 +53,6 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
-			flush();
 		}
 
 		for (j = 0; j < SLOTSIZE; j++) {
@@ -78,7 +75,6 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
-			flush();
 		}
 	}
 
@@ -91,7 +87,6 @@ int pt_test(int argc, char **argv) {
 
 		if (i % 16 == 0) {
 			printf("%d... ", i / 16);
-			flush();
 		}
 
 		for (j = 0; j < SLOTSIZE; j++) {

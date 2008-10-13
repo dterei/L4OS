@@ -1,0 +1,34 @@
+/* List of TODO which aren't of high importance or nessecary */
+
+- Improve syscall interface. Have a generic IPC library which provides our var arg
+handle functions and use that for making system calls on both the user space side
+and kernel side rather then duplicating code on both side like currently. Also
+use jump table/function pointer array handling on receive side instead of giant
+switch.
+- (Comment) I agree, the libsos stuff would be nicer with varargs.  However the
+switch is compiled as a jump table already so that's not really an issue.
+
+- Move more things to the generic linked list implementation.
+	- Timer driver
+	- Process management (with threads)
+	- irq
+	- Bootinfo
+	- ...
+	- Filesystem stuff?
+
+- A more intelligent way of giving tids - not using the caps.  Force all system
+calls to include the calling thread as the somethingth argument in the message.
+Perhaps, the 31st (something like that).  This info is kept in the user defined
+TCR.  For security (not letting a process spoof another one) check this tid
+against the sender space when it arrives.
+Note that this is just a nice thing to do, it's not a problem as such.
+
+- There are comments in the code about not blocking SOS for too long on (what I
+assume is) console writing.  It's pretty negligible but yeah I can see that the
+problem does exist.  It's buffered now, so what we "need" (if we were to do it)
+is a thread to do the flushing.
+
+- investigate moving the kernel heap size setting to constants.h
+
+- have the init_thread finish instead of just constantly sleeping.
+

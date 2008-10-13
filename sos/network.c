@@ -106,26 +106,11 @@ void network_init(void) {
 	dprintf(2, "Finished %s\n\n", __FUNCTION__);
 }
 
-#define NS_BUFSIZ 64
-
-static char nsBuf[NS_BUFSIZ + 1];
-static int nsBufpos = 0;
-
-void network_flush(void) {
-	serial_send(serial, nsBuf, nsBufpos);
-	nsBufpos = 0;
-}
-
-int network_puts(char *s, int len) {
-	for (int i = 0; i < len; i++) {
-		nsBuf[nsBufpos++] = s[i];
-
-		if ((s[i] == '\n') || (nsBufpos == NS_BUFSIZ)) {
-			network_flush();
-		}
+int network_sendstring(char *s, int len) {
+	if (len <= 0) {
+		return 0;
 	}
-
-	return len;
+	return serial_send(serial, s, len);
 }
 
 int network_register_serialhandler(
