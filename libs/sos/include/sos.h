@@ -56,6 +56,7 @@ typedef enum {
 	SOS_SWAPUSE,
 	SOS_PHYSUSE,
 	SOS_VPAGER,
+	SOS_LOADER,
 	SOS_MEMLOC,
 	SOS_SHARE_VM,
 	L4_PAGEFAULT = ((L4_Word_t) -2),
@@ -251,6 +252,9 @@ L4_Word_t memloc(L4_Word_t addr);
 
 /* Get the threadid of the virtual pager */
 L4_ThreadId_t vpager(void);
+
+/* Get the threadid of the elf loader */
+L4_ThreadId_t loader(void);
 
 /*************************************************************************/
 /*									 */

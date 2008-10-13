@@ -18,6 +18,10 @@
 
 static L4_ThreadId_t elfloadTid; // automatically L4_nilthread
 
+L4_ThreadId_t elfload_get_tid(void) {
+	return elfloadTid;
+}
+
 static void elfloadHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 	elfloadTid = sos_my_tid();

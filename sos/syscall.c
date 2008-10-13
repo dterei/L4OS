@@ -4,6 +4,7 @@
 #include <sos/sos.h>
 
 #include "constants.h"
+#include "elfload.h"
 #include "frames.h"
 #include "l4.h"
 #include "libsos.h"
@@ -147,6 +148,10 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_VPAGER:
 			syscall_reply(tid, L4_ThreadNo(pager_get_tid()));
+			break;
+
+		case SOS_LOADER:
+			syscall_reply(tid, L4_ThreadNo(elfload_get_tid()));
 			break;
 
 		default:
