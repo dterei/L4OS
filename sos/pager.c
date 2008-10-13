@@ -1,4 +1,3 @@
-#include <elf/elf.h>
 #include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +47,7 @@ static L4_Word_t pinnedFrame;
 static void queueRequest(PagerRequest *pr);
 
 // For the pager process
-#define PAGER_STACK_SIZE PAGESIZE // DO NOT CHANGE
+#define PAGER_STACK_SIZE PAGESIZE
 
 static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
@@ -873,10 +872,6 @@ static void pagerFlush(void) {
 	}
 }
 
-static void elfLoad(char *path) {
-	;
-}
-
 static void virtualPagerHandler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 
@@ -971,7 +966,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				elfLoad((char*) pager_buffer(tid));
+				printf("trying to create process!\n");
 				break;
 
 			case SOS_DEBUG_FLUSH:

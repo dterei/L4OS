@@ -351,7 +351,7 @@ vfs_open_done(L4_ThreadId_t tid, VNode self, fmode_t mode, int status) {
 	files[fd].fmode = mode;
 	files[fd].fp = 0;
 
-	syscall_reply(tid, fd);
+	syscall_reply_m(tid, 2, fd, SOS_OPEN);
 }
 
 /* Close a file */
@@ -473,7 +473,7 @@ vfs_read_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char 
 
 	// update file
 	vf[file].fp += nbyte;
-	syscall_reply(tid, status);
+	syscall_reply_m(tid, 2, status, SOS_READ);
 }
 
 /* Write to a file */
@@ -541,7 +541,7 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	}
 	
 	vf[file].fp += nbyte;
-	syscall_reply(tid, status);
+	syscall_reply_m(tid, 2, status, SOS_WRITE);
 }
 
 /* Seek to a position in a file */
@@ -581,7 +581,7 @@ vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence) {
 
 	dprintf(3, "vfs_seek: new fp %d\n", vf[file].fp);
 
-	syscall_reply(tid, SOS_VFS_OK);
+	syscall_reply_m(tid, 2, SOS_VFS_OK, SOS_LSEEK);
 }
 
 /* Get a directory listing */
