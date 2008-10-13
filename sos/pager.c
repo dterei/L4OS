@@ -132,10 +132,12 @@ static void pagetableFree(Process *p) {
 	frame_free((L4_Word_t) pt1);
 }
 
-static void pagerFrameFree(L4_Word_t frame) {
+static void pagerFrameFree(Process *p, L4_Word_t frame) {
 	assert((frame & ~PAGEALIGN) == 0);
 	frame_free(frame);
 	allocLimit++;
+
+	process_get_info(p)->size--;
 }
 
 static int framesFree(void *contents, void *data) {
@@ -144,7 +146,7 @@ static int framesFree(void *contents, void *data) {
 
 	if ((pid_t) curr->fst == process_get_pid(p)) {
 		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
-		pagerFrameFree(*entry & ADDRESS_MASK);
+		pagerFrameFree(p, *entry & ADDRESS_MASK);
 		return 1;
 	} else {
 		return 0;
@@ -713,12 +715,7 @@ static void finishedSwapout(void) {
 	L4_Word_t *entry, frame, addr;
 
 	// Either the swapout was just for a free frame, or it was for
-	// a frame with existing contents (in which case there would be
-	// a pinned frame with the contents we need) - in either case we
-	// now have a frame we can free
-	pagerFrameFree(swapoutRequest.addr);
-	swappingOut = 0;
-
+	// a frame with existing contents
 	request = (PagerRequest*) list_peek(requests);
 	p = process_lookup(request->pid);
 
@@ -727,6 +724,9 @@ static void finishedSwapout(void) {
 		request->callback(request);
 		dequeueRequest();
 	}
+
+	swappingOut = 0;
+	pagerFrameFree(p, swapoutRequest.addr);
 
 	// Pager is now guaranteed to find a page (note that the pager
 	// action has been separated, we reply later)

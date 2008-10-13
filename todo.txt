@@ -36,15 +36,9 @@ program to show this but won't be too hard.  Also won't be a hard fix.
 - Clean up copyin/out as well, there is a lot of repetition across the two
 functions and they aren't so nice anyway.
 
-- The count for size-of-processes isn't being set properly.  Need to fix.
-
-- Use frame_alloc as a stack for the init thread rather than a static array.
-
 - Move process deleting back to process.c (from pager.c) if possible.  Still
 want to minimise the interface to the pager though.
 
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
-
-- Hide threads from ps.
 
