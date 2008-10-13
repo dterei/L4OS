@@ -1,3 +1,9 @@
 Import("env")
-lib = env.KengeLibrary("elf", LIBS=["c"])
+
+LIBS = "libs"
+
+public_headers = [("include/", "include/")]
+lib = env.KengeLibrary("elf", libs=Split(LIBS))
 Return("lib")
+
+# vim: set filetype=python:
