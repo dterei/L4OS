@@ -282,8 +282,14 @@ int fremove(const char *path) {
  * file).
  */
 pid_t process_create(const char *path) {
-	printf("process_create: system call not implemented.\n");
-	return -1;
+	L4_Msg_t msg;
+	int len;
+
+	len = strlen(path);
+	copyin((void*) path, len + 1, 0);
+
+	syscall_prepare(&msg);
+	return syscall(vpager(), SOS_PROCESS_CREATE, YES_REPLY, &msg);
 }
 
 /* 

@@ -1,3 +1,4 @@
+#include <elf/elf.h>
 #include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -965,12 +966,17 @@ static void virtualPagerHandler(void) {
 				syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
 				break;
 
+			case SOS_PROCESS_CREATE:
+				printf("trying to create process!\n");
+				break;
+
 			case SOS_DEBUG_FLUSH:
 				pagerFlush();
 				syscall_reply_m(tid, 0);
 				break;
 
 			case L4_EXCEPTION:
+				// TODO kill process
 				dprintf(0, "!!! virtualPagerHandler exception: ip=%lx, sp=%lx\n",
 						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
 				dprintf(0, "    cpsr=%lx exception=%lx, cause=%lx\n",

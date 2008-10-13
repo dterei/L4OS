@@ -5,14 +5,16 @@ handle functions and use that for making system calls on both the user space sid
 and kernel side rather then duplicating code on both side like currently. Also
 use jump table/function pointer array handling on receive side instead of giant
 switch.
+- (Comment) I agree, the libsos stuff would be nicer with varargs.  However the
+switch is compiled as a jump table already so that's not really an issue.
 
 - Move more things to the generic linked list implementation.
 	- Timer driver
-	- Filesystem stuff
 	- Process management (with threads)
 	- irq
 	- Bootinfo
 	- ...
+	- Filesystem stuff?
 
 - A more intelligent way of giving tids - not using the caps.  Force all system
 calls to include the calling thread as the somethingth argument in the message.
