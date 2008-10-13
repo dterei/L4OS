@@ -16,15 +16,52 @@
 #include "region.h"
 #include "syscall.h"
 
+#define verbose 2
+
 static L4_ThreadId_t elfloadTid; // automatically L4_nilthread
 
 L4_ThreadId_t elfload_get_tid(void) {
 	return elfloadTid;
 }
 
-static void processCreate(char *path) {
-	// To start, open the file
-	openNonblocking(FM_READ);
+static void processCreate(L4_ThreadId_t tid, char *path) {
+	Process *p;
+	fildes_t elfFile;
+	struct Elf32_Header elfHeader;
+	struct Elf32_Phdr elfPhdr;
+	int rval;
+
+	// Open the elf file
+	elfFile = open(path, FM_READ);
+
+	if (elfFile < 0) {
+		// Couldn't open the file
+		dprintf(1, "!!! processCreate: couldn't open %s\n", path);
+		syscall_reply(tid, (-1));
+		return;
+	}
+
+	// Read the header data
+	rval = read(elfFile, (char*) &elfHeader, sizeof(struct Elf32_Header));
+
+	if (rval != sizeof(struct Elf32_Header)) {
+		// Something bad happened
+		dprintf(1, "!!! processCreate: couldn't reader ELF header\n");
+		syscall_reply(tid, (-1));
+		return;
+	} else if (elf_checkFile(&elfHeader) != 0) {
+		// It wasn't an ELF file
+		dprintf(1, "!!! processCreate: not an ELF file\n");
+		syscall_reply(tid, (-1));
+		return;
+	}
+
+	// Read in all the program sections
+	for (int i = 0; i < elf_getNumProgramHeaders(&elfHeader)) {
+
+
+	printf("On the way to being successful\n");
+	syscall_reply(tid, 0);
 }
 
 static void elfloadHandler(void) {
@@ -44,7 +81,7 @@ static void elfloadHandler(void) {
 
 		switch (TAG_SYSLAB(tag)) {
 			case SOS_PROCESS_CREATE:
-				processCreate((char*) pager_buffer(tid));
+				processCreate(tid, (char*) pager_buffer(tid));
 				break;
 				
 			case SOS_REPLY:
