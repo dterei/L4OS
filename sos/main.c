@@ -35,11 +35,6 @@
 
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
 
-// Stack for the initialisation thread
-// TODO Use frame_alloc?
-#define STACK_SIZE PAGESIZE
-static L4_Word_t init_stack_s[STACK_SIZE];
-
 static void
 init_thread(void) {
 	L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
@@ -196,7 +191,8 @@ main(void) {
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
-	sos_thread_new(L4_nilthread, &init_thread, &init_stack_s[STACK_SIZE]);
+	sos_thread_new(L4_nilthread, &init_thread,
+			((char*) frame_alloc()) + PAGESIZE - sizeof(L4_Word_t));
 
 	dprintf(2, "*** main: about to start syscall loop\n");
 	syscall_loop();

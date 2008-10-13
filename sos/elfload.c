@@ -16,9 +16,6 @@
 #include "region.h"
 #include "syscall.h"
 
-#define ELFLOAD_STACK_SIZE PAGESIZE
-
-static L4_Word_t elfloadStack[ELFLOAD_STACK_SIZE];
 static L4_ThreadId_t elfloadTid; // automatically L4_nilthread
 
 static void elfloadHandler(void) {
@@ -52,7 +49,7 @@ void elfload_init(void) {
 	process_set_name(elfload, "elfload");
 	process_prepare(elfload, RUN_AS_THREAD);
 	process_set_ip(elfload, (void*) elfloadHandler);
-	process_set_sp(elfload, elfloadStack + ELFLOAD_STACK_SIZE - 1);
+	process_set_sp(elfload, (char*) frame_alloc() + PAGESIZE - sizeof(L4_Word_t));
 
 	process_run(elfload, RUN_AS_THREAD);
 

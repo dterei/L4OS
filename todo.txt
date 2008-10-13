@@ -46,3 +46,5 @@ want to minimise the interface to the pager though.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
+- Hide threads from ps.
+

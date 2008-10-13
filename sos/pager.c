@@ -49,7 +49,6 @@ static void queueRequest(PagerRequest *pr);
 // For the pager process
 #define PAGER_STACK_SIZE PAGESIZE
 
-static L4_Word_t virtualPagerStack[PAGER_STACK_SIZE];
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
 static void virtualPagerHandler(void);
 
@@ -303,7 +302,7 @@ void pager_init(void) {
 	process_set_name(pager, "virtual_pager");
 	process_prepare(pager, RUN_AS_THREAD);
 	process_set_ip(pager, (void*) virtualPagerHandler);
-	process_set_sp(pager, virtualPagerStack + PAGER_STACK_SIZE - 1);
+	process_set_sp(pager, (char*) frame_alloc() + PAGESIZE - sizeof(L4_Word_t));
 
 	process_run(pager, RUN_AS_THREAD);
 
