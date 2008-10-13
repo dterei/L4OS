@@ -131,11 +131,6 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			vfs_remove(tid, pager_buffer(tid));
 			break;
 
-		case SOS_FLUSH:
-			network_flush();
-			syscall_reply_m(tid, 0);
-			break;
-
 		case SOS_TIME_STAMP:
 			syscall_reply_m(tid, 2,
 					(L4_Word_t) time_stamp(),

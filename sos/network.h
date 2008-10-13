@@ -9,8 +9,7 @@ struct cookie mnt_point;
 // Always call network_irq if an interrupt occurs that you are not interested in
 int network_irq(L4_ThreadId_t *tP, int *sendP);
 void network_init(void);
-void network_flush(void);
-int network_puts(char *s, int len);
+int network_sendstring(char *s, int len);
 int network_register_serialhandler(void (*handler)(struct serial *serial, char c));
 
 #endif // sos/network.h
