@@ -28,6 +28,7 @@ struct Process_t {
 	timestamp_t   startedAt;
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
+	int           isThread;
 };
 
 // Array of all PCBs
@@ -66,10 +67,9 @@ static Process *processAlloc(void) {
 	return p;
 }
 
-Process *process_init(void) {
-	// On the first process initialisation set the offset
-	// to whatever it is, and disable libsos from allocating
-	// any more threadids.  Admittedly, this is a bit of a hack.
+Process *process_init(int isThread) {
+	// On the first process initialisation set the offset to whatever it is
+	// and disable libsos from allocation any more threads
 	if (tidOffset == 0) {
 		tidOffset = L4_ThreadNo(sos_peek_new_tid());
 		sos_get_new_tid_disable();
@@ -77,6 +77,8 @@ Process *process_init(void) {
 	}
 
 	// Do the normal process initialisation
+	Process *p = processAlloc();
+	p->isThread = isThread;
 	return processAlloc();
 }
 
@@ -189,24 +191,24 @@ static L4_Word_t getNextPid(void) {
 	return nextPid;
 }
 
-void process_prepare(Process *p, int asThread) {
+void process_prepare(Process *p) {
 	// Register with the collection of PCBs
 	p->info.pid = getNextPid();
 	sosProcs[p->info.pid] = p;
 
-	if (asThread != RUN_AS_THREAD) {
+	if (!p->isThread) {
 		addBuiltinRegions(p);
 		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
 	}
 }
 
-L4_ThreadId_t process_run(Process *p, int asThread) {
+L4_ThreadId_t process_run(Process *p) {
 	L4_ThreadId_t tid;
 	if (verbose > 2) process_dump(p);
 
 	p->startedAt = time_stamp();
 
-	if (asThread == RUN_AS_THREAD) {
+	if (p->isThread) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (pager_is_active()) {
 		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
@@ -280,8 +282,9 @@ void process_close_files(Process *p) {
 int process_kill(Process *p) {
 	assert(p != NULL);
 
-	if (process_get_pid(p) > tidOffset) {
-		// Isn't a kernel-allocated process, and isn't the pager
+	if (process_get_pid(p) > tidOffset && !p->isThread) {
+		// Isn't a kernel-allocated process, and isn't the pager.  Also we
+		// don't want anybody killing threads (and they shouldn't be visible)
 		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
 					L4_nilthread, L4_nilthread, 0, NULL));
 		sosProcs[process_get_pid(p)] = NULL;
@@ -298,7 +301,7 @@ int process_write_status(process_t *dest, int n) {
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL) {
+		if (sosProcs[i] != NULL && !sosProcs[i]->isThread) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
 			dest++;

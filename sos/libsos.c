@@ -426,7 +426,7 @@ bootinfo_new_pd(bi_name_t owner, const bi_user_data_t * data) {
 	dprintf(2, "*** bootinfo_new_pd: (owner %d) = %d\n", owner, bootinfo_id);
 
 	BootinfoProcess *bip = (BootinfoProcess*) malloc(sizeof(BootinfoProcess));
-	bip->process = process_init();
+	bip->process = process_init(0);
 	bip->regions = NULL;
 	//bip->tid = found later
 	bip->sid = bootinfo_id;
@@ -488,8 +488,8 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 	}
 
 	// Prepare and run the process
-	process_prepare(bip->process, RUN_AS_PROCESS);
-	L4_ThreadId_t newtid = process_run(bip->process, RUN_AS_PROCESS);
+	process_prepare(bip->process);
+	L4_ThreadId_t newtid = process_run(bip->process);
 	dprintf(2, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {

@@ -44,14 +44,14 @@ static void elfloadHandler(void) {
 }
 
 void elfload_init(void) {
-	Process *elfload = process_init();
+	Process *elfload = process_init(1);
 
 	process_set_name(elfload, "elfload");
-	process_prepare(elfload, RUN_AS_THREAD);
+	process_prepare(elfload);
 	process_set_ip(elfload, (void*) elfloadHandler);
 	process_set_sp(elfload, (char*) frame_alloc() + PAGESIZE - sizeof(L4_Word_t));
 
-	process_run(elfload, RUN_AS_THREAD);
+	process_run(elfload);
 
 	while (L4_IsThreadEqual(elfloadTid, L4_nilthread)) L4_Yield();
 }

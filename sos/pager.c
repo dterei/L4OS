@@ -297,14 +297,14 @@ void pager_init(void) {
 	copyInOutBuffer = (char*) allocFrames(numFrames);
 
 	// Start the real pager process
-	Process *pager = process_init();
+	Process *pager = process_init(1);
 
 	process_set_name(pager, "virtual_pager");
-	process_prepare(pager, RUN_AS_THREAD);
+	process_prepare(pager);
 	process_set_ip(pager, (void*) virtualPagerHandler);
 	process_set_sp(pager, (char*) frame_alloc() + PAGESIZE - sizeof(L4_Word_t));
 
-	process_run(pager, RUN_AS_THREAD);
+	process_run(pager);
 
 	// Wait until it has actually started
 	while (!pager_is_active()) L4_Yield();
