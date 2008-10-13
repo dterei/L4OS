@@ -41,10 +41,11 @@ init_thread(void) {
 
 	network_init();
 	vfs_init();
-	pager_init();
 	elfload_init();
+	pager_init();
 	sos_start_binfo_executables();
 
+	// TODO kill thread
 	for (;;)
 		sos_usleep(30 * 1000 * 1000);
 }

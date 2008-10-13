@@ -79,7 +79,7 @@ Process *process_init(int isThread) {
 	// Do the normal process initialisation
 	Process *p = processAlloc();
 	p->isThread = isThread;
-	return processAlloc();
+	return p;
 }
 
 void process_add_region(Process *p, Region *r) {

@@ -21,6 +21,7 @@
 #include <sos/sos.h>
 
 #include "constants.h"
+#include "elfload.h"
 #include "l4.h"
 #include "libsos.h"
 #include "pager.h"
@@ -305,6 +306,13 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	// And the pager
 	if (pager_is_active()) {
 		res = L4_CreateIpcCap(pager, L4_rootclist, pager, clistId);
+		assert(res);
+	}
+
+	// And the elf loader
+	if (!L4_IsThreadEqual(elfload_get_tid(), L4_nilthread)) {
+		res = L4_CreateIpcCap(
+				elfload_get_tid(), L4_rootclist, elfload_get_tid(), clistId);
 		assert(res);
 	}
 

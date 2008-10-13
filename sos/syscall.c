@@ -151,6 +151,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_LOADER:
+			printf("tid is %ld\n", L4_ThreadNo(elfload_get_tid()));
 			syscall_reply(tid, L4_ThreadNo(elfload_get_tid()));
 			break;
 
