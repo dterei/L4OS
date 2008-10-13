@@ -5,6 +5,7 @@ DEBUG       = ENABLE_DEBUG=True ENABLE_KDB_CONS=True ENABLE_KDB_CLI=True KDB_BRE
 SCONS       = tools/build.py $(MCHN_FLAGS) $(PROJ_FLAGS) $(TOOLCHAIN) $(DEBUG)
 TLA         = baz
 SCONSRESULT = build/images/image.boot.bin
+ELFDIR      = build/userland_elf/bin
 
 # Only try to assign TFTPROOT if it hasn't already been.
 ifeq ($(TFTPROOT),)
@@ -41,6 +42,7 @@ on off up down reset:
 $(TARGET): $(SCONSRESULT)
 	mkdir -p $(TFTPROOT)
 	cp $(SCONSRESULT) $(TARGET) || true
+	cp $(ELFDIR)/* $(TFTPROOT)
 
 $(SCONSRESULT): on tools
 	$(SCONS)

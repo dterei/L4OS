@@ -108,6 +108,18 @@ app_env.Package("libs/elf")
 app_env.Package("libs/gcc")
 app_env.Package("libs/sos")
 
+elf_env=build.KengeEnvironment("userland_elf", _LINKADDRESS="-Ttext=0x10000000")
+elf_env.system = "sos" # for libc
+process_global_config(elf_env)
+elf_env.Package("libs/l4")
+elf_env.Package("libs/compat")
+elf_env.Package("libs/c")
+elf_env.Package("libs/elf")
+elf_env.Package("libs/gcc")
+elf_env.Package("libs/sos")
+
+ping = elf_env.Package("bin/ping")
+
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling
 # the Application function a number times in the app_env environment.
@@ -132,6 +144,8 @@ spec = elfweaver_env.GenWeaverXML(apps)
 elf_image, sim_image, boot_image = elfweaver_env.CreateImages(spec, apps)
 build.TestImage(boot_image)
 build.RunImage(boot_image)
-Default(boot_image) # Default build target is the bootimage.
+
+#Default(boot_image) # Default build target is the bootimage.
+Default(boot_image, ping)
 
 # vim:ft=python:
