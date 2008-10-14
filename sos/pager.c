@@ -1,3 +1,4 @@
+#include <elf/elf.h>
 #include <sos/sos.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,8 +56,12 @@ static L4_Word_t pinnedFrame;
 // ELF loading
 typedef struct ElfloadRequest_t ElfloadRequest;
 struct ElfloadRequest_t {
-	fildes_t fd;
-	Process *p;
+	char *path;  // path to executable
+	fildes_t fd; // file descriptor (when opened)
+	struct Elf32_Header elfHeader;
+	struct Elf32_Phdr elfPhdr;
+	pid_t caller; // pid of the process that made the request
+	Process *p; // process being gradually loaded
 };
 
 // For the pager process
@@ -668,8 +673,56 @@ static void startPagerRequest(void) {
 	}
 }
 
+static void continueElfloadRequest(void) {
+	;
+}
+
 static void startElfloadRequest(void) {
-	dprintf(0, "*** startElfloadRequest\n");
+	assert(requestsPeekType() == REQUEST_ELFLOAD);
+
+	// Open the file and let the continuation take over
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+	openNonblocking(FM_READ);
+
+	//elfFile = openPhys(path, FM_READ);
+
+	/*
+	if (elfFile < 0) {
+		// Couldn't open the file
+		dprintf(1, "!!! processCreate: couldn't open %s\n", path);
+		syscall_reply(tid, (-1));
+		return;
+	} else {
+		dprintf(2, "*** processCreate: opened with fd=%d\n", elfFile);
+	}
+
+	// Read the header data
+	rval = readPhys(elfFile, (char*) &elfHeader, sizeof(struct Elf32_Header));
+
+	if (rval != sizeof(struct Elf32_Header)) {
+		// Something bad happened
+		dprintf(1, "!!! processCreate: couldn't reader ELF header\n");
+		syscall_reply(tid, (-1));
+		return;
+	} else if (elf_checkFile(&elfHeader) != 0) {
+		// It wasn't an ELF file
+		dprintf(1, "!!! processCreate: not an ELF file\n");
+		syscall_reply(tid, (-1));
+		return;
+	}
+
+	// Read in all the program sections
+	for (int i = 0; i < elf_getNumProgramHeaders(&elfHeader); i++) {
+		dprintf(2, "Program section %d\n", i);
+	}
+
+	(void) p;
+	(void) elfPhdr;
+
+	printf("processCreate: not fully implemented\n");
+	syscall_reply(tid, (-1));
+	*/
 }
 
 static void startRequest(void) {
@@ -831,7 +884,6 @@ static void finishedSwapin(void) {
 static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
 	PagerRequest *pr;
-	ElfloadRequest *er;
 
 	switch (requestsPeekType()) {
 		case REQUEST_SWAPOUT:
@@ -887,9 +939,8 @@ static void vfsHandler(int vfsRval) {
 
 		case REQUEST_ELFLOAD:
 			dprintf(0, "*** vfsHandler: elfload continuation\n");
-			(void) er;
+			continueElfloadRequest();
 			break;
-
 	}
 }
 

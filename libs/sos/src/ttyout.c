@@ -40,13 +40,11 @@ sos_read(void *vData, long int position, size_t count, void *handle) {
 }
 
 void abort(void) {
-	printf("ABORT\n");
 	L4_KDB_Enter("sos abort()ed");
 	while (1);
 }
 
 void _Exit(int status) {
-	printf("EXIT\n");
 	abort();
 }
 

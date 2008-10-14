@@ -18,7 +18,6 @@
 #include <sos/sos.h>
 
 #include "constants.h"
-#include "elfload.h"
 #include "frames.h"
 #include "irq.h"
 #include "l4.h"
@@ -41,7 +40,6 @@ init_thread(void) {
 
 	network_init();
 	vfs_init();
-	elfload_init();
 	pager_init();
 	sos_start_binfo_executables();
 

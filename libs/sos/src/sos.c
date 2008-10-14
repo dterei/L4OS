@@ -40,7 +40,6 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_SWAPUSE: return "SOS_SWAPUSE";
 		case SOS_PHYSUSE: return "SOS_PHYSUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
-		case SOS_LOADER: return "SOS_LOADER";
 		case SOS_MEMLOC: return "SOS_MEMLOC";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 		case L4_PAGEFAULT: return "L4_PAGEFAULT";
@@ -333,7 +332,7 @@ pid_t process_create(const char *path) {
 	copyin((void*) path, len + 1, 0);
 
 	syscall_prepare(&msg);
-	return syscall(loader(), SOS_PROCESS_CREATE, YES_REPLY, &msg);
+	return syscall(vpager(), SOS_PROCESS_CREATE, YES_REPLY, &msg);
 }
 
 /* 
@@ -444,20 +443,6 @@ L4_ThreadId_t vpager(void) {
 		L4_Msg_t msg;
 		syscall_prepare(&msg);
 		tid = L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
-		knowTid = 1;
-	}
-
-	return tid;
-}
-
-L4_ThreadId_t loader(void) {
-	static int knowTid = 0;
-	static L4_ThreadId_t tid;
-
-	if (!knowTid) {
-		L4_Msg_t msg;
-		syscall_prepare(&msg);
-		tid = L4_GlobalId(syscall(L4_rootserver, SOS_LOADER, YES_REPLY, &msg), 1);
 		knowTid = 1;
 	}
 
