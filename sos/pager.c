@@ -29,6 +29,17 @@ static List *alloced; // [(pid, word)]
 static List *swapped; // [(pid, word)]
 
 // Asynchronous pager requests
+static List *requests; // [(rtype_t, rdata)]
+
+typedef enum {
+	REQUEST_SWAPOUT,
+	REQUEST_SWAPIN,
+	REQUEST_ELFLOAD,
+} rtype_t;
+
+static void queueRequest(rtype_t rtype, void *request);
+
+// Demand paging
 #define SWAP_BUFSIZ 1024
 
 typedef struct PagerRequest_t PagerRequest;
@@ -39,12 +50,14 @@ struct PagerRequest_t {
 	void (*callback)(PagerRequest *pr);
 };
 
-static List *requests; // [PagerRequest]
-static PagerRequest swapoutRequest;
-static int swappingOut = 0;
 static L4_Word_t pinnedFrame;
 
-static void queueRequest(PagerRequest *pr);
+// ELF loading
+typedef struct ElfloadRequest_t ElfloadRequest;
+struct ElfloadRequest_t {
+	fildes_t fd;
+	Process *p;
+};
 
 // For the pager process
 #define PAGER_STACK_SIZE PAGESIZE
@@ -137,7 +150,7 @@ static void pagerFrameFree(Process *p, L4_Word_t frame) {
 	frame_free(frame);
 	allocLimit++;
 
-	process_get_info(p)->size--;
+	if (p != NULL) process_get_info(p)->size--;
 }
 
 static int framesFree(void *contents, void *data) {
@@ -282,6 +295,21 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	}
 
 	return frame;
+}
+
+static rtype_t requestsPeekType(void) {
+	return (rtype_t) ((Pair*) list_peek(requests))->fst;
+}
+
+static void *requestsPeek(void) {
+	return (void*) ((Pair*) list_peek(requests))->snd;
+}
+
+static void *requestsUnshift(void) {
+	Pair *pair = (Pair*) list_unshift(requests);
+	void *data = (void*) pair->snd;
+	pair_free(pair);
+	return data;
 }
 
 void pager_init(void) {
@@ -461,7 +489,7 @@ static int pagerAction(PagerRequest *pr) {
 	if (*entry & ONDISK_MASK) {
 		// On disk, queue a swapin request
 		dprintf(2, "*** pagerAction: page is on disk\n");
-		queueRequest(pr);
+		queueRequest(REQUEST_SWAPIN, pr);
 		return 0;
 	} else if ((frame & ADDRESS_MASK) != 0) {
 		// Already appears in page table as a frame, just got unmapped
@@ -481,7 +509,7 @@ static int pagerAction(PagerRequest *pr) {
 
 		if (frame == 0) {
 			dprintf(2, "*** pagerAction: no free frames\n");
-			queueRequest(pr);
+			queueRequest(REQUEST_SWAPIN, pr);
 			return 0;
 		}
 	}
@@ -571,11 +599,8 @@ static void startSwapout(void) {
 			process_get_pid(p), (void*) frame);
 
 	// Set up the swapout
-	swapoutRequest.pid = swapout->fst;
-	swapoutRequest.addr = frame;
-	swapoutRequest.offset = 0;
-	swapoutRequest.callback = NULL;
-	swappingOut = 1;
+	list_shift(requests, pair_alloc(REQUEST_SWAPOUT,
+			(L4_Word_t) allocPagerRequest(swapout->fst, frame, NULL)));
 
 	// Set up where on disk to put the page
 	L4_Word_t diskAddr = pagerSwapslotAlloc(p);
@@ -602,7 +627,8 @@ static void startSwapin(void) {
 	// kick-start the chain of NFS requests and callbacks by lseeking
 	// to the position in the swap file the page is (and this is found
 	// by ADDR_MASK since it doubles as physical and ondisk memory location)
-	PagerRequest *nextPr = (PagerRequest*) list_peek(requests);
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	PagerRequest *nextPr = requestsPeek();
 
 	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(process_lookup(nextPr->pid)),
@@ -612,13 +638,14 @@ static void startSwapin(void) {
 			*entry & ADDRESS_MASK, SEEK_SET);
 }
 
-static void startRequest(void) {
-	dprintf(1, "*** startRequest\n");
+static void startPagerRequest(void) {
+	dprintf(1, "*** startPagerRequest\n");
 	assert(!list_null(requests));
 
 	// This is called to start running the next pager request, assuming
 	// there is another one 
-	PagerRequest *nextPr = (PagerRequest*) list_peek(requests);
+	assert(requestsPeekType() != REQUEST_ELFLOAD);
+	PagerRequest *nextPr = requestsPeek();
 
 	L4_Word_t *entry = pagetableLookup(
 			process_get_pagetable(process_lookup(nextPr->pid)),
@@ -634,10 +661,33 @@ static void startRequest(void) {
 
 		if (allocLimit > 0) {
 			// In the meantime a frame has become free
-			pager((PagerRequest*) list_unshift(requests));
+			pager((PagerRequest*) requestsUnshift());
 		} else {
 			startSwapout();
 		}
+	}
+}
+
+static void startElfloadRequest(void) {
+	dprintf(0, "*** startElfloadRequest\n");
+}
+
+static void startRequest(void) {
+	dprintf(1, "*** startRequest\n");
+	assert(!list_null(requests));
+
+	switch (requestsPeekType()) {
+		case REQUEST_SWAPOUT:
+		case REQUEST_SWAPIN:
+			startPagerRequest();
+			break;
+
+		case REQUEST_ELFLOAD:
+			startElfloadRequest();
+			break;
+
+		default:
+			dprintf(0, "!!! startRequest: unrecognised request\n");
 	}
 }
 
@@ -654,14 +704,14 @@ static void dequeueRequest(void) {
 	}
 }
 
-static void queueRequest(PagerRequest *pr) {
-	dprintf(1, "*** queueRequest: p=%d addr=%p\n", pr->pid, pr->addr);
+static void queueRequest(rtype_t rtype, void *request) {
+	dprintf(1, "*** queueRequest\n");
 
 	if (list_null(requests)) {
-		list_push(requests, pr);
+		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 		startRequest();
 	} else {
-		list_push(requests, pr);
+		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
 }
 
@@ -673,28 +723,33 @@ static void finishedSwapout(void) {
 	dprintf(1, "*** finishedSwapout\n");
 
 	Process *p;
-	PagerRequest *request;
+	PagerRequest *swapin, *swapout;
 	L4_Word_t *entry, frame, addr;
+
+	// Done with the swapout
+	assert(requestsPeekType() == REQUEST_SWAPOUT);
+	swapout = (PagerRequest*) requestsUnshift();
+
+	pagerFrameFree(process_lookup(swapout->pid), swapout->addr);
+	free(swapout);
 
 	// Either the swapout was just for a free frame, or it was for
 	// a frame with existing contents
-	request = (PagerRequest*) list_peek(requests);
-	p = process_lookup(request->pid);
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	swapin = (PagerRequest*) requestsPeek();
 
+	p = process_lookup(swapin->pid);
 	if (p == NULL) {
 		// Process died
-		request->callback(request);
+		swapin->callback(swapin);
 		dequeueRequest();
 	}
 
-	swappingOut = 0;
-	pagerFrameFree(p, swapoutRequest.addr);
-
 	// Pager is now guaranteed to find a page (note that the pager
 	// action has been separated, we reply later)
-	pagerAction(request);
+	pagerAction(swapin);
 
-	addr = request->addr & PAGEALIGN;
+	addr = swapin->addr & PAGEALIGN;
 	entry = pagetableLookup(process_get_pagetable(p), addr);
 	frame = *entry & ADDRESS_MASK;
 
@@ -714,7 +769,7 @@ static void finishedSwapout(void) {
 			(void*) addr, process_get_pid(p), (void*) frame);
 
 	prepareDataOut(p, addr);
-	request->callback(request);
+	swapin->callback(swapin);
 	dequeueRequest();
 }
 
@@ -725,7 +780,8 @@ static void finishedSwapin(void) {
 	Pair args; // (pid, word)
 	L4_Word_t *entry, addr;
 
-	request = (PagerRequest*) list_peek(requests);
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	request = (PagerRequest*) requestsPeek();
 	p = process_lookup(request->pid);
 
 	if (p == NULL) {
@@ -772,57 +828,68 @@ static void finishedSwapin(void) {
 	}
 }
 
-static void demandPager(int vfsRval) {
-	dprintf(2, "*** demandPager: vfsRval=%d\n", vfsRval);
+static void vfsHandler(int vfsRval) {
+	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
+	PagerRequest *pr;
+	ElfloadRequest *er;
 
-	if (swappingOut) {
-		dprintf(3, "*** demandPager: swapout continuation\n");
+	switch (requestsPeekType()) {
+		case REQUEST_SWAPOUT:
+			dprintf(3, "*** demandPager: swapout continuation\n");
 
-		// This is part of a swapout continuation
-		assert(swapoutRequest.offset <= PAGESIZE);
+			// This is part of a swapout continuation
+			pr = (PagerRequest*) requestsPeek();
+			assert(pr->offset <= PAGESIZE);
 
-		if (swapoutRequest.offset == PAGESIZE) {
-			// We finished the swapout so use the now-free frame
-			// as either a swapin target or a free frame
-			finishedSwapout();
-		} else {
-			// Still swapping out, continue the vfs write
-			memcpy(
-					pager_buffer(virtualPager),
-					((char*) swapoutRequest.addr) + swapoutRequest.offset,
-					SWAP_BUFSIZ);
+			if (pr->offset == PAGESIZE) {
+				// We finished the swapout so use the now-free frame
+				// as either a swapin target or a free frame
+				finishedSwapout();
+			} else {
+				// Still swapping out, continue the vfs write
+				memcpy(pager_buffer(virtualPager),
+						(void*) (pr->addr + pr->offset), SWAP_BUFSIZ);
 
-			writeNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
-			swapoutRequest.offset += SWAP_BUFSIZ; // FIXME use vfsRval
-		}
-	} else {
-		dprintf(3, "*** demandPager: swapin continuation\n");
+				writeNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
+				pr->offset += SWAP_BUFSIZ;
+			}
 
-		// This is part of a swapin continuation
-		PagerRequest *request = (PagerRequest*) list_peek(requests);
-		assert(request->offset <= PAGESIZE);
+			break;
 
-		if (request->offset > 0) {
-			// there is data to copy across to the pinned frame
-			assert(vfsRval > 0);
-			assert((vfsRval % SWAP_BUFSIZ) == 0);
-			assert(((request->offset - vfsRval) % SWAP_BUFSIZ) == 0);
+		case REQUEST_SWAPIN:
+			dprintf(3, "*** demandPager: swapin continuation\n");
 
-			memcpy(
-					((char*) pinnedFrame) + request->offset - vfsRval,
-					pager_buffer(virtualPager),
-					SWAP_BUFSIZ);
-		}
+			// This is part of a swapin continuation
+			pr = (PagerRequest*) requestsPeek();
+			assert(pr->offset <= PAGESIZE);
 
-		if (request->offset == PAGESIZE) {
-			// we finished the swapin so we can now attempt to
-			// give the page to the process that needs it
-			finishedSwapin();
-		} else {
-			// still swapping in
-			readNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
-			request->offset += SWAP_BUFSIZ;
-		}
+			if (pr->offset > 0) {
+				// there is data to copy across to the pinned frame
+				assert(vfsRval > 0);
+				assert((vfsRval % SWAP_BUFSIZ) == 0);
+				assert(((pr->offset - vfsRval) % SWAP_BUFSIZ) == 0);
+
+				memcpy(((char*) pinnedFrame) + pr->offset - vfsRval,
+						pager_buffer(virtualPager), SWAP_BUFSIZ);
+			}
+
+			if (pr->offset == PAGESIZE) {
+				// we finished the swapin so we can now attempt to
+				// give the page to the process that needs it
+				finishedSwapin();
+			} else {
+				// still swapping in
+				readNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
+				pr->offset += SWAP_BUFSIZ;
+			}
+
+			break;
+
+		case REQUEST_ELFLOAD:
+			dprintf(0, "*** vfsHandler: elfload continuation\n");
+			(void) er;
+			break;
+
 	}
 }
 
@@ -879,7 +946,7 @@ static void virtualPagerHandler(void) {
 
 			case SOS_REPLY:
 				if (L4_IsThreadEqual(process_get_tid(p), L4_rootserver)) {
-					demandPager(L4_MsgWord(&msg, 0));
+					vfsHandler(L4_MsgWord(&msg, 0));
 				} else {
 					dprintf(0, "!!! virtualPagerHandler: got reply from user\n");
 				}

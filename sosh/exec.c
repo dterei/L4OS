@@ -34,7 +34,6 @@ int exec(int argc, char **argv) {
 		}
 	} else {
 		printf("Failed!\n");
-		return 1;
 	}
 
 	if (bg == 0) {

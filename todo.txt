@@ -44,3 +44,5 @@ of swapping in or swapping out.
 
 - SOS crashing on 
 
+- Putting exec outside of sosh was stupid, it relies on the console.  Fix.
+
