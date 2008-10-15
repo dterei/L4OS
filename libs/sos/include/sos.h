@@ -40,6 +40,7 @@ typedef enum {
 	SOS_OPEN,
 	SOS_CLOSE,
 	SOS_READ,
+	SOS_FLUSH,
 	SOS_WRITE,
 	SOS_LSEEK,
 	SOS_GETDIRENT,
@@ -198,6 +199,12 @@ int write(fildes_t file, const char *buf, size_t nbyte);
  * been made.  Use with caution.
  */
 void writeNonblocking(fildes_t file, size_t nbyte);
+
+/* Flush a file or stream out to disk/network */
+int flush(fildes_t file);
+
+/* Nonblocking version of flush */
+void flushNonblocking(fildes_t file);
 
 /* Lseek sets the file position indicator to the specified position "pos".
  * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative

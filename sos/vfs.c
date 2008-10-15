@@ -137,6 +137,7 @@ find_vnode(const char *path) {
 	return NULL;
 }
 
+/* Create a new empty vnode */
 static
 VNode
 new_vnode(void) {
@@ -164,9 +165,11 @@ new_vnode(void) {
 	vn->close = NULL;
 	vn->read = NULL;
 	vn->write = NULL;
+	vn->flush = NULL;
 	vn->getdirent = NULL;
 	vn->stat = NULL;
 	vn->remove = NULL;
+
 	return vn;
 }
 
@@ -542,6 +545,33 @@ vfs_write_done(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	
 	vf[file].fp += nbyte;
 	syscall_reply_m(tid, 2, status, SOS_WRITE);
+}
+
+/* Flush a stream */
+void
+vfs_flush(L4_ThreadId_t tid, fildes_t file) {
+	dprintf(1, "*** vfs_flush: %d, %d\n", L4_ThreadNo(tid), file);
+
+	// get file
+	Process *p = process_lookup(L4_ThreadNo(tid));
+	VFile *vf = process_get_files(p);
+	if (p == NULL || vf == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
+		return;
+	}
+
+	// get vnode to make sure file exists
+	VNode vnode = vf[file].vnode;
+
+	// make sure ok
+	if (vnode == NULL) {
+		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
+		syscall_reply(tid, SOS_VFS_NOFILE);
+		return;
+	}
+
+	// flush
+	vnode->flush(tid, vnode, file);
 }
 
 /* Seek to a position in a file */

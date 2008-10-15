@@ -72,6 +72,8 @@
 #include <string.h>
 #include <l4/thread.h>
 
+#include <sos/sos.h>
+
 /*
  * All of these functions do not lock the I/O stream.  They all end up calling
  * format which handles the locking. 
@@ -95,3 +97,4 @@ printf(const char *format, ...)
 
     return ret;
 }
+

@@ -31,8 +31,6 @@ want to minimise the interface to the pager though.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
-- Output bug is back, need to fix.  Again.
-
 - Don't need to swap out a page if the swapfile isn't the default.  This is a
 pretty easy optimisation to make (well, not easy) but given that we can do it
 we might as well.
