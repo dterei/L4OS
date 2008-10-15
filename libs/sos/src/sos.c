@@ -55,6 +55,24 @@ void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
+static char buf[BUFSIZ];
+
+static void debugPrint(void) {
+	for (int i = 0; i < strlen(buf); i++) {
+		L4_KDB_PrintChar(buf[i]);
+	}
+}
+
+static void pprintError(L4_Word_t ec) {
+	L4_Word_t e, p;
+
+	e = (ec >> 1) & 15;
+	p = ec & 1;
+
+	sprintf(buf, "%s error, code is 0x%lx (see p125)\n", p? "receive":"send", e);
+	debugPrint();
+}
+
 void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
 		L4_Word_t *rvals, int nRvals, L4_Msg_t *msg) {
 	L4_MsgTag_t tag;
@@ -66,6 +84,12 @@ void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
 		tag = L4_Call(tid);
 	} else {
 		tag = L4_Send(tid);
+	}
+
+	if (L4_IpcFailed(tag)) {
+		sprintf(buf, "### syscall_generic to %ld failed: ", L4_ThreadNo(tid));
+		debugPrint();
+		pprintError(L4_ErrorCode());
 	}
 
 	L4_MsgStore(tag, msg);
@@ -486,17 +510,9 @@ L4_Word_t memloc(L4_Word_t addr) {
 }
 
 L4_ThreadId_t vpager(void) {
-	static int knowTid = 0;
-	static L4_ThreadId_t tid;
-
-	if (!knowTid) {
-		L4_Msg_t msg;
-		syscall_prepare(&msg);
-		tid = L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
-		knowTid = 1;
-	}
-
-	return tid;
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	return L4_GlobalId(syscall(L4_rootserver, SOS_VPAGER, YES_REPLY, &msg), 1);
 }
 
 /* 

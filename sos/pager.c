@@ -1087,8 +1087,10 @@ static void virtualPagerHandler(void) {
 		p = process_lookup(L4_ThreadNo(tid));
 		L4_MsgStore(tag, &msg);
 
-		dprintf(2, "*** virtualPagerHandler: got %s from %d\n",
-				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
+		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
+			dprintf(0, "*** virtualPagerHandler: tid=%ld tag=%s\n",
+					L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
+		}
 
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:

@@ -13,7 +13,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
@@ -83,8 +83,10 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf;
 
-	dprintf(1, "*** syscall_handle: got tid=%ld tag=%s\n",
-			L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
+	if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
+		dprintf(1, "*** syscall_handle: got tid=%ld tag=%s\n",
+				L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
+	}
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
