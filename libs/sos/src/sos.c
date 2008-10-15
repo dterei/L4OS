@@ -55,7 +55,7 @@ void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-static char buf[BUFSIZ];
+static char buf[128];
 
 static void debugPrint(void) {
 	for (int i = 0; i < strlen(buf); i++) {
