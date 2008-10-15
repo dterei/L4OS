@@ -17,6 +17,7 @@
 #include <bootinfo/bootinfo.h>
 
 #include "constants.h"
+#include "pager.h"
 
 #define TAG_SYSLAB(t)	((short) L4_Label(t) >> 4)
 
@@ -159,7 +160,9 @@ static inline L4_Word_t sos_tid2task(L4_ThreadId_t tid)
 //
 static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
 {
-	return L4_GlobalId(L4_SpaceNo(sid), 1);
+	return L4_IsSpaceEqual(sid, L4_rootspace) ?
+		pager_get_tid() : L4_GlobalId(L4_SpaceNo(sid), 1);
+		//sos_my_tid() : L4_GlobalId(L4_SpaceNo(sid), 1);
 }
 
 //
@@ -169,10 +172,6 @@ static inline L4_ThreadId_t sos_sid2tid(L4_SpaceId_t sid)
 static inline L4_SpaceId_t sos_tid2sid(L4_ThreadId_t tid)
 {
 	return L4_SpaceId(L4_ThreadNo(tid));
-}
-
-static inline L4_ThreadId_t sos_cap2tid(L4_ThreadId_t tid) {
-	return L4_GlobalId(tid.raw & (MAX_THREADS - 1), 1);
 }
 
 //

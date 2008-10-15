@@ -31,7 +31,12 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 		return;
 	}
 
-	assert(!L4_IsThreadEqual(tid, L4_rootserver));
+	// ignore if a reponse to the roottask, probably a faked syscall
+	if (L4_IsThreadEqual(tid, L4_rootserver)) {
+		dprintf(0, "!!! syscall_reply_m: ignoring reply to roottask\n");
+		return;
+	}
+
 	L4_MsgTag_t tag;
 
 	L4_CacheFlushAll();
@@ -78,7 +83,8 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 {
 	char *buf;
 
-	dprintf(2, "*** syscall_handle: got %s\n", syscall_show(TAG_SYSLAB(tag)));
+	dprintf(1, "*** syscall_handle: got tid=%ld tag=%s\n",
+			L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:

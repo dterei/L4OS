@@ -35,5 +35,15 @@ of swapping in or swapping out.
 pretty easy optimisation to make (well, not easy) but given that we can do it
 we might as well.
 
-- Deal with the swapfile disappearing (i.e. being deleted)
+- Change the callback sequencer to use enums rather than magic state.  Then...
+
+- Don't close the default swapfile, and only open it once.
+
+- When swapping in, if ELF file then switch swapfile to default
+
+- Ok we should probably generalise the last few points and make swapfiles
+even more generic, with a "type" enum or something.  ELF versus STANDARD etc.
+
+- Check exec permissions when trying to run an ELF file.
+
 

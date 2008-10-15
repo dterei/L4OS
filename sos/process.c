@@ -188,7 +188,7 @@ static L4_Word_t getNextPid(void) {
 	// it's too much effort
 	assert(sosProcs[nextPid] == NULL);
 
-	return nextPid;
+	return nextPid++; // FIXME increment is hack
 }
 
 void process_prepare(Process *p) {
@@ -198,6 +198,7 @@ void process_prepare(Process *p) {
 
 	if (!p->isThread) {
 		addBuiltinRegions(p);
+		printf("opening stdout for %ld\n", L4_ThreadNo(process_get_tid(p)));
 		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
 	}
 }
@@ -289,6 +290,13 @@ int process_kill(Process *p) {
 		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
 					L4_nilthread, L4_nilthread, 0, NULL));
 		sosProcs[process_get_pid(p)] = NULL;
+
+		/*
+		if (process_get_pid(p) < nextPid) {
+			nextPid = process_get_pid(p);
+		}
+		*/
+
 		return 0;
 	} else {
 		// Invalid process

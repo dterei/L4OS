@@ -512,7 +512,7 @@ static int pagerAction(PagerRequest *pr) {
 	Region *r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
 
 	if (r == NULL) {
-		printf("Segmentation fault\n");
+		printf("Segmentation fault (%d)\n", process_get_pid(p));
 		processDelete(process_get_pid(p));
 		return 0;
 	}
@@ -1083,7 +1083,7 @@ static void virtualPagerHandler(void) {
 	for (;;) {
 		tag = L4_Wait(&tid);
 
-		tid = sos_cap2tid(tid);
+		tid = sos_sid2tid(L4_SenderSpace());
 		p = process_lookup(L4_ThreadNo(tid));
 		L4_MsgStore(tag, &msg);
 
@@ -1111,7 +1111,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_REPLY:
-				if (L4_IsThreadEqual(process_get_tid(p), L4_rootserver)) {
+				if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
 					vfsHandler(L4_MsgWord(&msg, 0));
 				} else {
 					dprintf(0, "!!! virtualPagerHandler: got reply from user\n");

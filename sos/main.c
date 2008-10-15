@@ -128,7 +128,7 @@ syscall_loop(void) {
 		send = 1; /* In most cases we will want to send a reply */
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				sosPagerHandler(sos_cap2tid(tid), &msg);
+				sosPagerHandler(sos_sid2tid(L4_SenderSpace()), &msg);
 				L4_Set_MsgTag(L4_Niltag);
 				break;
 
@@ -148,7 +148,7 @@ syscall_loop(void) {
 
 			default:
 				// Turn the tid cap in to an actual tid
-				send = syscall_handle(tag, sos_cap2tid(tid), &msg);
+				send = syscall_handle(tag, sos_sid2tid(L4_SenderSpace()), &msg);
 		}
 	}
 }
