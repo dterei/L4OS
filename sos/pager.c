@@ -766,7 +766,7 @@ static void startElfload(void) {
 	// Open the file and let the continuation take over
 	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
 	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
-	openNonblocking(FM_READ);
+	openNonblocking(NULL, FM_READ);
 }
 
 static void startRequest(void) {

@@ -150,8 +150,8 @@ new_vnode(void) {
 
 	// stats
 	vn->path[0] = '\0';
-	vn->Max_Readers = VFS_UNLIMITED_RW;
-	vn->Max_Writers = VFS_UNLIMITED_RW;
+	vn->Max_Readers = FM_UNLIMITED_RW;
+	vn->Max_Writers = FM_UNLIMITED_RW;
 	vn->readers = 0;
 	vn->writers = 0;
 	vn->extra = NULL;
@@ -196,7 +196,7 @@ increase_refs(VNode vnode, fmode_t mode) {
 	// open file for reading
 	if (mode & FM_READ) {
 		// check if reader slots full
-		if (vnode->readers >= vnode->Max_Readers && vnode->Max_Readers != VFS_UNLIMITED_RW) {
+		if (vnode->readers >= vnode->Max_Readers && vnode->Max_Readers != FM_UNLIMITED_RW) {
 			return SOS_VFS_READFULL;
 		} else {
 			vnode->readers++;
@@ -206,7 +206,7 @@ increase_refs(VNode vnode, fmode_t mode) {
 	// open file for writing
 	if (mode & FM_WRITE) {
 		// check if writers slots full
-		if (vnode->writers >= vnode->Max_Writers && vnode->Max_Writers != VFS_UNLIMITED_RW) {
+		if (vnode->writers >= vnode->Max_Writers && vnode->Max_Writers != FM_UNLIMITED_RW) {
 			if (mode & FM_READ) {
 				vnode->readers--;
 			}
@@ -246,8 +246,10 @@ decrease_refs(VNode vnode, fmode_t mode) {
  * a filesystem must be invoked to handle the call.
  */
 void
-vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
-	dprintf(1, "*** vfs_open: %d, %p (%s) %d\n", L4_ThreadNo(tid), path, path, mode);
+vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode,
+		unsigned int readers, unsigned int writers) {
+	dprintf(1, "*** vfs_open: %d, %p (%s) %d %d %d\n", L4_ThreadNo(tid), path, path, mode, readers,
+			writers);
 	
 	VNode vnode = NULL;
 
@@ -284,6 +286,17 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 			vfs_open_done(tid, vnode, mode, SOS_VFS_NOMEM);
 			return;
 		}
+
+		// setup locking and make sure valid paramaters
+		vnode->Max_Readers = readers;
+		vnode->Max_Writers = writers;
+		if (increase_refs(vnode, mode) != SOS_VFS_OK) {
+			free_vnode(vnode);
+			syscall_reply(tid, SOS_VFS_ERROR);
+		}
+		vnode->readers = 0;
+		vnode->writers = 0;
+
 		dprintf(2, "*** vfs_open: try to open file with nfs: %s\n", path);
 		nfsfs_open(tid, vnode, path, mode, vfs_open_done);
 		add_vnode(vnode);
@@ -291,7 +304,12 @@ vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode) {
 
 	// Open file, so handle in just vfs layer
 	else {
-		vfs_open_done(tid, vnode, mode, SOS_VFS_OK);
+		// can only lock non - open files!
+		if (readers == FM_UNLIMITED_RW && writers == FM_UNLIMITED_RW) {
+			vfs_open_done(tid, vnode, mode, SOS_VFS_OK);
+		} else {
+			syscall_reply(tid, SOS_VFS_OPEN);
+		}
 	}
 }
 

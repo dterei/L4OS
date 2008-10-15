@@ -18,6 +18,7 @@
 #include "pager.h"
 #include "swapfile.h"
 #include "vfs.h"
+#include "syscall.h"
 
 #define verbose 1
 
@@ -57,17 +58,16 @@ Swapfile *swapfile_init(char *path) {
 	return sf;
 }
 
+/* Max readers and writers for swap file */
+#define SWAP_READERS 1
+#define SWAP_WRITERS 1
+
 void swapfile_open(Swapfile *sf, int rights) {
 	dprintf(1, "*** swapfile_open sf=%p rights=%d\n", sf, rights);
 	assert(sf->data.fd == VFS_NIL_FILE);
-	L4_Msg_t msg;
 
-	strcpy(pager_buffer(pager_get_tid()), sf->data.path);
-
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, rights | FM_NOTRUNC);
-
-	syscall(L4_rootserver, SOS_OPEN, NO_REPLY, &msg);
+	strncpy(pager_buffer(pager_get_tid()), sf->data.path, MAX_IO_BUF);
+	open_lockNonblocking(NULL, rights | FM_NOTRUNC, SWAP_READERS, SWAP_WRITERS);
 }
 
 int swapfile_is_open(Swapfile *sf) {
@@ -77,12 +77,8 @@ int swapfile_is_open(Swapfile *sf) {
 void swapfile_close(Swapfile *sf) {
 	dprintf(1, "*** swapfile_close sf=%p\n", sf);
 	assert(sf->data.fd != VFS_NIL_FILE);
-	L4_Msg_t msg;
 
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, sf->data.fd);
-
-	syscall(L4_rootserver, SOS_CLOSE, NO_REPLY, &msg);
+	closeNonblocking(sf->data.fd);
 	sf->data.fd = VFS_NIL_FILE;
 }
 

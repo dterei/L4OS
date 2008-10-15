@@ -13,20 +13,20 @@
 /* VFS Return Codes */
 typedef enum {
 	SOS_VFS_OK = 0,
-	SOS_VFS_EOF = 0,
-	SOS_VFS_ERROR = -1,
-	SOS_VFS_PERM = -2,
-	SOS_VFS_NOFILE = -3,
-	SOS_VFS_NOVNODE = -4,
-	SOS_VFS_NOMEM = -5,
-	SOS_VFS_NOMORE = -6,
-	SOS_VFS_PATHINV = -7,
-	SOS_VFS_CORVNODE = -8,
-	SOS_VFS_NOTIMP = -9,
-	SOS_VFS_WRITEFULL = -10,
-	SOS_VFS_READFULL = -11,
-	SOS_VFS_OPEN = -12,
-	SOS_VFS_DIR = -13,
+	SOS_VFS_EOF = -999, // make sure not to add more then 999 return codes :)
+	SOS_VFS_ERROR,
+	SOS_VFS_PERM,
+	SOS_VFS_NOFILE,
+	SOS_VFS_NOVNODE,
+	SOS_VFS_NOMEM,
+	SOS_VFS_NOMORE,
+	SOS_VFS_PATHINV,
+	SOS_VFS_CORVNODE,
+	SOS_VFS_NOTIMP,
+	SOS_VFS_WRITEFULL,
+	SOS_VFS_READFULL,
+	SOS_VFS_OPEN,
+	SOS_VFS_DIR,
 } vfs_return_t;
 
 /* System calls for SOS */
@@ -65,15 +65,19 @@ typedef enum {
 } syscall_t;
 
 /* file modes */
-#define FM_WRITE   1
-#define FM_READ    2
-#define FM_EXEC    4
-#define FM_NOTRUNC 8
+typedef enum {
+	FM_WRITE = 1,
+	FM_READ = 2,
+	FM_EXEC = 4,
+	FM_NOTRUNC = 8,
+} sos_filemodes;
 typedef uint8_t fmode_t;
 
 #define O_RDONLY FM_READ
 #define O_WRONLY FM_WRITE
 #define O_RDWR   (FM_READ|FM_WRITE)
+
+#define FM_UNLIMITED_RW ((unsigned int) (-1))
 
 /* stat file types */
 typedef enum {
@@ -140,20 +144,17 @@ int moremem(uintptr_t *base, unsigned int nb);
 
 /* I/O system calls */
 
-/*
- * Copy in a section of memory to the kernel's buffer in perparation for
+/* Copy in a section of memory to the kernel's buffer in perparation for
  * any system call that requres it.
  */
 void copyin(void *data, size_t size, int append);
 
-/*
- * Copy out a section of memory to the kernel's buffer in perparation for
+/* Copy out a section of memory to the kernel's buffer in perparation for
  * any system call that requres it.
  */
 void copyout(void *data, size_t size, int append);
 
-/*
- * Open file and return file descriptor, -1 if unsuccessful 
+/* Open file and return file descriptor, -1 if unsuccessful 
  * (too many open files, console already open for reading).
  * A new file should be created if 'path' does not already exist.
  * A failed attempt to open the console for reading (because it is already
@@ -166,11 +167,27 @@ fildes_t open(const char *path, fmode_t mode);
 /* A nonblocking version of open which assumes a copyin call has already
  * been made.  Use with caution.
  */
-void openNonblocking(fmode_t mode);
+void openNonblocking(const char *path, fmode_t mode);
+
+/* A version of open which allows you to lock the file, specifying the max number of
+ * times the file can be opened for reading/writing. Can only lock files which haven't
+ * been opened yet. So the fiilile should only be opened using open_lock once and
+ * subsequent opens should use plain open.
+ */
+fildes_t open_lock(const char *path, fmode_t mode, unsigned int readers,
+		unsigned int writers);
+
+/* A nonblocking version of open_lock
+ */
+void open_lockNonblocking(const char *path, fmode_t mode, unsigned int readers,
+		unsigned int writers);
 
 /* Closes an open file. Returns 0 if successful, -1 if not (invalid "file").
  */
 int close(fildes_t file);
+
+/* Nonblocking version of close */
+int closeNonblocking(fildes_t file);
 
 /* Read from an open file, into "buf", max "nbyte" bytes.
  * Returns the number of bytes read.
@@ -195,10 +212,12 @@ int write(fildes_t file, const char *buf, size_t nbyte);
  */
 void writeNonblocking(fildes_t file, size_t nbyte);
 
-/* Flush a file or stream out to disk/network */
+/* Flush a file or stream out to disk/network
+ */
 int flush(fildes_t file);
 
-/* Nonblocking version of flush */
+/* Nonblocking version of flush
+ */
 void flushNonblocking(fildes_t file);
 
 /* Lseek sets the file position indicator to the specified position "pos".

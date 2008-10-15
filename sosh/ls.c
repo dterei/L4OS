@@ -81,10 +81,10 @@ int ls(int argc, char **argv) {
 	for (i = 0;; i++) {
 		r = getdirent(i, buf, BUF_SIZ);
 
-		if (r < 0) {
-			printf("dirent(%d) failed: %d\n", i, r);
+		if (r == SOS_VFS_EOF) {
 			break;
-		} else if (!r) {
+		} else if (r < 0) {
+			printf("dirent(%d) failed: %d\n", i, r);
 			break;
 		}
 
