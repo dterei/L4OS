@@ -93,7 +93,10 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_OPEN:
-			vfs_open(tid, pager_buffer(tid), (fmode_t) L4_MsgWord(msg, 0));
+			vfs_open(tid, pager_buffer(tid),
+					(fmode_t) L4_MsgWord(msg, 0),
+					(unsigned int) L4_MsgWord(msg, 1),
+					(unsigned int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_CLOSE:

@@ -145,21 +145,41 @@ void copyout(void *data, size_t size, int append) {
 }
 
 fildes_t open(const char *path, fmode_t mode) {
-	copyin((void*) path, strlen(path) + 1, 0);
+	return open_lock(path, mode, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
+}
+
+void openNonblocking(const char *path, fmode_t mode) {
+	open_lockNonblocking(path, mode, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
+}
+
+fildes_t open_lock(const char *path, fmode_t mode, unsigned int readers,
+		unsigned int writers) {
+	if (path != NULL) {
+		copyin((void*) path, strlen(path) + 1, 0);
+	}
 
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
+	L4_MsgAppendWord(&msg, (L4_Word_t) readers);
+	L4_MsgAppendWord(&msg, (L4_Word_t) writers);
 
 	return syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
 }
 
-void openNonblocking(fmode_t mode) {
+void open_lockNonblocking(const char *path, fmode_t mode, unsigned int readers,
+		unsigned int writers) {
+	if (path != NULL) {
+		copyin((void*) path, strlen(path) + 1, 0);
+	}
+
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
 	L4_MsgAppendWord(&msg, (L4_Word_t) mode);
+	L4_MsgAppendWord(&msg, (L4_Word_t) readers);
+	L4_MsgAppendWord(&msg, (L4_Word_t) writers);
 
 	syscall(L4_rootserver, SOS_OPEN, NO_REPLY, &msg);
 }

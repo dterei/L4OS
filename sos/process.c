@@ -198,8 +198,7 @@ void process_prepare(Process *p) {
 
 	if (!p->isThread) {
 		addBuiltinRegions(p);
-		printf("opening stdout for %ld\n", L4_ThreadNo(process_get_tid(p)));
-		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE);
+		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
 	}
 }
 

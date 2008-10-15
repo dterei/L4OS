@@ -41,7 +41,7 @@ typedef struct {
 } Console_File;
 
 // The file names of our consoles
-Console_File Console_Files[] = { {NULL, "console", 1, VFS_UNLIMITED_RW } };
+Console_File Console_Files[] = { {NULL, "console", 1, FM_UNLIMITED_RW } };
 
 // callback for read
 static void serial_read_callback(struct serial *serial, char c);
@@ -189,8 +189,8 @@ console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			i++;
 		}
 
-		// console buffer full or user buffer empty
-		if (cf->buf_used >= CONSOLE_BUF_SIZ) {
+		// console buffer full or user buffer empty or ends in '\n'
+		if (cf->buf_used >= CONSOLE_BUF_SIZ || buf[nbyte - 1] == '\n') {
 			dprintf(2, "flushing console buffer (%d)\n", cf->buf_used);
 			status = _flush(cf);
 		}

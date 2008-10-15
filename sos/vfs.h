@@ -3,7 +3,6 @@
 
 #include <sos/sos.h>
 
-#define VFS_UNLIMITED_RW ((unsigned int) (-1))
 #define VFS_NIL_FILE (-1)
 
 /* Simple VFS-style vnode */
@@ -71,7 +70,8 @@ void vfiles_init(VFile *files);
 /* Open a file, in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call.
  */
-void vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode);
+void vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode,
+		unsigned int readers, unsigned int writers);
 
 /* Close a file in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call, when refcount is zero, the file handler

@@ -399,8 +399,6 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	memcpy( (void *) self->path, (void *) path, MAX_FILE_NAME);
 	self->readers = 0;
 	self->writers = 0;
-	self->Max_Readers = DEFAULT_MAX_READERS;
-	self->Max_Writers = DEFAULT_MAX_WRITERS;
 	self->vstat.st_type = ST_FILE;
 	self->next = NULL;
 	self->previous = NULL;
