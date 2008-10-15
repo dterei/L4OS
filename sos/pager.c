@@ -62,12 +62,18 @@ struct PagerRequest_t {
 static L4_Word_t pinnedFrame;
 
 // ELF loading
+typedef enum {
+	ELFLOAD_OPEN,
+	ELFLOAD_READ_HEADER
+} elfload_stage_t;
+
 typedef struct ElfloadRequest_t ElfloadRequest;
 struct ElfloadRequest_t {
+	elfload_stage_t stage;
 	char *path;  // path to executable
 	fildes_t fd; // file descriptor (when opened)
-	struct Elf32_Header elfHeader;
-	struct Elf32_Phdr elfPhdr;
+	struct Elf32_Header header;
+	struct Elf32_Phdr phdr;
 	pid_t caller; // pid of the process that made the request
 	Process *p; // process being gradually loaded
 };
@@ -404,6 +410,18 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr,
 	return newPr;
 }
 
+static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
+	ElfloadRequest *er = (ElfloadRequest*) malloc(sizeof(ElfloadRequest));
+
+	er->stage = 0;
+	er->path = path;
+	er->fd = VFS_NIL_FILE;
+	er->caller = caller;
+	er->p = NULL;
+
+	return er;
+}
+
 static void pagerContinue(PagerRequest *pr) {
 	dprintf(2, "*** pagerContinue: replying to %d\n", pr->pid);
 
@@ -688,49 +706,60 @@ static void startPagerRequest(void) {
 	}
 }
 
-static void continueElfload(int vfsRval) {
-	//elfFile = openPhys(path, FM_READ);
+static void finishElfload(int rval) {
+	assert(requestsPeekType() == REQUEST_ELFLOAD);
+	ElfloadRequest *er = (ElfloadRequest*) requestsUnshift();
 
-	/*
-	if (elfFile < 0) {
-		// Couldn't open the file
-		dprintf(1, "!!! processCreate: couldn't open %s\n", path);
-		syscall_reply(tid, (-1));
-		return;
-	} else {
-		dprintf(2, "*** processCreate: opened with fd=%d\n", elfFile);
-	}
-
-	// Read the header data
-	rval = readPhys(elfFile, (char*) &elfHeader, sizeof(struct Elf32_Header));
-
-	if (rval != sizeof(struct Elf32_Header)) {
-		// Something bad happened
-		dprintf(1, "!!! processCreate: couldn't reader ELF header\n");
-		syscall_reply(tid, (-1));
-		return;
-	} else if (elf_checkFile(&elfHeader) != 0) {
-		// It wasn't an ELF file
-		dprintf(1, "!!! processCreate: not an ELF file\n");
-		syscall_reply(tid, (-1));
-		return;
-	}
-
-	// Read in all the program sections
-	for (int i = 0; i < elf_getNumProgramHeaders(&elfHeader); i++) {
-		dprintf(2, "Program section %d\n", i);
-	}
-
-	(void) p;
-	(void) elfPhdr;
-
-	printf("processCreate: not fully implemented\n");
-	syscall_reply(tid, (-1));
-	*/
-	;
+	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->caller));
+	free(er);
+	syscall_reply(replyTo, rval);
 }
 
-static void startElfloadRequest(void) {
+static void continueElfload(int vfsRval) {
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+
+	switch (er->stage) {
+		case ELFLOAD_OPEN:
+			dprintf(0, "ELFLOAD_OPEN\n");
+			if (vfsRval < 0) {
+				dprintf(0, "*** continueElfload: failed to open\n");
+				finishElfload(-1);
+			} else {
+				er->fd = vfsRval;
+				readNonblocking(er->fd, sizeof(struct Elf32_Header));
+			}
+
+			er->stage++;
+			break;
+
+		//case ELFLOAD_CHECK_EXEC:
+		//	break;
+
+		case ELFLOAD_READ_HEADER:
+			dprintf(0, "ELFLOAD_READ_HEADER\n");
+			assert(vfsRval == sizeof(struct Elf32_Header));
+			memcpy(&er->header, pager_buffer(sos_my_tid()), sizeof(struct Elf32_Header));
+
+			if (elf_checkFile(&er->header) != 0) {
+				// It wasn't an ELF file
+				dprintf(0, "*** continueElfload: not an ELF file\n");
+				finishElfload(-1);
+			} else {
+				// Read in all the program sections
+				for (int i = 0; i < elf_getNumProgramHeaders(&er->header); i++) {
+					dprintf(0, "Program section %d\n", i);
+				}
+			}
+
+			er->stage++;
+			break;
+
+		default:
+			assert(!"continueElfload");
+	}
+}
+
+static void startElfload(void) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
 
 	// Open the file and let the continuation take over
@@ -750,7 +779,7 @@ static void startRequest(void) {
 			break;
 
 		case REQUEST_ELFLOAD:
-			startElfloadRequest();
+			startElfload();
 			break;
 
 		default:
@@ -1083,7 +1112,8 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				printf("trying to create process!\n");
+				queueRequest(REQUEST_ELFLOAD,
+						allocElfloadRequest(pager_buffer(tid), process_get_pid(p)));
 				break;
 
 			case SOS_DEBUG_FLUSH:

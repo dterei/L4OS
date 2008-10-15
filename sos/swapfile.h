@@ -7,7 +7,8 @@
 
 typedef struct Swapfile_t Swapfile;
 
-// Create a new swapfile bookkeeping struct
+// Create a new swapfile bookkeeping struct with given rights -
+// useful for when dealing with swapfile ELF structs
 Swapfile *swapfile_init(char *path);
 
 // Open a swapfile (non blocking)

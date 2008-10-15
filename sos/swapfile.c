@@ -19,7 +19,7 @@
 #include "swapfile.h"
 #include "vfs.h"
 
-#define verbose 2
+#define verbose 1
 
 typedef struct SwapfileData_t SwapfileData;
 struct SwapfileData_t {
