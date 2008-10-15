@@ -32,3 +32,8 @@ is a thread to do the flushing.
 
 - have the init_thread finish instead of just constantly sleeping.
 
+- bug with vfs that opening a file in write truncate mode doesn't actually
+truncate the file if its already open. Need to add a truncate function to the
+vfs so we can just call that. (At moment truncate at file creation by just creating
+a new file).
+

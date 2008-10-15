@@ -424,7 +424,7 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	rq->open_done = open_done;
 
 	// If open mode is write, then create new file since we want to start again.
-	if (mode & FM_WRITE) {
+	if (mode & FM_WRITE && !(mode & FM_NOTRUNC)) {
 		sattr_t sat = DEFAULT_SATTR;
 		nfs_create(&nfs_mnt, rq->p.vnode->path, &sat, lookup_cb, rq->p.token);
 	} else {

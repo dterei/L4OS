@@ -64,9 +64,10 @@ typedef enum {
 } syscall_t;
 
 /* file modes */
-#define FM_WRITE 1
-#define FM_READ  2
-#define FM_EXEC  4
+#define FM_WRITE   1
+#define FM_READ    2
+#define FM_EXEC    4
+#define FM_NOTRUNC 8
 typedef uint8_t fmode_t;
 
 #define O_RDONLY FM_READ

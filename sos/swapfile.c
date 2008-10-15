@@ -65,7 +65,7 @@ void swapfile_open(Swapfile *sf, int rights) {
 	strcpy(pager_buffer(pager_get_tid()), sf->data.path);
 
 	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, rights);
+	L4_MsgAppendWord(&msg, rights | FM_NOTRUNC);
 
 	syscall(L4_rootserver, SOS_OPEN, NO_REPLY, &msg);
 }
