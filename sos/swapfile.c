@@ -23,6 +23,7 @@
 
 typedef struct SwapfileData_t SwapfileData;
 struct SwapfileData_t {
+	char path[MAX_FILE_NAME];
 	fildes_t fd;
 	L4_Word_t head;
 	int usage;
@@ -35,31 +36,11 @@ struct Swapfile_t {
 	L4_Word_t slots[SWAPSIZE];
 };
 
-static Swapfile *defaultSwapfile;
-
-void swapfile_init_default(void) {
-	// Open the file
-	L4_Msg_t msg;
-	fildes_t fd;
-
-	strcpy(pager_buffer(pager_get_tid()), SWAPFILE_FN);
-
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, (L4_Word_t) FM_READ | FM_WRITE);
-	fd = syscall(L4_rootserver, SOS_OPEN, YES_REPLY, &msg);
-	dprintf(1, "*** swapfile_init_default: opened at %d\n", fd);
-
-	// Create the bookkeeping
-	defaultSwapfile = swapfile_init(fd);
-}
-
-Swapfile *swapfile_default(void) {
-	return defaultSwapfile;
-}
-
-Swapfile *swapfile_init(fildes_t fd) {
+Swapfile *swapfile_init(char *path) {
 	assert(sizeof(Swapfile) == PAGESIZE);
-	Swapfile *sf = (Swapfile*) frame_alloc();
+	Swapfile *sf;
+
+	sf = (Swapfile*) frame_alloc();
 
 	for (int i = 0; i < SWAPSIZE - 1; i++) {
 		sf->slots[i] = i + 1;
@@ -67,11 +48,39 @@ Swapfile *swapfile_init(fildes_t fd) {
 
 	sf->slots[SWAPSIZE - 1] = ADDRESS_NONE;
 
-	sf->data.fd = fd;
+	sf->data.fd = VFS_NIL_FILE;
 	sf->data.head = 0;
 	sf->data.usage = 0;
+	strncpy(sf->data.path, path, MAX_FILE_NAME);
 
 	return sf;
+}
+
+void swapfile_open(Swapfile *sf, int rights) {
+	assert(sf->data.fd == VFS_NIL_FILE);
+	L4_Msg_t msg;
+
+	strcpy(pager_buffer(pager_get_tid()), sf->data.path);
+
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, rights);
+
+	syscall(L4_rootserver, SOS_OPEN, NO_REPLY, &msg);
+}
+
+int swapfile_is_open(Swapfile *sf) {
+	return (sf->data.fd != VFS_NIL_FILE);
+}
+
+void swapfile_close(Swapfile *sf) {
+	assert(sf->data.fd != VFS_NIL_FILE);
+	L4_Msg_t msg;
+
+	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, sf->data.fd);
+
+	syscall(L4_rootserver, SOS_CLOSE, NO_REPLY, &msg);
+	sf->data.fd = VFS_NIL_FILE;
 }
 
 int swapfile_get_usage(Swapfile *sf) {
@@ -79,7 +88,14 @@ int swapfile_get_usage(Swapfile *sf) {
 }
 
 fildes_t swapfile_get_fd(Swapfile *sf) {
+	assert(swapfile_is_open(sf));
 	return sf->data.fd;
+}
+
+void swapfile_set_fd(Swapfile *sf, fildes_t fd) {
+	assert(sf->data.fd == VFS_NIL_FILE);
+	assert(fd != VFS_NIL_FILE);
+	sf->data.fd = fd;
 }
 
 L4_Word_t swapslot_alloc(Swapfile *sf) {

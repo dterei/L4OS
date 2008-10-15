@@ -18,16 +18,22 @@
 
 #define verbose 1
 
-// For (demand and otherwise) paging
-#define FRAME_ALLOC_LIMIT 4 // limited by the swapfile size
-
+// Masks for page table entries
 #define ONDISK_MASK  0x00000001
 #define REFBIT_MASK  0x00000002
+#define ONELF_MASK   0x00000004
 #define ADDRESS_MASK 0xfffff000
 
+// Limiting the number of user frames
+#define FRAME_ALLOC_LIMIT 4
 static int allocLimit;
+
+// Tracking allocated frames, including default swap file
 static List *alloced; // [(pid, word)]
 static List *swapped; // [(pid, word)]
+
+#define PR_OFFSET_UNDEFINED (-1)
+static Swapfile *defaultSwapfile;
 
 // Asynchronous pager requests
 static List *requests; // [(rtype_t, rdata)]
@@ -47,6 +53,7 @@ typedef struct PagerRequest_t PagerRequest;
 struct PagerRequest_t {
 	pid_t pid;
 	L4_Word_t addr;
+	Swapfile *sf;
 	int offset;
 	void (*callback)(PagerRequest *pr);
 };
@@ -331,6 +338,9 @@ void pager_init(void) {
 	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) allocFrames(numFrames);
 
+	// The default swapfile (.swap)
+	defaultSwapfile = swapfile_init(SWAPFILE_FN);
+
 	// Start the real pager process
 	Process *pager = process_init(1);
 
@@ -380,13 +390,14 @@ static int findRegion(void *contents, void *data) {
 			(addr < region_get_base(r) + region_get_size(r)));
 }
 
-static PagerRequest *allocPagerRequest(
-		pid_t pid, L4_Word_t addr, void (*callback)(PagerRequest *pr)) {
+static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr,
+		Swapfile *sf, void (*callback)(PagerRequest *pr)) {
 	PagerRequest *newPr = (PagerRequest*) malloc(sizeof(PagerRequest));
 
 	newPr->pid = pid;
 	newPr->addr = addr;
-	newPr->offset = 0;
+	newPr->offset = PR_OFFSET_UNDEFINED;
+	newPr->sf = sf;
 	newPr->callback = callback;
 
 	return newPr;
@@ -401,7 +412,7 @@ static void pagerContinue(PagerRequest *pr) {
 }
 
 static L4_Word_t pagerSwapslotAlloc(Process *p) {
-	L4_Word_t diskAddr = swapslot_alloc(swapfile_default());
+	L4_Word_t diskAddr = swapslot_alloc(defaultSwapfile);
 
 	if (diskAddr == ADDRESS_NONE) {
 		dprintf(0, "!!! pagerSwapslotAlloc: none available\n");
@@ -418,7 +429,7 @@ static int pagerSwapslotFree(void *contents, void *data) {
 
 	if ((curr->fst == args->fst) &&
 			((curr->snd == args->snd) || (curr->snd == ADDRESS_ALL))) {
-		swapslot_free(swapfile_default(), curr->snd);
+		swapslot_free(defaultSwapfile, curr->snd);
 		return 1;
 	} else {
 		return 0;
@@ -580,6 +591,8 @@ static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
 	Process *p;
+	Region *r;
+	Swapfile *sf;
 	Pair *swapout; // (pid, word)
 	L4_Word_t *entry, frame, addr;
 
@@ -590,6 +603,12 @@ static void startSwapout(void) {
 
 	entry = pagetableLookup(process_get_pagetable(p), swapout->snd);
 	frame = *entry & ADDRESS_MASK;
+
+	// Need the region for finding the swap file
+	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
+	assert(r != NULL);
+	sf = region_get_swapfile(r);
+	if (sf == NULL) sf = defaultSwapfile;
 
 	// Make sure the frame reflects what is stored in the frame
 	assert((swapout->snd & ~PAGEALIGN) == 0);
@@ -605,7 +624,7 @@ static void startSwapout(void) {
 
 	// Set up the swapout
 	list_shift(requests, pair_alloc(REQUEST_SWAPOUT,
-			(L4_Word_t) allocPagerRequest(swapout->fst, frame, NULL)));
+			(L4_Word_t) allocPagerRequest(swapout->fst, frame, sf, NULL)));
 
 	// Set up where on disk to put the page
 	L4_Word_t diskAddr = pagerSwapslotAlloc(p);
@@ -618,7 +637,10 @@ static void startSwapout(void) {
 
 	// Kick-start with an lseek, the pager message handler loop
 	// will start writing from then on
-	lseekNonblocking(swapfile_get_fd(swapfile_default()), diskAddr, SEEK_SET);
+	//lseekNonblocking(swapfile_get_fd(swapfile_default()), diskAddr, SEEK_SET);
+
+	// We open the swapfile on each operation
+	swapfile_open(sf, FM_WRITE);
 	pair_free(swapout);
 }
 
@@ -629,18 +651,10 @@ static void startSwapin(void) {
 	// since really it's just a temporary frame and nothing is really pinned)
 	pinnedFrame = frame_alloc();
 
-	// kick-start the chain of NFS requests and callbacks by lseeking
-	// to the position in the swap file the page is (and this is found
-	// by ADDR_MASK since it doubles as physical and ondisk memory location)
+	// kick-start the chain of NFS requests and callbacks by opening swapfile
 	assert(requestsPeekType() == REQUEST_SWAPIN);
 	PagerRequest *nextPr = requestsPeek();
-
-	L4_Word_t *entry = pagetableLookup(
-			process_get_pagetable(process_lookup(nextPr->pid)),
-			nextPr->addr & PAGEALIGN);
-
-	lseekNonblocking(swapfile_get_fd(swapfile_default()),
-			*entry & ADDRESS_MASK, SEEK_SET);
+	swapfile_open(nextPr->sf, FM_READ);
 }
 
 static void startPagerRequest(void) {
@@ -673,18 +687,7 @@ static void startPagerRequest(void) {
 	}
 }
 
-static void continueElfloadRequest(void) {
-	;
-}
-
-static void startElfloadRequest(void) {
-	assert(requestsPeekType() == REQUEST_ELFLOAD);
-
-	// Open the file and let the continuation take over
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
-	openNonblocking(FM_READ);
-
+static void continueElfload(int vfsRval) {
 	//elfFile = openPhys(path, FM_READ);
 
 	/*
@@ -723,6 +726,16 @@ static void startElfloadRequest(void) {
 	printf("processCreate: not fully implemented\n");
 	syscall_reply(tid, (-1));
 	*/
+	;
+}
+
+static void startElfloadRequest(void) {
+	assert(requestsPeekType() == REQUEST_ELFLOAD);
+
+	// Open the file and let the continuation take over
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+	openNonblocking(FM_READ);
 }
 
 static void startRequest(void) {
@@ -881,65 +894,85 @@ static void finishedSwapin(void) {
 	}
 }
 
+static void continueSwapin(int vfsRval) {
+	PagerRequest *pr = (PagerRequest*) requestsPeek();
+	assert(pr->offset <= PAGESIZE);
+
+	if (!swapfile_is_open(pr->sf)) {
+		// Swapfile has been closed, swapin finished
+		finishedSwapin();
+	} else if (pr->offset == PR_OFFSET_UNDEFINED) {
+		// Swapin just starting, open the file
+		L4_Word_t *entry = pagetableLookup(
+				process_get_pagetable(process_lookup(pr->pid)),
+				pr->addr & ADDRESS_MASK);
+		lseekNonblocking(swapfile_get_fd(pr->sf),
+					*entry & ADDRESS_MASK, SEEK_SET);
+		pr->offset = 0;
+	} else {
+		// In the middle of swapping in
+		if (pr->offset > 0) {
+			// there is data to copy across to the pinned frame
+			assert(vfsRval > 0);
+			assert((vfsRval % SWAP_BUFSIZ) == 0);
+			assert(((pr->offset - vfsRval) % SWAP_BUFSIZ) == 0);
+
+			memcpy(((char*) pinnedFrame) + pr->offset - vfsRval,
+					pager_buffer(virtualPager), SWAP_BUFSIZ);
+		}
+
+		if (pr->offset == PAGESIZE) {
+			// we finished the swapin so we can now close the sf
+			swapfile_close(pr->sf);
+		} else {
+			// still swapping in
+			readNonblocking(swapfile_get_fd(pr->sf), SWAP_BUFSIZ);
+			pr->offset += SWAP_BUFSIZ;
+		}
+	}
+}
+
+static void continueSwapout(int vfsRval) {
+	PagerRequest *pr = (PagerRequest*) requestsPeek();
+	assert(pr->offset <= PAGESIZE);
+
+	if (!swapfile_is_open(pr->sf)) {
+		// Finished the swapout
+		finishedSwapout();
+	} else if (pr->offset == PR_OFFSET_UNDEFINED) {
+		lseekNonblocking(swapfile_get_fd(pr->sf),
+				pr->addr & ADDRESS_MASK, SEEK_SET);
+		pr->offset = 0;
+	} else if (pr->offset == PAGESIZE) {
+		// Swapout finihsed, can close file
+		swapfile_close(pr->sf);
+	} else {
+		// Still swapping out, continue the vfs write
+		memcpy(pager_buffer(virtualPager),
+				(void*) (pr->addr + pr->offset), SWAP_BUFSIZ);
+
+		writeNonblocking(swapfile_get_fd(pr->sf), SWAP_BUFSIZ);
+		pr->offset += SWAP_BUFSIZ;
+	}
+}
+
 static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
-	PagerRequest *pr;
 
 	switch (requestsPeekType()) {
 		case REQUEST_SWAPOUT:
 			dprintf(3, "*** demandPager: swapout continuation\n");
-
-			// This is part of a swapout continuation
-			pr = (PagerRequest*) requestsPeek();
-			assert(pr->offset <= PAGESIZE);
-
-			if (pr->offset == PAGESIZE) {
-				// We finished the swapout so use the now-free frame
-				// as either a swapin target or a free frame
-				finishedSwapout();
-			} else {
-				// Still swapping out, continue the vfs write
-				memcpy(pager_buffer(virtualPager),
-						(void*) (pr->addr + pr->offset), SWAP_BUFSIZ);
-
-				writeNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
-				pr->offset += SWAP_BUFSIZ;
-			}
-
+			continueSwapout(vfsRval);
 			break;
 
 		case REQUEST_SWAPIN:
 			dprintf(3, "*** demandPager: swapin continuation\n");
-
-			// This is part of a swapin continuation
-			pr = (PagerRequest*) requestsPeek();
-			assert(pr->offset <= PAGESIZE);
-
-			if (pr->offset > 0) {
-				// there is data to copy across to the pinned frame
-				assert(vfsRval > 0);
-				assert((vfsRval % SWAP_BUFSIZ) == 0);
-				assert(((pr->offset - vfsRval) % SWAP_BUFSIZ) == 0);
-
-				memcpy(((char*) pinnedFrame) + pr->offset - vfsRval,
-						pager_buffer(virtualPager), SWAP_BUFSIZ);
-			}
-
-			if (pr->offset == PAGESIZE) {
-				// we finished the swapin so we can now attempt to
-				// give the page to the process that needs it
-				finishedSwapin();
-			} else {
-				// still swapping in
-				readNonblocking(swapfile_get_fd(swapfile_default()), SWAP_BUFSIZ);
-				pr->offset += SWAP_BUFSIZ;
-			}
-
+			continueSwapin(vfsRval);
 			break;
 
 		case REQUEST_ELFLOAD:
 			dprintf(0, "*** vfsHandler: elfload continuation\n");
-			continueElfloadRequest();
+			continueElfload(vfsRval);
 			break;
 	}
 }
@@ -956,8 +989,6 @@ static void virtualPagerHandler(void) {
 
 	virtualPager = sos_my_tid();
 	dprintf(1, "*** virtualPagerHandler: tid=%ld\n", L4_ThreadNo(virtualPager));
-
-	swapfile_init_default();
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
@@ -978,7 +1009,7 @@ static void virtualPagerHandler(void) {
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
 				pager(allocPagerRequest(process_get_pid(p),
-							L4_MsgWord(&msg, 0), pagerContinue));
+							L4_MsgWord(&msg, 0), NULL, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
@@ -1018,7 +1049,7 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_SWAPUSE:
-				syscall_reply(tid, swapfile_get_usage(swapfile_default()));
+				syscall_reply(tid, swapfile_get_usage(defaultSwapfile));
 				break;
 
 			case SOS_PHYSUSE:
@@ -1141,6 +1172,7 @@ static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	pager(allocPagerRequest(
 				process_get_pid(process_lookup(L4_ThreadNo(tid))),
 				(L4_Word_t) src,
+				NULL,
 				copyInContinue));
 }
 
@@ -1205,6 +1237,7 @@ static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	pager(allocPagerRequest(
 				process_get_pid(process_lookup(L4_ThreadNo(tid))),
 				(L4_Word_t) dest,
+				NULL,
 				copyOutContinue));
 }
 

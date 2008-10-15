@@ -20,7 +20,7 @@ Region *region_alloc(region_type type, uintptr_t base,
 	new->size = size;
 	new->rights = rights;
 	new->mapDirectly = dirmap;
-	new->swapfile = swapfile_default();
+	new->swapfile = NULL;
 
 	return new;
 }
