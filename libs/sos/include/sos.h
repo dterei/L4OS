@@ -187,7 +187,7 @@ void open_lockNonblocking(const char *path, fmode_t mode, unsigned int readers,
 int close(fildes_t file);
 
 /* Nonblocking version of close */
-int closeNonblocking(fildes_t file);
+void closeNonblocking(fildes_t file);
 
 /* Read from an open file, into "buf", max "nbyte" bytes.
  * Returns the number of bytes read.

@@ -63,7 +63,7 @@ Swapfile *swapfile_init(char *path) {
 #define SWAP_WRITERS 1
 
 void swapfile_open(Swapfile *sf, int rights) {
-	dprintf(1, "*** swapfile_open sf=%p rights=%d\n", sf, rights);
+	dprintf(1, "*** swapfile_open path=%s rights=%d\n", sf->data.path, rights);
 	assert(sf->data.fd == VFS_NIL_FILE);
 
 	strncpy(pager_buffer(pager_get_tid()), sf->data.path, MAX_IO_BUF);
@@ -75,7 +75,7 @@ int swapfile_is_open(Swapfile *sf) {
 }
 
 void swapfile_close(Swapfile *sf) {
-	dprintf(1, "*** swapfile_close sf=%p\n", sf);
+	dprintf(1, "*** swapfile_close path=%s\n", sf->data.path);
 	assert(sf->data.fd != VFS_NIL_FILE);
 
 	closeNonblocking(sf->data.fd);
@@ -92,7 +92,7 @@ fildes_t swapfile_get_fd(Swapfile *sf) {
 }
 
 void swapfile_set_fd(Swapfile *sf, fildes_t fd) {
-	dprintf(1, "*** swapfile_init sf=%p fd=%d\n", sf, fd);
+	dprintf(1, "*** swapfile_get_fd path=%s fd=%d\n", sf->data.path, fd);
 	assert(sf->data.fd == VFS_NIL_FILE);
 	assert(fd != VFS_NIL_FILE);
 	sf->data.fd = fd;

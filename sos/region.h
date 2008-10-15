@@ -34,5 +34,6 @@ Swapfile *region_get_swapfile(Region *r);
 // Setters
 void region_set_rights(Region *r, int rights);
 void region_set_size(Region *r, unsigned int size);
+void region_set_swapfile(Region *r, Swapfile *sf);
 
 #endif // sos/region.h

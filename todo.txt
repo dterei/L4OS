@@ -35,3 +35,5 @@ of swapping in or swapping out.
 pretty easy optimisation to make (well, not easy) but given that we can do it
 we might as well.
 
+- Deal with the swapfile disappearing (i.e. being deleted)
+

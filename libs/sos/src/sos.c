@@ -193,13 +193,13 @@ int close(fildes_t file) {
 	return syscall(L4_rootserver, SOS_CLOSE, YES_REPLY, &msg);
 }
 
-int closeNonblocking(fildes_t file) {
+void closeNonblocking(fildes_t file) {
 	L4_Msg_t msg;
+
 	syscall_prepare(&msg);
+	L4_MsgAppendWord(&msg, file);
 
-	L4_MsgAppendWord(&msg, (L4_Word_t) file);
-
-	return syscall(L4_rootserver, SOS_CLOSE, NO_REPLY, &msg);
+	syscall(L4_rootserver, SOS_CLOSE, NO_REPLY, &msg);
 }
 
 int read(fildes_t file, char *buf, size_t nbyte) {
