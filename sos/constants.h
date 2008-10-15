@@ -9,7 +9,9 @@
 
 // UDP port serial library uses/sosh.
 #define SERIAL_PORT (26706)
-#define SERIAL_SEND_SIZE 1024
+
+// Console buffer size
+#define CONSOLE_BUF_SIZ 128
 
 /* Random problems seem to occur if all of buffer used, some is needed for
  * nfs header.

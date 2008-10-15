@@ -43,6 +43,8 @@ struct VNode_t {
 			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
+	void (*flush)(L4_ThreadId_t tid, VNode self, fildes_t file);
+
 	void (*getdirent)(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
 	void (*stat)(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf);
@@ -82,6 +84,9 @@ void vfs_read(L4_ThreadId_t tid, fildes_t file, char *buf, size_t nbyte);
 
 /* Write to a file */
 void vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte);
+
+/* Flush a stream */
+void vfs_flush(L4_ThreadId_t tid, fildes_t file);
 
 /* Seek to a position in a file */
 void vfs_lseek(L4_ThreadId_t tid, fildes_t file, fpos_t pos, int whence);

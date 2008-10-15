@@ -173,6 +173,9 @@ int close(fildes_t file) {
 }
 
 int read(fildes_t file, char *buf, size_t nbyte) {
+	// flush stdout
+	flush(stdout_fd);
+
 	int rval;
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
@@ -220,6 +223,16 @@ void writeNonblocking(fildes_t file, size_t nbyte) {
 	syscall(L4_rootserver, SOS_WRITE, NO_REPLY, &msg);
 }
 
+/* Flush a file or stream out to disk/network */
+int flush(fildes_t file) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+
+	return syscall(L4_rootserver, SOS_FLUSH, YES_REPLY, &msg);
+}
+
 /* Lseek sets the file position indicator to the specified position "pos".
  * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
  * to the start of the file, current position in the file or end of the file
@@ -230,7 +243,6 @@ void writeNonblocking(fildes_t file, size_t nbyte) {
  * Returns 0 on success and -1 on error.
  */
 int lseek(fildes_t file, fpos_t pos, int whence) {
-	int rval;
 	L4_Msg_t msg;
 	syscall_prepare(&msg);
 
@@ -238,9 +250,7 @@ int lseek(fildes_t file, fpos_t pos, int whence) {
 	L4_MsgAppendWord(&msg, (L4_Word_t) pos);
 	L4_MsgAppendWord(&msg, (L4_Word_t) whence);
 
-	rval = syscall(L4_rootserver, SOS_LSEEK, YES_REPLY, &msg);
-
-	return rval;
+	return syscall(L4_rootserver, SOS_LSEEK, YES_REPLY, &msg);
 }
 
 void lseekNonblocking(fildes_t file, fpos_t pos, int whence) {

@@ -476,6 +476,7 @@ static int processDelete(L4_Word_t pid) {
 	// Free all resources
 	args = PAIR(process_get_pid(p), ADDRESS_ALL);
 
+	process_close_files(p);
 	list_delete(alloced, framesFree, p);
 	list_delete(swapped, pagerSwapslotFree, &args);
 	pagetableFree(p);

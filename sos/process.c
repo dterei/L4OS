@@ -273,6 +273,7 @@ void process_close_files(Process *p) {
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
 			if (pfiles[fd].vnode != NULL) {
+				vfs_flush(process_get_tid(p), fd);
 				vfs_close(process_get_tid(p), fd);
 			}
 		}

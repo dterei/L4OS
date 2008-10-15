@@ -34,6 +34,10 @@ typedef struct {
 	// store info about a thread waiting on a read
 	// change to a list to support more then one reader
 	Console_ReadRequest reader;	
+
+	// use a buffer to 'fix' crappy provided network code that doesn't have queues
+	char buf[CONSOLE_BUF_SIZ];
+	int buf_used;
 } Console_File;
 
 // The file names of our consoles
@@ -68,6 +72,7 @@ console_init(VNode sflist) {
 		console->close = console_close;
 		console->read = console_read;
 		console->write = console_write;
+		console->flush = console_flush;
 		console->getdirent = console_getdirent;
 		console->stat = console_stat;
 		console->remove = console_remove;
@@ -75,6 +80,7 @@ console_init(VNode sflist) {
 		// setup the console struct
 		Console_Files[i].reader.tid = L4_nilthread;
 		Console_Files[i].vnode = console;
+		Console_Files[i].buf_used = 0;
 		console->extra = (void *) (&Console_Files[i]);
 
 		// add console to special files
@@ -147,16 +153,81 @@ console_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	cf->reader.read_done = read_done;
 }
 
+static
+int
+_flush(Console_File *cf) {
+	int status = network_sendstring(cf->buf, cf->buf_used);
+	cf->buf_used = 0;
+	return status;
+}
+
 /* Write to a console file */
 void
 console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status)) {
 	dprintf(1, "*** console_write: %d %p %d\n", file, buf, nbyte);
+	
+	// make sure console exists
+	if (self == NULL) {
+		write_done(tid, self, file, offset, buf, 0, SOS_VFS_NOVNODE);
+		return;
+	}
 
-	//int status = network_puts((char *) buf, nbyte);
-	int status = network_sendstring((char *) buf, nbyte);
+	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL) {
+		dprintf(0, "!!! VNode without Console_File (%p) passed into console_write\n", cf);
+		write_done(tid, self, file, offset, buf, 0, SOS_VFS_CORVNODE);
+		return;
+	}
+
+	int status = nbyte;
+	for (int i = 0; i < nbyte; ) {
+		while (cf->buf_used < CONSOLE_BUF_SIZ && i < nbyte) {
+			cf->buf[cf->buf_used] = buf[i];
+			cf->buf_used++;
+			i++;
+		}
+
+		// console buffer full or user buffer empty
+		if (cf->buf_used >= CONSOLE_BUF_SIZ) {
+			dprintf(2, "flushing console buffer (%d)\n", cf->buf_used);
+			status = _flush(cf);
+		}
+
+		if (status < 0) {
+			status = SOS_VFS_ERROR;
+		} else {
+			status = nbyte;
+		}
+	}
+
 	write_done(tid, self, file, offset, buf, 0, status);
+}
+
+/* Flush the given console stream to the network */
+void console_flush(L4_ThreadId_t tid, VNode self, fildes_t file) {
+	dprintf(1, "*** console_flush: %d, %p, %d\n", L4_ThreadNo(tid), self, file);
+
+	// make sure console exists
+	if (self == NULL) {
+		return;
+	}
+
+	Console_File *cf = (Console_File *) (self->extra);
+	if (cf == NULL) {
+		dprintf(0, "!!! VNode without Console_File (%p) passed into console_flush\n", cf);
+		return;
+	}
+
+	dprintf(2, "flushing console buffer (%d)\n", cf->buf_used);
+	int status = _flush(cf);
+
+	if (status > 0) {
+		syscall_reply(tid, SOS_VFS_OK);
+	} else {
+		syscall_reply(tid, SOS_VFS_EOF);
+	}
 }
 
 /* Get a directory listing */

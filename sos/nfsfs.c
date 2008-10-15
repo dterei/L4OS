@@ -415,6 +415,7 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	self->close = nfsfs_close;
 	self->read = nfsfs_read;
 	self->write = nfsfs_write;
+	self->flush = nfsfs_flush;
 	self->getdirent = nfsfs_getdirent;
 	self->stat = nfsfs_stat;
 	self->remove = nfsfs_remove;
@@ -546,6 +547,14 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	rq->write_done = write_done;
 
 	nfs_write(&(nf->fh), offset, nbyte, rq->buf, write_cb, rq->p.token);
+}
+
+/* Flush the given nfs file to disk. (UNSUPPORTED) (no buffering used) */
+void
+nfsfs_flush(L4_ThreadId_t tid, VNode self, fildes_t file) {
+	dprintf(1, "*** nfsfs_flush: %d, %p, %d\n", L4_ThreadNo(tid), self, file);
+	dprintf(0, "!!! nfsfs_flush: Not implemented for nfs fs\n");
+	syscall_reply(tid, SOS_VFS_NOTIMP);
 }
 
 /* NFS Callback for NFS_getdirent */

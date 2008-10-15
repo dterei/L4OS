@@ -36,6 +36,9 @@ void console_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offse
 			const char *buf, size_t nbyte, void (*write_done)(L4_ThreadId_t tid, VNode self,
 				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
 
+/* Flush the given console stream to the network */
+void console_flush(L4_ThreadId_t tid, VNode self, fildes_t file);
+
 /* List directory entries of a console file (UNSUPPORTED) */
 void console_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte);
 
