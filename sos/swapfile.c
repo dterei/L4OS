@@ -19,7 +19,7 @@
 #include "swapfile.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 2
 
 typedef struct SwapfileData_t SwapfileData;
 struct SwapfileData_t {
@@ -37,6 +37,7 @@ struct Swapfile_t {
 };
 
 Swapfile *swapfile_init(char *path) {
+	dprintf(1, "*** swapfile_init path=%s\n", path);
 	assert(sizeof(Swapfile) == PAGESIZE);
 	Swapfile *sf;
 
@@ -57,6 +58,7 @@ Swapfile *swapfile_init(char *path) {
 }
 
 void swapfile_open(Swapfile *sf, int rights) {
+	dprintf(1, "*** swapfile_open sf=%p rights=%d\n", sf, rights);
 	assert(sf->data.fd == VFS_NIL_FILE);
 	L4_Msg_t msg;
 
@@ -73,6 +75,7 @@ int swapfile_is_open(Swapfile *sf) {
 }
 
 void swapfile_close(Swapfile *sf) {
+	dprintf(1, "*** swapfile_close sf=%p\n", sf);
 	assert(sf->data.fd != VFS_NIL_FILE);
 	L4_Msg_t msg;
 
@@ -93,6 +96,7 @@ fildes_t swapfile_get_fd(Swapfile *sf) {
 }
 
 void swapfile_set_fd(Swapfile *sf, fildes_t fd) {
+	dprintf(1, "*** swapfile_init sf=%p fd=%d\n", sf, fd);
 	assert(sf->data.fd == VFS_NIL_FILE);
 	assert(fd != VFS_NIL_FILE);
 	sf->data.fd = fd;

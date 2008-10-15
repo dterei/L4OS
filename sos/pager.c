@@ -53,6 +53,7 @@ typedef struct PagerRequest_t PagerRequest;
 struct PagerRequest_t {
 	pid_t pid;
 	L4_Word_t addr;
+	L4_Word_t diskAddr;
 	Swapfile *sf;
 	int offset;
 	void (*callback)(PagerRequest *pr);
@@ -504,7 +505,7 @@ static int pagerAction(PagerRequest *pr) {
 
 	if (*entry & ONDISK_MASK) {
 		// On disk, queue a swapin request
-		dprintf(2, "*** pagerAction: page is on disk\n");
+		dprintf(2, "*** pagerAction: page is on disk (%p)\n", (void*) *entry);
 		queueRequest(REQUEST_SWAPIN, pr);
 		return 0;
 	} else if ((frame & ADDRESS_MASK) != 0) {
@@ -591,6 +592,7 @@ static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
 	Process *p;
+	PagerRequest *swapoutPr;
 	Region *r;
 	Swapfile *sf;
 	Pair *swapout; // (pid, word)
@@ -608,7 +610,7 @@ static void startSwapout(void) {
 	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
 	assert(r != NULL);
 	sf = region_get_swapfile(r);
-	if (sf == NULL) sf = defaultSwapfile;
+	if (sf == NULL) sf = defaultSwapfile; // Region initialised with NULL sf
 
 	// Make sure the frame reflects what is stored in the frame
 	assert((swapout->snd & ~PAGEALIGN) == 0);
@@ -623,8 +625,8 @@ static void startSwapout(void) {
 			process_get_pid(p), (void*) frame);
 
 	// Set up the swapout
-	list_shift(requests, pair_alloc(REQUEST_SWAPOUT,
-			(L4_Word_t) allocPagerRequest(swapout->fst, frame, sf, NULL)));
+	swapoutPr = allocPagerRequest(swapout->fst, frame, sf, NULL);
+	list_shift(requests, pair_alloc(REQUEST_SWAPOUT, (L4_Word_t) swapoutPr));
 
 	// Set up where on disk to put the page
 	L4_Word_t diskAddr = pagerSwapslotAlloc(p);
@@ -635,11 +637,9 @@ static void startSwapout(void) {
 	*entry &= ~ADDRESS_MASK;
 	*entry |= diskAddr;
 
-	// Kick-start with an lseek, the pager message handler loop
-	// will start writing from then on
-	//lseekNonblocking(swapfile_get_fd(swapfile_default()), diskAddr, SEEK_SET);
-
-	// We open the swapfile on each operation
+	// We open the swapfile on each swapout
+	swapoutPr->offset = PR_OFFSET_UNDEFINED;
+	swapoutPr->diskAddr = diskAddr;
 	swapfile_open(sf, FM_WRITE);
 	pair_free(swapout);
 }
@@ -654,6 +654,7 @@ static void startSwapin(void) {
 	// kick-start the chain of NFS requests and callbacks by opening swapfile
 	assert(requestsPeekType() == REQUEST_SWAPIN);
 	PagerRequest *nextPr = requestsPeek();
+	nextPr->offset = PR_OFFSET_UNDEFINED;
 	swapfile_open(nextPr->sf, FM_READ);
 }
 
@@ -898,21 +899,24 @@ static void continueSwapin(int vfsRval) {
 	PagerRequest *pr = (PagerRequest*) requestsPeek();
 	assert(pr->offset <= PAGESIZE);
 
-	if (!swapfile_is_open(pr->sf)) {
-		// Swapfile has been closed, swapin finished
-		finishedSwapin();
-	} else if (pr->offset == PR_OFFSET_UNDEFINED) {
-		// Swapin just starting, open the file
+	if (pr->offset == PR_OFFSET_UNDEFINED) {
+		dprintf(2, "*** continueSwapin: just opened %d, seeking\n", vfsRval);
+		swapfile_set_fd(pr->sf, vfsRval);
+
 		L4_Word_t *entry = pagetableLookup(
 				process_get_pagetable(process_lookup(pr->pid)),
 				pr->addr & ADDRESS_MASK);
+
+		dprintf(2, "*** continueSwapin: seeking to %d\n", *entry & ADDRESS_MASK);
 		lseekNonblocking(swapfile_get_fd(pr->sf),
 					*entry & ADDRESS_MASK, SEEK_SET);
 		pr->offset = 0;
+	} else if (!swapfile_is_open(pr->sf)) {
+		dprintf(2, "*** continueSwapin: just closed, finished\n");
+		finishedSwapin();
 	} else {
-		// In the middle of swapping in
 		if (pr->offset > 0) {
-			// there is data to copy across to the pinned frame
+			dprintf(2, "*** continueSwapin: data to copy\n");
 			assert(vfsRval > 0);
 			assert((vfsRval % SWAP_BUFSIZ) == 0);
 			assert(((pr->offset - vfsRval) % SWAP_BUFSIZ) == 0);
@@ -922,10 +926,10 @@ static void continueSwapin(int vfsRval) {
 		}
 
 		if (pr->offset == PAGESIZE) {
-			// we finished the swapin so we can now close the sf
+			dprintf(2, "*** continueSwapin: finised swapin, closing\n");
 			swapfile_close(pr->sf);
 		} else {
-			// still swapping in
+			dprintf(2, "*** continueSwapin: continuing\n");
 			readNonblocking(swapfile_get_fd(pr->sf), SWAP_BUFSIZ);
 			pr->offset += SWAP_BUFSIZ;
 		}
@@ -936,18 +940,21 @@ static void continueSwapout(int vfsRval) {
 	PagerRequest *pr = (PagerRequest*) requestsPeek();
 	assert(pr->offset <= PAGESIZE);
 
-	if (!swapfile_is_open(pr->sf)) {
-		// Finished the swapout
-		finishedSwapout();
-	} else if (pr->offset == PR_OFFSET_UNDEFINED) {
-		lseekNonblocking(swapfile_get_fd(pr->sf),
-				pr->addr & ADDRESS_MASK, SEEK_SET);
+	if (pr->offset == PR_OFFSET_UNDEFINED) {
+		dprintf(2, "*** continueSwapout: just opened %d, seeking\n", vfsRval);
+		swapfile_set_fd(pr->sf, vfsRval);
+
+		dprintf(2, "*** continueSwapout: seeking to %d\n", pr->diskAddr);
+		lseekNonblocking(swapfile_get_fd(pr->sf), pr->diskAddr, SEEK_SET);
 		pr->offset = 0;
+	} else if (!swapfile_is_open(pr->sf)) {
+		dprintf(2, "*** continueSwapout: just closed, finished\n");
+		finishedSwapout();
 	} else if (pr->offset == PAGESIZE) {
-		// Swapout finihsed, can close file
+		dprintf(2, "*** continueSwapout: finished swapout, closing\n");
 		swapfile_close(pr->sf);
 	} else {
-		// Still swapping out, continue the vfs write
+		dprintf(2, "*** continueSwapout: continuing\n");
 		memcpy(pager_buffer(virtualPager),
 				(void*) (pr->addr + pr->offset), SWAP_BUFSIZ);
 
@@ -1009,7 +1016,7 @@ static void virtualPagerHandler(void) {
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
 				pager(allocPagerRequest(process_get_pid(p),
-							L4_MsgWord(&msg, 0), NULL, pagerContinue));
+							L4_MsgWord(&msg, 0), defaultSwapfile, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
@@ -1172,7 +1179,7 @@ static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	pager(allocPagerRequest(
 				process_get_pid(process_lookup(L4_ThreadNo(tid))),
 				(L4_Word_t) src,
-				NULL,
+				defaultSwapfile,
 				copyInContinue));
 }
 
@@ -1237,7 +1244,7 @@ static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	pager(allocPagerRequest(
 				process_get_pid(process_lookup(L4_ThreadNo(tid))),
 				(L4_Word_t) dest,
-				NULL,
+				defaultSwapfile,
 				copyOutContinue));
 }
 
