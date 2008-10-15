@@ -673,6 +673,7 @@ static inline void portInit(struct netif *netif)
 
     IX_OSAL_MBUF *mbuf;
     while ( (mbuf = IX_OSAL_MBUF_POOL_GET(state->fRXPool)) ) {
+		 ixOsalSleep(100);
 	if (ixEthAccPortRxFreeReplenish(netif->num, mbuf))
 	    assert(!"ixEthAccPortRxFreeReplenish");
     }

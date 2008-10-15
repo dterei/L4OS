@@ -60,8 +60,10 @@
  */
 
 #include <compat/c.h>
+#include <sos/sos.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <threadstate.h>
 #include <bootinfo/bootinfo_header.h>
 
@@ -93,6 +95,8 @@ __sys_entry(void * bootinfo)
 #endif
 
     main();
+	 printf("TIME TO DIE (l4_rootserver)\n");
+	 process_delete(my_id());
 }
 
 void
