@@ -25,6 +25,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_CLOSE: return "SOS_CLOSE";
 		case SOS_READ: return "SOS_READ";
 		case SOS_WRITE: return "SOS_WRITE";
+		case SOS_FLUSH: return "SOS_FLUSH";
 		case SOS_LSEEK: return "SOS_LSEEK";
 		case SOS_GETDIRENT: return "SOS_GETDIRENT";
 		case SOS_STAT: return "SOS_STAT";
