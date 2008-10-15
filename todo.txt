@@ -1,15 +1,3 @@
-- Very frequently SOS hangs on bootup on "waiting for PHY to become ready", with
-*** sos_pager_handler: addr=0x0000000c ip=0x001488e4 sender=0
-This might be our problem, not sure.  Not the same as the other unhandled page
-fault that often happens (on a high address) which everybody gets and certainly
-isn't our fault.
-
-- Update crt (whatever that is) to kill a process when it finishes.  At the
-moment it just pagefaults like crazy.  Apparently this is a mystery funtion
-somewhere, possibly written in assembler (?), or alternatively _Exit or _Abort
-should get called too.
-Btw this is __sysenter and __sysexit or something along those times.
-
 - Free L4's resources when deleting process.
 
 - ELF loading.  Note that we should aim to load everything by setting the
@@ -42,13 +30,6 @@ want to minimise the interface to the pager though.
 
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
-
-- Problem with the number of possible open files for the pager.  Either it
-will have to be dramatically increased (unlikely) or the pager will need to
-open the file on every call.  This makes more sense, but requires yet more
-changes.  Sigh.
-
-- Close ELF file after loading.
 
 - Output bug is back, need to fix.  Again.
 

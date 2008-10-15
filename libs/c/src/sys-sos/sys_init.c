@@ -59,6 +59,8 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
+#include <sos/sos.h>
 #include <compat/c.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -84,6 +86,8 @@ __sys_entry(void * dummy)
 #endif
 
     main();
+
+	 process_delete(my_id());
 }
 
 void

@@ -2,7 +2,7 @@
 #include <sos/sos.h>
 #include <l4/types.h>
 
-#define WAIT_FOR (6)
+#define WAIT_FOR (5)
 
 #define verbose 2
 #define dprintf(v, buf) if ((v) < verbose) kprint(buf);
