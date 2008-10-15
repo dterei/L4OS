@@ -5,7 +5,9 @@
 
 int main(int argc, char *argv[]) {
 	for (int i = 0;; i++) {
+		kprint("------------------------------------\n");
 		kprint("ping\n");
+		kprint("------------------------------------\n");
 		usleep(SLEEP_MS * 1000);
 	}
 

@@ -61,7 +61,7 @@ static int exec(int argc, char **argv) {
 	pid = process_create(argv[1]);
 
 	if (pid >= 0) {
-		printf("Child pid=%d\n", pid);
+		//printf("Child pid=%d\n", pid);
 		if (bg == 0) {
 			process_wait(pid);
 		}

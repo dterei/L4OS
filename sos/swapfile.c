@@ -58,7 +58,7 @@ Swapfile *swapfile_init(char *path) {
 }
 
 void swapfile_open(Swapfile *sf, int rights) {
-	dprintf(1, "*** swapfile_open sf=%p rights=%d\n", sf, rights);
+	dprintf(1, "*** swapfile_open path=%s rights=%d\n", sf->data.path, rights);
 	assert(sf->data.fd == VFS_NIL_FILE);
 	L4_Msg_t msg;
 
@@ -75,14 +75,9 @@ int swapfile_is_open(Swapfile *sf) {
 }
 
 void swapfile_close(Swapfile *sf) {
-	dprintf(1, "*** swapfile_close sf=%p\n", sf);
+	dprintf(1, "*** swapfile_close path=%s\n", sf->data.path);
 	assert(sf->data.fd != VFS_NIL_FILE);
-	L4_Msg_t msg;
-
-	syscall_prepare(&msg);
-	L4_MsgAppendWord(&msg, sf->data.fd);
-
-	syscall(L4_rootserver, SOS_CLOSE, NO_REPLY, &msg);
+	closeNonblocking(sf->data.fd);
 	sf->data.fd = VFS_NIL_FILE;
 }
 
@@ -96,7 +91,7 @@ fildes_t swapfile_get_fd(Swapfile *sf) {
 }
 
 void swapfile_set_fd(Swapfile *sf, fildes_t fd) {
-	dprintf(1, "*** swapfile_init sf=%p fd=%d\n", sf, fd);
+	dprintf(1, "*** swapfile_get_fd path=%s fd=%d\n", sf->data.path, fd);
 	assert(sf->data.fd == VFS_NIL_FILE);
 	assert(fd != VFS_NIL_FILE);
 	sf->data.fd = fd;

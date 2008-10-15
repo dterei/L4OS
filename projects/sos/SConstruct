@@ -10,6 +10,7 @@
 # Date: 2008-06-24
 
 from math import ceil, log
+from os import listdir as ls
 
 #############################################################################
 ## Global configuration options
@@ -118,7 +119,10 @@ elf_env.Package("libs/elf")
 elf_env.Package("libs/gcc")
 elf_env.Package("libs/sos")
 
-ping = elf_env.Package("bin/ping")
+elfapps = []
+
+for dir in ls('bin'):
+    elfapps.append(elf_env.Package('bin/%s' % (dir)))
 
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling
@@ -146,6 +150,6 @@ build.TestImage(boot_image)
 build.RunImage(boot_image)
 
 #Default(boot_image) # Default build target is the bootimage.
-Default(boot_image, ping)
+Default(boot_image, elfapps)
 
 # vim:ft=python:

@@ -61,3 +61,7 @@ void region_set_size(Region *r, unsigned int size) {
 	r->size = size;
 }
 
+void region_set_swapfile(Region *r, Swapfile *sf) {
+	r->swapfile = sf;
+}
+

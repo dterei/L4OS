@@ -171,6 +171,11 @@ void openNonblocking(fmode_t mode);
  */
 int close(fildes_t file);
 
+/* A nonblocking version of close which assumes a copyin call has already
+ * been made.  Use with caution.
+ */
+void closeNonblocking(fildes_t file);
+
 /* Read from an open file, into "buf", max "nbyte" bytes.
  * Returns the number of bytes read.
  * Will block when reading from console and no input is presently

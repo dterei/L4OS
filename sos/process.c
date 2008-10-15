@@ -149,10 +149,10 @@ static void addBuiltinRegions(Process *p) {
 static void regionsDump(void *contents, void *data) {
 	Region *r = (Region*) contents;
 
-	printf("*** region %p -> %p (%p)\n",
+	printf("*** region %p -> %p (%p) rights=%d\n",
 			(void*) region_get_base(r),
 			(void*) (region_get_base(r) + region_get_size(r)),
-			(void*) r);
+			(void*) r, region_get_rights(r));
 }
 
 void process_dump(Process *p) {
