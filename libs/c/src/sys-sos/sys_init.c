@@ -87,7 +87,6 @@ __sys_entry(void * dummy)
 
     main();
 
-	 printf("TIME TO DIE (sys-sos)\n");
 	 process_delete(my_id());
 }
 

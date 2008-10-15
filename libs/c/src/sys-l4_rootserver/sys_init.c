@@ -95,7 +95,7 @@ __sys_entry(void * bootinfo)
 #endif
 
     main();
-	 printf("TIME TO DIE (l4_rootserver)\n");
+
 	 process_delete(my_id());
 }
 
