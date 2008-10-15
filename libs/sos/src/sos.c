@@ -234,6 +234,16 @@ int flush(fildes_t file) {
 	return syscall(L4_rootserver, SOS_FLUSH, YES_REPLY, &msg);
 }
 
+/* Flush a file or stream out to disk/network */
+void flushNonblocking(fildes_t file) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+
+	L4_MsgAppendWord(&msg, (L4_Word_t) file);
+
+	syscall(L4_rootserver, SOS_FLUSH, NO_REPLY, &msg);
+}
+
 /* Lseek sets the file position indicator to the specified position "pos".
  * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
  * to the start of the file, current position in the file or end of the file

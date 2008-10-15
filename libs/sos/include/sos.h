@@ -198,6 +198,9 @@ void writeNonblocking(fildes_t file, size_t nbyte);
 /* Flush a file or stream out to disk/network */
 int flush(fildes_t file);
 
+/* Nonblocking version of flush */
+void flushNonblocking(fildes_t file);
+
 /* Lseek sets the file position indicator to the specified position "pos".
  * if "whence" is set to SEEK_SET, SEEK_CUR, or SEEK_END the offset is relative
  * to the start of the file, current position in the file or end of the file
