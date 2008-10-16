@@ -15,7 +15,6 @@
 #include "alloc.h"
 #include "cat.h"
 #include "commands.h"
-#include "cp.h"
 #include "hex.h"
 #include "kecho.h"
 #include "kill.h"
@@ -30,7 +29,6 @@
 #include "segfault.h"
 #include "sleep.h"
 #include "sosh.h"
-#include "swaptest.h"
 #include "time.h"
 #include "top.h"
 #include "up.h"
@@ -101,7 +99,6 @@ help(int argc, char *argv[])
 struct command sosh_commands[] = {
 	{"alloc", alloc},
 	{"cat", cat},
-	{"cp", cp},
 	{"dir", ls},
 	{"exec", exec},
 	{"help", help},
@@ -117,7 +114,6 @@ struct command sosh_commands[] = {
 	{"rm", rm},
 	{"seektest", seektest},
 	{"segfault", segfault},
-	{"swaptest", swaptest},
 	{"sleep", sleep},
 	{"time", time},
 	{"top", top},
