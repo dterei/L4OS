@@ -16,13 +16,6 @@ switch is compiled as a jump table already so that's not really an issue.
 	- ...
 	- Filesystem stuff?
 
-- A more intelligent way of giving tids - not using the caps.  Force all system
-calls to include the calling thread as the somethingth argument in the message.
-Perhaps, the 31st (something like that).  This info is kept in the user defined
-TCR.  For security (not letting a process spoof another one) check this tid
-against the sender space when it arrives.
-Note that this is just a nice thing to do, it's not a problem as such.
-
 - There are comments in the code about not blocking SOS for too long on (what I
 assume is) console writing.  It's pretty negligible but yeah I can see that the
 problem does exist.  It's buffered now, so what we "need" (if we were to do it)
@@ -36,4 +29,12 @@ is a thread to do the flushing.
 truncate the file if its already open. Need to add a truncate function to the
 vfs so we can just call that. (At moment truncate at file creation by just creating
 a new file).
+
+- Clean up copyin/out as well, there is a lot of repetition across the two
+functions and they aren't so nice anyway.
+
+- Move process deleting back to process.c (from pager.c) if possible.  Still
+want to minimise the interface to the pager though.
+
+- Check memory leaks in pager
 
