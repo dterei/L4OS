@@ -9,7 +9,7 @@
 #include "network.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 3
 
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
@@ -90,6 +90,8 @@ typedef struct {
 	NFS_BaseRequest p;
 	fildes_t file;
 	char *buf;
+	L4_Word_t pos;
+	size_t nbyte;
 	void (*read_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
 			size_t nbyte, int status);
 } NFS_ReadRequest;
@@ -98,6 +100,7 @@ typedef struct {
 	NFS_BaseRequest p;
 	fildes_t file;
 	char *buf;
+	L4_Word_t offset;
 	size_t nbyte;
 	void (*write_done)(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 			const char *buf, size_t nbyte, int status);
@@ -106,6 +109,7 @@ typedef struct {
 typedef struct {
 	NFS_BaseRequest p;
 	stat_t *stat;
+	const char *path;
 } NFS_StatRequest;
 
 typedef struct {
@@ -126,6 +130,15 @@ static List *NfsRequests;
 
 /* NFS Base directory */
 static struct cookie nfs_mnt;
+
+
+/* functions to run for requests */
+static void rq_lookup_run(NFS_LookupRequest *rq);
+static void rq_read_run(NFS_ReadRequest *brq);
+static void rq_write_run(NFS_WriteRequest *brq);
+static void rq_stat_run(NFS_StatRequest *brq);
+static void rq_dir_run(NFS_DirRequest *brq);
+static void rq_rem_run(NFS_RemoveRequest *brq);
 
 
 /* Start up NFS file system */
@@ -156,12 +169,85 @@ int
 search_requests(void *node, void *key) {
 	NFS_BaseRequest *brq = (NFS_BaseRequest *) node;
 	uintptr_t token = *((uintptr_t *) key);
+	dprintf(2, "search_requests: %d, %d\n", brq->token, token);
 	if (brq->token == token) {
 		return 1;
 	} else {
 		return 0;
 	}
 }
+
+/* Return a NFS request struct with the token specified */
+static
+NFS_BaseRequest*
+get_request(uintptr_t token) {
+	if (list_null(NfsRequests)) {
+		dprintf(0, "!!! get_request: List is NULL\n");
+		return NULL;
+	}
+	return (NFS_BaseRequest *) list_find(NfsRequests, search_requests, &token);
+}
+
+/* Run a request if its at the start of the queue */
+static
+int
+run_request(NFS_BaseRequest *rq) {
+	/* At head of queue, so run it */
+	switch (rq->rt) {
+		case RT_LOOKUP:
+			rq_lookup_run((NFS_LookupRequest *) rq);
+			break;
+		case RT_READ:
+			rq_read_run((NFS_ReadRequest *) rq);
+			break;
+		case RT_WRITE:
+			rq_write_run((NFS_WriteRequest *) rq);
+			break;
+		case RT_STAT:
+			rq_stat_run((NFS_StatRequest *) rq);
+			break;
+		case RT_DIR:
+			rq_dir_run((NFS_DirRequest *) rq);
+			break;
+		case RT_REMOVE:
+			rq_rem_run((NFS_RemoveRequest *) rq);
+			break;
+		default:
+			dprintf(0, "!!! nfsfs.c: run_request: invalid request type %d\n", rq->rt);
+			return 0;
+	}
+
+	return 1;
+}
+
+/* check if the specified request is at the start of the list and should run */
+static
+int
+check_request(NFS_BaseRequest *rq) {
+	if (list_null(NfsRequests)) {
+		dprintf(0, "!!! nfsfs: check_request NfsRequest list is null !!!\n");
+		return run_request(rq);
+	}
+
+	/* Check at head of queue */
+	NFS_BaseRequest *brq = (NFS_BaseRequest *) list_peek(NfsRequests);
+	if (brq != rq) {
+		return 0;
+	}
+
+	return run_request((NFS_BaseRequest *) list_peek(NfsRequests));
+}
+
+/* Run request at head of queue */
+static
+int
+run_head_request(void) {
+	if (list_null(NfsRequests)) {
+		return 0;
+	}
+	return run_request((NFS_BaseRequest *) list_peek(NfsRequests));
+}
+
 
 /* Create a new NFS request of type specified */
 static
@@ -240,13 +326,9 @@ remove_request(NFS_BaseRequest *rq) {
 		default:
 			dprintf(0, "!!! nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
 	}
-}
 
-/* Return a NFS request struct with the token specified */
-static
-NFS_BaseRequest*
-get_request(uintptr_t token) {
-	return (NFS_BaseRequest *) list_find(NfsRequests, search_requests, &token);
+	// run next request in queue
+	run_head_request();
 }
 
 /* Convert the NFS mode (xwr) to unix mode (rwx) */
@@ -397,13 +479,21 @@ nfsfs_open(L4_ThreadId_t tid, VNode self, const char *path, fmode_t mode,
 	NFS_LookupRequest *rq = (NFS_LookupRequest *) create_request(RT_LOOKUP, self, tid);
 	rq->mode = mode;
 	rq->open_done = open_done;
+	
+	check_request((NFS_BaseRequest *) rq);
+}
 
+/* Run the actual open/lookup request */
+static
+void
+rq_lookup_run(NFS_LookupRequest *rq) {
+	dprintf(2, "run NFS Lookup request\n");
 	// If open mode is write, then create new file since we want to start again.
-	if (mode & FM_WRITE && !(mode & FM_NOTRUNC)) {
+	if (rq->mode & FM_WRITE && !(rq->mode & FM_NOTRUNC)) {
 		sattr_t sat = DEFAULT_SATTR;
 		nfs_create(&nfs_mnt, rq->p.vnode->path, &sat, lookup_cb, rq->p.token);
 	} else {
-		nfs_lookup(&nfs_mnt, (char *) path, lookup_cb, rq->p.token);
+		nfs_lookup(&nfs_mnt, rq->p.vnode->path, lookup_cb, rq->p.token);
 	}
 }
 
@@ -469,9 +559,20 @@ nfsfs_read(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t pos,
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) create_request(RT_READ, self, tid);
 	rq->file = file;
 	rq->buf = buf;
+	rq->pos = pos;
+	rq->nbyte = nbyte;
 	rq->read_done = read_done;
 
-	nfs_read(&(nf->fh), pos, nbyte, read_cb, rq->p.token);
+	check_request((NFS_BaseRequest *) rq);
+}
+
+/* Run the actual read request */
+static
+void
+rq_read_run(NFS_ReadRequest *rq) {
+	dprintf(2, "run NFS Read request\n");
+	NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
+	nfs_read(&(nf->fh), rq->pos, rq->nbyte, read_cb, rq->p.token);
 }
 
 /* NFS Callback for NFS_Write */
@@ -517,10 +618,20 @@ nfsfs_write(L4_ThreadId_t tid, VNode self, fildes_t file, L4_Word_t offset,
 	NFS_WriteRequest *rq = (NFS_WriteRequest *) create_request(RT_WRITE, self, tid);
 	rq->file = file;
 	rq->buf = (char *) buf;
+	rq->offset = offset;
 	rq->nbyte = nbyte;
 	rq->write_done = write_done;
 
-	nfs_write(&(nf->fh), offset, nbyte, rq->buf, write_cb, rq->p.token);
+	check_request((NFS_BaseRequest *) rq);
+}
+
+/* Run the actual write request */
+static
+void
+rq_write_run(NFS_WriteRequest *rq) {
+	dprintf(2, "run NFS Write request\n");
+	NFS_File *nf = (NFS_File *) rq->p.vnode->extra;
+	nfs_write(&(nf->fh), rq->offset, rq->nbyte, rq->buf, write_cb, rq->p.token);
 }
 
 /* Flush the given nfs file to disk. (UNSUPPORTED) (no buffering used) */
@@ -593,6 +704,14 @@ nfsfs_getdirent(L4_ThreadId_t tid, VNode self, int pos, char *name, size_t nbyte
 	rq->nbyte = nbyte;
 	rq->cpos = 0;
 
+	check_request((NFS_BaseRequest *) rq);
+}
+
+/* Run a getdirent request */
+static
+void
+rq_dir_run(NFS_DirRequest *rq) {
+	dprintf(2, "run NFS getdirent request\n");
 	nfs_readdir(&nfs_mnt, 0, IO_MAX_BUFFER, getdirent_cb, rq->p.token);
 }
 
@@ -640,9 +759,17 @@ nfsfs_stat(L4_ThreadId_t tid, VNode self, const char *path, stat_t *buf) {
 
 		NFS_StatRequest *rq = (NFS_StatRequest *) create_request(RT_STAT, self, tid);
 		rq->stat = buf;
-
-		nfs_lookup(&nfs_mnt, (char *) path, stat_cb, rq->p.token);
+		rq->path = path;
+		check_request((NFS_BaseRequest *) rq);
 	}
+}
+
+/* Run a stat request */
+static
+void
+rq_stat_run(NFS_StatRequest *rq) {
+	dprintf(2, "run NFS Stat request\n");
+	nfs_lookup(&nfs_mnt, (char *) rq->path, stat_cb, rq->p.token);
 }
 
 /* NFS Callback for NFS_Remove */
@@ -674,7 +801,14 @@ nfsfs_remove(L4_ThreadId_t tid, VNode self, const char *path) {
 		NFS_RemoveRequest *rq = (NFS_RemoveRequest *)
 			create_request(RT_REMOVE, self, tid);
 		rq->path = path;
-		nfs_remove(&nfs_mnt, (char *) path, remove_cb, rq->p.token);
+		check_request((NFS_BaseRequest *) rq);
 	}
+}
+
+static
+void
+rq_rem_run(NFS_RemoveRequest *rq) {
+	dprintf(2, "run NFS Remove request\n");
+	nfs_remove(&nfs_mnt, (char *) rq->path, remove_cb, rq->p.token);
 }
 
