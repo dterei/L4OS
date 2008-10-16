@@ -329,17 +329,17 @@ static
 L4_Word_t
 status_nfs2vfs(int status) {
 	switch(status) {
-		case NFS_OK:					return SOS_VFS_OK;		break;
-		case NFSERR_PERM:				return SOS_VFS_PERM;		break;
-		case NFSERR_NOENT:			return SOS_VFS_NOVNODE;	break;
-		case NFSERR_NAMETOOLONG:	return SOS_VFS_NOMEM;	break;
+		case NFS_OK:					return SOS_VFS_OK;
+		case NFSERR_PERM:				return SOS_VFS_PERM;
+		case NFSERR_NOENT:			return SOS_VFS_NOVNODE;
+		case NFSERR_NAMETOOLONG:	return SOS_VFS_NOMEM;
+		case NFSERR_ISDIR:         return SOS_VFS_PATHINV;
 		case NFSERR_IO:
 		case NFSERR_NXIO:
 		case NFSERR_ACCES:
 		case NFSERR_EXIST:
 		case NFSERR_NODEV:
 		case NFSERR_NOTDIR:
-		case NFSERR_ISDIR:
 		case NFSERR_FBIG:
 		case NFSERR_NOSPC:
 		case NFSERR_ROFS:

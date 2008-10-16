@@ -14,18 +14,7 @@ int rm(int argc, char **argv) {
 
 	if (r < 0) {
 		printf("rm(%s) failed: %d\n", argv[1], r);
-
-		if (r == SOS_VFS_NOFILE || r == SOS_VFS_PATHINV || r == SOS_VFS_NOVNODE) {
-			printf("file doesn't exist!\n");
-		} else if (r == SOS_VFS_PERM) {
-			printf("Invalid permissions\n");
-		} else if (r == SOS_VFS_NOTIMP) {
-			printf("Can't remove this type of file\n");
-		} else if (r == SOS_VFS_ERROR) {
-			printf("General failure\n");
-		} else if (r == SOS_VFS_OPEN) {
-			printf("File currently open, can't remove!\n");
-		}
+		printf("Can't remove file, %s\n", sos_error_msg(r));
 	}
 
 	return 0;

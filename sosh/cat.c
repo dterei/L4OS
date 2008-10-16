@@ -23,7 +23,7 @@ int cat(int argc, char **argv) {
 		return 1;
 	}
 
-	//printf("<%s>\n", argv[1]);
+	printf("<%s> (%d)\n", argv[1], fd);
 
 	while ((num_read = read(fd, buf, BUF_SIZ - 1)) > 0 ) {
 		buf[num_read] = '\0';
@@ -38,13 +38,13 @@ int cat(int argc, char **argv) {
 
 	close(fd);
 
-	if (num_read == -1) {
+	if (num_read < 0) {
 		printf( "error on read\n" );
 		kprint( "error on read\n" );
 		ret = 1;
 	}
 
-	if (num_written == -1) {
+	if (num_written < 0) {
 		printf( "error on write\n" );
 		kprint( "error on write\n" );
 		ret = 1;
