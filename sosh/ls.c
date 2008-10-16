@@ -30,7 +30,7 @@ static void prstat(const char *name) {
 	// make sure we don't go out of array
 	int t = sbuf.st_type > 2 ? 0 : sbuf.st_type;
 
-	printf("%c%c%c%c 0x%08x 0x%08lx 0x%08lx %s\n",
+	printf("%c%c%c%c %08u 0x%08lx 0x%08lx %s\n",
 			type[t],
 			sbuf.st_fmode & FM_READ     ? 'r' : '-',
 			sbuf.st_fmode & FM_WRITE    ? 'w' : '-',
@@ -100,6 +100,7 @@ int ls(int argc, char **argv) {
 			} else {
 				if (linec + strlen(buf) > LINE_LEN) {
 					printf("\n");
+					linec = 0;
 				}
 				linec += printf("%s ", buf);
 			}
