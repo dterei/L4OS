@@ -17,6 +17,7 @@
 #include <clock/nslu2.h>
 #include <sos/sos.h>
 
+#include "cache.h"
 #include "constants.h"
 #include "frames.h"
 #include "irq.h"
@@ -61,7 +62,7 @@ static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 
 	L4_Fpage_t targetFpage = L4_Fpage(addr, PAGESIZE);
 	L4_Set_Rights(&targetFpage, L4_FullyAccessible);
-	L4_PhysDesc_t phys = L4_PhysDesc(addr, L4_DefaultMemory);
+	L4_PhysDesc_t phys = L4_PhysDesc(addr, DEFAULT_MEMORY);
 
 	if (!L4_MapFpage(L4_SenderSpace(), targetFpage, phys)) { 
 		sos_print_error(L4_ErrorCode());

@@ -3,6 +3,7 @@
 #include <clock/clock.h>
 #include <sos/sos.h>
 
+#include "cache.h"
 #include "constants.h"
 #include "frames.h"
 #include "l4.h"
@@ -39,7 +40,7 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 
 	L4_MsgTag_t tag;
 
-	L4_CacheFlushAll();
+	CACHE_FLUSH_ALL();
 
 	L4_Msg_t msg;
 	L4_MsgClear(&msg);

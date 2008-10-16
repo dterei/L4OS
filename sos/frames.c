@@ -1,5 +1,6 @@
 #include <stddef.h>
 
+#include "cache.h"
 #include "constants.h"
 #include "libsos.h"
 #include "frames.h"
@@ -25,7 +26,7 @@ void frame_init(L4_Word_t low, L4_Word_t frame) {
 	for (page = low; page < high; page += PAGESIZE) {
 		fpage = L4_Fpage(page, PAGESIZE);
 		L4_Set_Rights(&fpage, L4_ReadWriteOnly);
-		ppage = L4_PhysDesc(page, L4_DefaultMemory);
+		ppage = L4_PhysDesc(page, DEFAULT_MEMORY);
 		L4_MapFpage(L4_rootspace, fpage, ppage);
 	}
 

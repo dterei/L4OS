@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cache.h"
 #include "constants.h"
 #include "frames.h"
 #include "l4.h"
@@ -210,7 +211,7 @@ static int mapPage(L4_SpaceId_t sid, L4_Word_t virt, L4_Word_t phys,
 
 	L4_Fpage_t fpage = L4_Fpage(virt, PAGESIZE);
 	L4_Set_Rights(&fpage, rights);
-	L4_PhysDesc_t ppage = L4_PhysDesc(phys, L4_DefaultMemory);
+	L4_PhysDesc_t ppage = L4_PhysDesc(phys, DEFAULT_MEMORY);
 
 	int result = L4_MapFpage(sid, fpage, ppage);
 	please(result);
@@ -243,8 +244,8 @@ static void prepareDataIn(Process *p, L4_Word_t vaddr) {
 	dprintf(3, "*** prepareDataIn: p=%d vaddr=%p frame=%p\n",
 			process_get_pid(p), (void*) vaddr, (void*) frame);
 
-	please(L4_CacheFlushRange(process_get_sid(p), vaddr, vaddr + PAGESIZE));
-	please(L4_CacheFlushRangeInvalidate(L4_rootspace, frame, frame + PAGESIZE));
+	please(CACHE_FLUSH_RANGE(process_get_sid(p), vaddr, vaddr + PAGESIZE));
+	please(CACHE_FLUSH_RANGE_INVALIDATE(L4_rootspace, frame, frame + PAGESIZE));
 }
 
 static void prepareDataOut(Process *p, L4_Word_t vaddr) {
@@ -259,8 +260,8 @@ static void prepareDataOut(Process *p, L4_Word_t vaddr) {
 	dprintf(3, "*** prepareDataOut: p=%d vaddr=%p frame=%p\n",
 			process_get_pid(p), (void*) vaddr, (void*) frame);
 
-	please(L4_CacheFlushRange(L4_rootspace, frame, frame + PAGESIZE));
-	please(L4_CacheFlushRangeInvalidate(
+	please(CACHE_FLUSH_RANGE(L4_rootspace, frame, frame + PAGESIZE));
+	please(CACHE_FLUSH_RANGE_INVALIDATE(
 				process_get_sid(p), vaddr, vaddr + PAGESIZE));
 }
 
