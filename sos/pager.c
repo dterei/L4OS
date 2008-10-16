@@ -1231,8 +1231,12 @@ static void virtualPagerHandler(void) {
 
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				pager(allocPagerRequest(process_get_pid(p),
-							L4_MsgWord(&msg, 0), defaultSwapfile, pagerContinue));
+				tmp = L4_MsgWord(&msg, 0);
+				printf("tmp=%p 1=%lu 2=%lu 3=%lu\n", (void*) tmp, L4_MsgWord(&msg, 1),
+						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3));
+
+				pager(allocPagerRequest(process_get_pid(p), tmp,
+							defaultSwapfile, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
@@ -1309,11 +1313,11 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case L4_EXCEPTION:
-				// TODO kill process
-				dprintf(0, "!!! virtualPagerHandler exception: ip=%lx, sp=%lx\n",
-						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
-				dprintf(0, "    cpsr=%lx exception=%lx, cause=%lx\n",
-						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
+				dprintf(0, "Exception (ip=%p sp=%p id=0x%lx cause=0x%lx pid=%d)\n",
+						(void*) L4_MsgWord(&msg, 0), (void*) L4_MsgWord(&msg, 1),
+						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4),
+						process_get_pid(p));
+				processDelete(process_get_pid(p));
 				break;
 
 			default:

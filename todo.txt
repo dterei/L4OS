@@ -6,6 +6,7 @@ that the whole address space for that process is being unmapped too.
 - This has been around for ages, but there is a security bug in copyin/out
 where the user can violate read/write access permissions.  Need to write a
 program to show this but won't be too hard.  Also won't be a hard fix.
+- Kill process when they have access permission errors.  How do we know?
 
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
@@ -16,8 +17,6 @@ causing this to not work.  Not sure where, could be the pager, could be VFS
 who knows).
 
 - The first process that starts from sosh segfaults, the rest are ok.
-
-- Kill (delete) proceses when they throw exceptions.
 
 - Physical frames are being gradually consumed whenever processes are run.  Very
 odd.  Need to fix this, since it means eventually we will run out of memory...
