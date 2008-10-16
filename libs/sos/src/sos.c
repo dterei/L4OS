@@ -55,11 +55,11 @@ void syscall_prepare(L4_Msg_t *msg) {
 	L4_MsgClear(msg);
 }
 
-static char buf[128];
+static char debugBuf[128];
 
 static void debugPrint(void) {
-	for (int i = 0; i < strlen(buf); i++) {
-		L4_KDB_PrintChar(buf[i]);
+	for (int i = 0; i < strlen(debugBuf); i++) {
+		L4_KDB_PrintChar(debugBuf[i]);
 	}
 }
 
@@ -69,7 +69,7 @@ static void pprintError(L4_Word_t ec) {
 	e = (ec >> 1) & 15;
 	p = ec & 1;
 
-	sprintf(buf, "%s error, code is 0x%lx (see p125)\n", p? "receive":"send", e);
+	sprintf(debugBuf, "%s error, code is 0x%lx (see p125)\n", p? "receive":"send", e);
 	debugPrint();
 }
 
@@ -87,7 +87,7 @@ void syscall_generic(L4_ThreadId_t tid, syscall_t s, int reply,
 	}
 
 	if (L4_IpcFailed(tag)) {
-		sprintf(buf, "### syscall_generic to %ld failed: ", L4_ThreadNo(tid));
+		sprintf(debugBuf, "### syscall_generic to %ld failed: ", L4_ThreadNo(tid));
 		debugPrint();
 		pprintError(L4_ErrorCode());
 	}

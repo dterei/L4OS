@@ -775,7 +775,6 @@ static void continueElfload(int vfsRval) {
 				for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
 					Region *r = region_alloc(
 							REGION_OTHER,
-							//elf32_getProgramHeaderVaddr(header, i) & PAGEALIGN,
 							elf32_getProgramHeaderVaddr(header, i),
 							elf32_getProgramHeaderMemorySize(header, i),
 							elf32_getProgramHeaderFlags(header, i), 0);

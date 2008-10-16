@@ -27,6 +27,8 @@
 		sos_print_error(L4_ErrorCode());\
 	}\
 
+#define BLIP() printf("@@@ %s @ %d\n", __FUNCTION__, __LINE__);
+
 // Clear the message registers.  Useful to use before an L4_Reply()
 void msgClearWith(L4_Word_t x);
 

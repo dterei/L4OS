@@ -31,18 +31,7 @@ want to minimise the interface to the pager though.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
-- Don't need to swap out a page if the swapfile isn't the default.  This is a
-pretty easy optimisation to make (well, not easy) but given that we can do it
-we might as well.
-
 - Change the callback sequencer to use enums rather than magic state.  Then...
-
-- Don't close the default swapfile, and only open it once.
-
-- When swapping in, if ELF file then switch swapfile to default
-
-- Ok we should probably generalise the last few points and make swapfiles
-even more generic, with a "type" enum or something.  ELF versus STANDARD etc.
 
 - Check exec permissions when trying to run an ELF file.
 
@@ -50,4 +39,8 @@ even more generic, with a "type" enum or something.  ELF versus STANDARD etc.
 after creating something like 16 processes.  So, need to increase the #define
 (pistachio/src/caps.cc) and also free the clists and all that stuff (as per
 the todo above).
+
+- Scrap the ELF file is a swap file thing (goddamn it) and just load them
+as a separate process.  And remember to zero the whole thing first, and only
+copy up to filesiz (but region goes up to memsiz).
 

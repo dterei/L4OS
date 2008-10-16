@@ -502,6 +502,12 @@ void
 vfs_write(L4_ThreadId_t tid, fildes_t file, const char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_write: %d, %d %p %d\n", L4_ThreadNo(tid), file, buf, nbyte);
 
+	if (file > PROCESS_MAX_FILES) {
+		dprintf(0, "!!! vfs_write: file handle (%d) is illegal\n", file); 
+		syscall_reply(tid, SOS_VFS_NOFILE);
+		return;
+	}
+
 	// get file
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	VFile *vf = process_get_files(p);

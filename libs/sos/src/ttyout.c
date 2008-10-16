@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <sos/sos.h>
 #include <sos/ttyout.h>
@@ -26,8 +27,6 @@ ttyout_init(void) {
 
 size_t
 sos_write(const void *vData, long int position, size_t count, void *handle) {
-	(void) position;
-	(void) handle;
 	return write(stdout_fd, vData, count);
 }
 
