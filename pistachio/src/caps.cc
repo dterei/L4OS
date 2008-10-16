@@ -74,7 +74,8 @@ DECLARE_KMEM_GROUP (kmem_clist);
 /* Table containing mappings from clistid_t to clist_t* */
 clistid_lookup_t clist_lookup;
 
-#define CONFIG_MAX_CLISTS   16
+#define CONFIG_MAX_CLISTS 1024
+
 void SECTION(SEC_INIT) init_clistids(void)
 {
     void * new_table;

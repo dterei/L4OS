@@ -1008,11 +1008,6 @@ static void startSwapin(void) {
 		// It is on an ELF file, need to read from that
 		assert(pr->sf != NULL);
 		pr->sf = region_get_elffile(r);
-		/*
-		printf("region size is %p\n", (void*) region_get_filesize(r));
-		printf("region base is %p\n", (void*) region_get_base(r));
-		pr->size = region_get_filesize(r);
-		*/
 		pr->finish = finishSwapelf;
 	} else {
 		// It is the default swapfile
