@@ -10,15 +10,12 @@ program to show this but won't be too hard.  Also won't be a hard fix.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
-- Don't ever close the default swapfile, and only ever open it
+- Stress test with multiple processes.  Okay, so there is a problem somewhere
+causing this to not work.  Not sure where, could be the pager, could be VFS
+(although I'd say most likely the pager, I've never tested it so heavily, but
+who knows).
 
-- Move all the console functions from sosh in to the ELF file.  In fact, get
-rid of the sosh directly and just put it in the bin directory, then make the
-only program that runs from bootinfo is one that continually executes sosh.
-And waits for it to finish.
+- The first process that starts from sosh segfaults, the rest are ok.
 
-- Stress test with multiple processes.
-
-- Test accessing regions without permissions, and also kill proceses when
-they throw exceptions.  Not very hard.
+- Kill (delete) proceses when they throw exceptions.
 

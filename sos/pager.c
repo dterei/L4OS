@@ -730,7 +730,6 @@ static void continueElfload(int vfsRval) {
 				process_prepare(p);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
-				process_dump(p);
 				process_run(p);
 				closeNonblocking(er->fd);
 				er->child = process_get_pid(p);
@@ -905,7 +904,7 @@ static void finishSwapelf(void) {
 	L4_Word_t fileTop = region_get_base(r) + region_get_filesize(r);
 
 	if ((fileTop & PAGEALIGN) == (pr->addr & PAGEALIGN)) {
-		printf("zeroing from %p because of addr %p\n",
+		dprintf(2, "*** finishSwapelf: zeroing from %p because of addr %p\n",
 				(void*) fileTop, (void*) pr->addr);
 		assert(region_get_size(r) >= region_get_filesize(r));
 		memzero((char*) pinnedFrame + (fileTop % PAGESIZE),
