@@ -5,7 +5,6 @@
  * - updated by Charles Gray 2006
  */
 
-#include <assert.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,7 +38,16 @@
 static stat_t sbuf;
 fildes_t in;
 
-static int exec(int argc, char **argv) {
+static void
+exitFailure(char *msg) {
+	int id = my_id();
+	printf("sosh (%d) %s!\n", id, msg);
+	printf("sosh (%d) exiting\n", id);
+	exit(EXIT_FAILURE);
+}
+
+static int
+exec(int argc, char **argv) {
 	pid_t pid;
 	int r;
 	int bg = 0;
@@ -55,7 +63,9 @@ static int exec(int argc, char **argv) {
 
 	if (bg == 0) {
 		r = close(in);
-		assert(r == 0);
+		if (r != 0) {
+			exitFailure("can't close console\n");
+		}
 	}
 
 	pid = process_create(argv[1]);
@@ -71,10 +81,7 @@ static int exec(int argc, char **argv) {
 	if (bg == 0) {
 		in = open("console", FM_READ);
 		if (in < 0) {
-			int id = my_id();
-			printf("sosh (%d) can't open console!\n", id);
-			printf("sosh (%d) exiting\n", id);
-			exit(EXIT_FAILURE);
+			exitFailure("can't open console for reading");
 		}
 	}
 
@@ -127,7 +134,9 @@ main(int sosh_argc, char *sosh_argv[])
 	char *bp, *p = "";
 
 	in = open("console", FM_READ);
-	assert (in >= 0);
+	if (in < 0) {
+		exitFailure("can't open console for reading");
+	}
 
 	bp  = buf;
 	new = 1;
