@@ -26,7 +26,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 42
+#define FRAME_ALLOC_LIMIT 4
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -50,13 +50,26 @@ static void queueRequest(rtype_t rtype, void *request);
 // Demand paging
 #define SWAP_BUFSIZ 1024
 
+typedef enum {
+	SWAPIN_OPEN,
+	SWAPIN_LSEEK,
+	SWAPIN_READ,
+	SWAPIN_CLOSE,
+	SWAPOUT_OPEN,
+	SWAPOUT_LSEEK,
+	SWAPOUT_WRITE,
+	SWAPOUT_CLOSE
+} pr_stage_t;
+
 typedef struct PagerRequest_t PagerRequest;
 struct PagerRequest_t {
+	pr_stage_t stage;
 	pid_t pid;
 	L4_Word_t addr;
 	L4_Word_t diskAddr;
 	Swapfile *sf;
 	int offset;
+	int size;
 	void (*callback)(PagerRequest *pr);
 };
 
@@ -631,8 +644,8 @@ static void startSwapout(void) {
 	// Need the region for finding the swap file
 	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
 	assert(r != NULL);
-	sf = region_get_swapfile(r);
-	if (sf == NULL) sf = defaultSwapfile; // Region initialised with NULL sf
+	assert(region_get_swapfile(r) == NULL);
+	sf = defaultSwapfile;
 
 	// Make sure the frame reflects what is stored in the frame
 	assert((swapout->snd & ~PAGEALIGN) == 0);
@@ -674,8 +687,6 @@ static void startSwapin(void) {
 	// since really it's just a temporary frame and nothing is really pinned)
 	pinnedFrame = frame_alloc();
 
-	// Figure out which swap file to swapin from 
-
 	// kick-start the chain of NFS requests and callbacks by opening swapfile
 	assert(requestsPeekType() == REQUEST_SWAPIN);
 	pr = requestsPeek();
@@ -684,10 +695,17 @@ static void startSwapin(void) {
 	r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
 	assert(r != NULL);
 
-	pr->sf = region_get_swapfile(r);
-	if (pr->sf == NULL) pr->sf = defaultSwapfile;
+	if (region_get_swapfile(r) != NULL) {
+		// It is on an ELF file, need to read from that
+		assert(!"argh");
+		pr->sf = region_get_swapfile(r);
+	} else {
+		// It is the default swapfile
+		pr->sf = defaultSwapfile;
+	}
 
-	pr->offset = PR_OFFSET_UNDEFINED;
+	pr->stage = SWAPIN_OPEN;
+	pr->size = PAGESIZE;
 	swapfile_open(pr->sf, FM_READ);
 }
 
@@ -729,14 +747,14 @@ static void finishElfload(int rval) {
 	syscall_reply(replyTo, rval);
 }
 
-static void setRegionOndisk(Process *p, Region *r, L4_Word_t addr) {
+static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
 	assert((addr & ~PAGEALIGN) == 0);
 	L4_Word_t *entry;
 	L4_Word_t base = region_get_base(r);
 
 	for (int size = 0; size < region_get_size(r); size += PAGESIZE) {
 		entry = pagetableLookup(process_get_pagetable(p), base + size);
-		*entry = (addr + size) | ONDISK_MASK;
+		*entry = (addr + size) | ONDISK_MASK | ONELF_MASK;
 	}
 }
 
@@ -780,7 +798,7 @@ static void continueElfload(int vfsRval) {
 							elf32_getProgramHeaderFlags(header, i), 0);
 					region_set_swapfile(r, swapfile_init(er->path));
 					process_add_region(p, r);
-					setRegionOndisk(p, r,
+					setRegionOnElf(p, r,
 							elf32_getProgramHeaderOffset(header, i) & PAGEALIGN);
 				}
 
@@ -975,41 +993,52 @@ static void continueSwapin(int vfsRval) {
 	PagerRequest *pr = (PagerRequest*) requestsPeek();
 	assert(pr->offset <= PAGESIZE);
 
-	if (pr->offset == PR_OFFSET_UNDEFINED) {
-		dprintf(2, "*** continueSwapin: just opened %d, seeking\n", vfsRval);
-		swapfile_set_fd(pr->sf, vfsRval);
+	switch (pr->stage) {
+		case SWAPIN_OPEN: 
+			assert(vfsRval == 0);
+			swapfile_set_fd(pr->sf, vfsRval);
 
-		L4_Word_t *entry = pagetableLookup(
-				process_get_pagetable(process_lookup(pr->pid)),
-				pr->addr & ADDRESS_MASK);
+			L4_Word_t *entry = pagetableLookup(
+					process_get_pagetable(process_lookup(pr->pid)),
+					pr->addr & ADDRESS_MASK);
 
-		dprintf(2, "*** continueSwapin: seeking to %p\n",
-				(void*) (*entry & ADDRESS_MASK));
-		lseekNonblocking(swapfile_get_fd(pr->sf),
+			lseekNonblocking(swapfile_get_fd(pr->sf),
 					*entry & ADDRESS_MASK, SEEK_SET);
-		pr->offset = 0;
-	} else if (!swapfile_is_open(pr->sf)) {
-		dprintf(2, "*** continueSwapin: just closed, finished\n");
-		finishedSwapin();
-	} else {
-		if (pr->offset > 0) {
-			dprintf(2, "*** continueSwapin: data to copy\n");
+			pr->offset = 0;
+
+			pr->stage++;
+			break;
+
+		case SWAPIN_LSEEK:
+			readNonblocking(swapfile_get_fd(pr->sf),
+					min(SWAP_BUFSIZ, pr->size - pr->offset));
+			pr->stage++;
+			break;
+
+		case SWAPIN_READ:
 			assert(vfsRval > 0);
-			assert((vfsRval % SWAP_BUFSIZ) == 0);
-			assert(((pr->offset - vfsRval) % SWAP_BUFSIZ) == 0);
 
-			memcpy(((char*) pinnedFrame) + pr->offset - vfsRval,
-					pager_buffer(virtualPager), SWAP_BUFSIZ);
-		}
+			memcpy(((char*) pinnedFrame) + pr->offset,
+					pager_buffer(virtualPager), vfsRval);
+			pr->offset += vfsRval;
+			assert(pr->offset <= pr->size);
 
-		if (pr->offset == PAGESIZE) {
-			dprintf(2, "*** continueSwapin: finised swapin, closing\n");
-			swapfile_close(pr->sf);
-		} else {
-			dprintf(2, "*** continueSwapin: continuing\n");
-			readNonblocking(swapfile_get_fd(pr->sf), SWAP_BUFSIZ);
-			pr->offset += SWAP_BUFSIZ;
-		}
+			if (pr->offset == pr->size) {
+				swapfile_close(pr->sf);
+				pr->stage++;
+			} else {
+				readNonblocking(swapfile_get_fd(pr->sf),
+						min(SWAP_BUFSIZ, pr->size - pr->offset));
+			}
+
+			break;
+
+		case SWAPIN_CLOSE:
+			finishedSwapin();
+			break;
+
+		default:
+			assert(! __FUNCTION__);
 	}
 }
 
@@ -1088,7 +1117,7 @@ static void virtualPagerHandler(void) {
 		L4_MsgStore(tag, &msg);
 
 		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-			dprintf(0, "*** virtualPagerHandler: tid=%ld tag=%s\n",
+			dprintf(2, "*** virtualPagerHandler: tid=%ld tag=%s\n",
 					L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
 		}
 

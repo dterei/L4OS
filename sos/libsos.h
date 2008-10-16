@@ -29,6 +29,9 @@
 
 #define BLIP() printf("@@@ %s @ %d\n", __FUNCTION__, __LINE__);
 
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 // Clear the message registers.  Useful to use before an L4_Reply()
 void msgClearWith(L4_Word_t x);
 
