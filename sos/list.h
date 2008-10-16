@@ -40,6 +40,11 @@ void *list_find(List *list, int (*f)(void *contents, void *data),
 void list_delete(List *list, int (*f)(void *contents, void *data),
 		void *data);
 
+// Iterate over a list with a given function, and delete first
+// node for which the function returns 1
+void list_delete_first(List *list, int (*f)(void *contents, void *data),
+		void *data);
+
 // Reduce a list to a single returned value
 void *list_reduce(List *list, void *(*f)(void *contents, void *data),
 		void *data);

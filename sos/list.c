@@ -154,6 +154,40 @@ void list_delete(List *list, int (*f)(void *contents, void *data),
 	}
 }
 
+void list_delete_first(List *list, int (*f)(void *contents, void *data),
+		void *data) {
+	assert(list != NULL);
+	Node *curr, *prev, *tmp;
+
+	curr = list->head;
+	prev = NULL;
+
+	while (curr != NULL) {
+		if (f(curr->contents, data)) {
+			tmp = curr;
+
+			if (prev == NULL) {
+				list->head = curr->next;
+			} else {
+				prev->next = curr->next;
+			}
+
+			curr = curr->next;
+			free(tmp);
+			break;
+		} else {
+			prev = curr;
+			curr = curr->next;
+		}
+	}
+
+	if (list->head == NULL) {
+		list->last = NULL;
+	} else if (prev->next == NULL) {
+		list->last = prev;
+	}
+}
+
 void *list_reduce(List *list, void *(*f)(void *contents, void *data),
 		void *data) {
 

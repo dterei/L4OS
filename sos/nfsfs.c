@@ -3,10 +3,11 @@
 
 #include "nfsfs.h"
 
+#include "constants.h"
 #include "libsos.h"
+#include "list.h"
 #include "network.h"
 #include "syscall.h"
-#include "constants.h"
 
 #define verbose 1
 
@@ -74,9 +75,6 @@ struct NFS_BaseRequest_t {
 	uintptr_t token;
 	VNode vnode;
 	L4_ThreadId_t tid;
-
-	NFS_BaseRequest *previous;
-	NFS_BaseRequest *next;
 };
 
 typedef struct {
@@ -124,10 +122,10 @@ typedef struct {
 } NFS_RemoveRequest;
 
 /* Queue of request for callbacks */
-NFS_BaseRequest *NfsRequests;
+static List *NfsRequests;
 
 /* NFS Base directory */
-struct cookie nfs_mnt;
+static struct cookie nfs_mnt;
 
 
 /* Start up NFS file system */
@@ -138,7 +136,7 @@ nfsfs_init(void) {
 	/* redefine just to limit our linkage to one place */
 	nfs_mnt = mnt_point;
 
-	NfsRequests = NULL;
+	NfsRequests = list_empty();
 	(void) sos_thread_new(L4_nilthread,
 			&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
 	return 0;
@@ -150,6 +148,19 @@ uintptr_t
 newtoken(void) {
 	static uintptr_t tok = 0;
 	return ((tok++) % (NULL_TOKEN - 1));
+}
+
+/* NfsRequest list search function, searching on a token */
+static
+int
+search_requests(void *node, void *key) {
+	NFS_BaseRequest *brq = (NFS_BaseRequest *) node;
+	uintptr_t token = *((uintptr_t *) key);
+	if (brq->token == token) {
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 /* Create a new NFS request of type specified */
@@ -193,17 +204,10 @@ create_request(enum NfsRequestType rt, VNode vn, L4_ThreadId_t tid) {
 	rq->vnode = vn;
 	rq->tid = tid;
 
-	rq->next = NULL;
-	rq->previous = NULL;
+	// add to list
+	list_push(NfsRequests, rq);
 
-	// add to list if list not empty
-	if (NfsRequests != NULL) {
-		rq->next = NfsRequests;
-		NfsRequests->previous = rq;
-	}
-	NfsRequests = rq;
-
-	return NfsRequests;
+	return rq;
 }
 
 /* Remove and free a specified request */
@@ -211,28 +215,7 @@ static
 void
 remove_request(NFS_BaseRequest *rq) {
 	// remove from lists
-	NFS_BaseRequest *prq, *nrq;
-	prq = rq->previous;
-	nrq = rq->next;
-
-	// handle empty list
-	if (prq == NULL && nrq == NULL) {
-		NfsRequests = NULL;
-	}
-	// handle end of list
-	else if (nrq == NULL) {
-		prq->next = NULL;
-	}
-	// handle start of list
-	else if (prq == NULL) {
-		NfsRequests = nrq;
-		nrq->previous = NULL;
-	}
-	// handle other usual case
-	else {
-		prq->next = nrq;
-		nrq->previous = prq;
-	}
+	list_delete_first(NfsRequests, search_requests, &(rq->token));
 
 	// free memory
 	switch (rq->rt) {
@@ -263,14 +246,7 @@ remove_request(NFS_BaseRequest *rq) {
 static
 NFS_BaseRequest*
 get_request(uintptr_t token) {
-	for (NFS_BaseRequest* brq = NfsRequests; brq != NULL; brq = brq->next) {
-		dprintf(3, "nfsfs_read_cb: NFS_BaseRequest: %d\n", brq->token);
-		if (brq->token == token) {
-			return brq;
-		}
-	}
-
-	return NULL;
+	return (NFS_BaseRequest *) list_find(NfsRequests, search_requests, &token);
 }
 
 /* Convert the NFS mode (xwr) to unix mode (rwx) */
