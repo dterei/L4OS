@@ -216,6 +216,8 @@ increase_refs(VNode vnode, fmode_t mode) {
 		}
 	}
 
+	dprintf(2, "Inc VNode: (%s) (r %u/%u) (w %u/%u)\n", vnode->path, vnode->readers,
+			vnode->Max_Readers, vnode->writers, vnode->Max_Writers);
 	return SOS_VFS_OK;
 }
 
@@ -235,10 +237,12 @@ decrease_refs(VNode vnode, fmode_t mode) {
 
 	// check refs are consistent
 	if (vnode->readers < 0 || vnode->writers < 0) {
-		dprintf(0, "!!! VNode refs corrupt! (%s) (r %d) (w %d)\n", vnode->path,
+		dprintf(0, "!!! VNode refs corrupt! (%s) (r %u) (w %u)\n", vnode->path,
 				vnode->readers, vnode->writers);
 	}
 
+	dprintf(2, "Dec VNode: (%s) (r %u/%u) (w %u/%u)\n", vnode->path, vnode->readers,
+			vnode->Max_Readers, vnode->writers, vnode->Max_Writers);
 	return SOS_VFS_OK;
 }
 
@@ -248,7 +252,7 @@ decrease_refs(VNode vnode, fmode_t mode) {
 void
 vfs_open(L4_ThreadId_t tid, const char *path, fmode_t mode,
 		unsigned int readers, unsigned int writers) {
-	dprintf(1, "*** vfs_open: %d, %p (%s) %d %d %d\n", L4_ThreadNo(tid), path, path, mode, readers,
+	dprintf(1, "*** vfs_open: %d, %p (%s) %d %u %u\n", L4_ThreadNo(tid), path, path, mode, readers,
 			writers);
 	
 	VNode vnode = NULL;
@@ -391,7 +395,8 @@ vfs_close(L4_ThreadId_t tid, fildes_t file) {
 	// get vnode
 	VNode vnode = vf[file].vnode;
 	if (vnode == NULL) {
-		dprintf(1, "*** vfs_close: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_close: invalid file handler: %d, %d\n",
+				L4_ThreadNo(tid), file);
 		syscall_reply(tid, SOS_VFS_NOFILE);
 		return;
 	}
@@ -589,7 +594,8 @@ vfs_flush(L4_ThreadId_t tid, fildes_t file) {
 
 	// make sure ok
 	if (vnode == NULL) {
-		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
+		dprintf(1, "*** vfs_seek: invalid file handler: %d, %d\n",
+				L4_ThreadNo(tid), file);
 		syscall_reply(tid, SOS_VFS_NOFILE);
 		return;
 	}
