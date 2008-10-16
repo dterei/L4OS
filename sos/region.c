@@ -6,6 +6,7 @@ struct Region_t {
 	region_type type;
 	uintptr_t base;
 	unsigned int size;
+	unsigned int filesize;
 	int rights;
 	int mapDirectly;
 	Swapfile *swapfile;
@@ -41,6 +42,10 @@ unsigned int region_get_size(Region *r) {
 	return r->size;
 }
 
+unsigned int region_get_filesize(Region *r) {
+	return r->filesize;
+}
+
 int region_get_rights(Region *r) {
 	return r->rights;
 }
@@ -59,6 +64,10 @@ void region_set_rights(Region *r, int rights) {
 
 void region_set_size(Region *r, unsigned int size) {
 	r->size = size;
+}
+
+void region_set_filesize(Region *r, unsigned int filesize) {
+	r->filesize = filesize;
 }
 
 void region_set_swapfile(Region *r, Swapfile *sf) {

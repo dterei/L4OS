@@ -288,6 +288,10 @@ int process_kill(Process *p) {
 		// don't want anybody killing threads (and they shouldn't be visible)
 		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
 					L4_nilthread, L4_nilthread, 0, NULL));
+		// delete caps
+		// space control delete asid
+		// delete clist
+
 		sosProcs[process_get_pid(p)] = NULL;
 
 		/*

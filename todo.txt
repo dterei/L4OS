@@ -1,4 +1,7 @@
-- Free L4's resources when deleting process.
+- Free L4's resources when deleting process.  This involves (as mentioned in
+process.c), freeing the capabilties (to rootserver and pager), freeing the
+address space, and then freeing the capability list.  Should probably check
+that the whole address space for that process is being unmapped too.
 
 - ELF loading.  Note that we should aim to load everything by setting the
 relevant memory sections of whichever process as being on disk, and then having
@@ -31,8 +34,6 @@ want to minimise the interface to the pager though.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
-- Change the callback sequencer to use enums rather than magic state.  Then...
-
 - Check exec permissions when trying to run an ELF file.
 
 - Max clists is 16, so despite having max addrspaces as 256 it will crash
@@ -40,9 +41,5 @@ after creating something like 16 processes.  So, need to increase the #define
 (pistachio/src/caps.cc) and also free the clists and all that stuff (as per
 the todo above).
 
-- Scrap the ELF file is a swap file thing (goddamn it) and just load them
-as a separate process.  And remember to zero the whole thing first, and only
-copy up to filesiz (but region goes up to memsiz).
-
-- finished -> finish
+- Don't ever close the default swapfile, and only ever open it
 

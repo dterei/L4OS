@@ -26,7 +26,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 4
+#define FRAME_ALLOC_LIMIT 42
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -46,6 +46,10 @@ typedef enum {
 } rtype_t;
 
 static void queueRequest(rtype_t rtype, void *request);
+static void startPagerRequest(void);
+static void startRequest(void);
+static void startSwapin(void);
+static void startSwapout(void);
 
 // Demand paging
 #define SWAP_BUFSIZ 1024
@@ -69,6 +73,7 @@ struct PagerRequest_t {
 	Swapfile *sf;
 	int offset;
 	int size;
+	void (*finish)(void);
 	void (*callback)(PagerRequest *pr);
 };
 
@@ -77,7 +82,7 @@ static L4_Word_t pinnedFrame;
 // ELF loading
 typedef enum {
 	ELFLOAD_OPEN,
-	//ELFLOAD_CHECK_EXEC,
+	ELFLOAD_CHECK_EXEC,
 	ELFLOAD_READ_HEADER,
 	ELFLOAD_CLOSE,
 } elfload_stage_t;
@@ -414,6 +419,10 @@ static int findRegion(void *contents, void *data) {
 			(addr < region_get_base(r) + region_get_size(r)));
 }
 
+static void panic(void) {
+	assert(! "DON'T PANIC");
+}
+
 static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr,
 		Swapfile *sf, void (*callback)(PagerRequest *pr)) {
 	PagerRequest *newPr = (PagerRequest*) malloc(sizeof(PagerRequest));
@@ -422,6 +431,7 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr,
 	newPr->addr = addr;
 	newPr->offset = PR_OFFSET_UNDEFINED;
 	newPr->sf = sf;
+	newPr->finish = panic;
 	newPr->callback = callback;
 
 	return newPr;
@@ -622,6 +632,395 @@ static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
 	copyInOutData[L4_ThreadNo(tid)] = data;
 }
 
+static void finishElfload(int rval) {
+	assert(requestsPeekType() == REQUEST_ELFLOAD);
+	ElfloadRequest *er = (ElfloadRequest*) requestsUnshift();
+
+	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
+	free(er);
+	syscall_reply(replyTo, rval);
+}
+
+static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
+	assert((addr & ~PAGEALIGN) == 0);
+	L4_Word_t *entry;
+	L4_Word_t base = region_get_base(r);
+
+	for (int size = 0; size < region_get_size(r); size += PAGESIZE) {
+		entry = pagetableLookup(process_get_pagetable(p), base + size);
+		*entry = (addr + size) | ONDISK_MASK | ONELF_MASK;
+	}
+}
+
+static void continueElfload(int vfsRval) {
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	struct Elf32_Header *header;
+	Process *p;
+
+	switch (er->stage) {
+		case ELFLOAD_OPEN:
+			dprintf(0, "ELFLOAD_OPEN\n");
+			if (vfsRval < 0) {
+				dprintf(0, "*** continueElfload: failed to open\n");
+				finishElfload(-1);
+			} else {
+				er->fd = vfsRval;
+				readNonblocking(er->fd, MAX_IO_BUF);
+			}
+
+			er->stage++;
+			break;
+
+		case ELFLOAD_CHECK_EXEC:
+			printf("REMINDER: CHECK EXEC\n");
+			er->stage++;
+
+		case ELFLOAD_READ_HEADER:
+			dprintf(0, "ELFLOAD_READ_HEADER\n");
+			header = (struct Elf32_Header*) pager_buffer(sos_my_tid());
+
+			if (elf32_checkFile(header) != 0) {
+				dprintf(0, "*** continueElfload: not an ELF file\n");
+				finishElfload(-1);
+			} else {
+				p = process_init(0);
+
+				for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
+					Region *r = region_alloc(
+							REGION_OTHER,
+							elf32_getProgramHeaderVaddr(header, i),
+							elf32_getProgramHeaderMemorySize(header, i),
+							elf32_getProgramHeaderFlags(header, i), 0);
+					region_set_swapfile(r, swapfile_init(er->path));
+					region_set_filesize(r, elf32_getProgramHeaderFileSize(
+								header, i));
+					process_add_region(p, r);
+					setRegionOnElf(p, r,
+							elf32_getProgramHeaderOffset(header, i) & PAGEALIGN);
+				}
+
+				process_set_name(p, er->path);
+				process_prepare(p);
+				process_set_ip(p, (void*) elf32_getEntryPoint(header));
+
+				process_dump(p);
+				process_run(p);
+				closeNonblocking(er->fd);
+				er->child = process_get_pid(p);
+			}
+
+			er->stage++;
+			break;
+
+		case ELFLOAD_CLOSE:
+			dprintf(0, "ELFLOAD_CLOSE\n");
+			finishElfload(er->child);
+			break;
+
+		default:
+			assert(!"continueElfload");
+	}
+}
+
+static void startElfload(void) {
+	assert(requestsPeekType() == REQUEST_ELFLOAD);
+
+	// Open the file and let the continuation take over
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+	openNonblocking(NULL, FM_READ);
+}
+
+static void dequeueRequest(void) {
+	dprintf(1, "*** dequeueRequest\n");
+
+	list_unshift(requests);
+
+	if (list_null(requests)) {
+		dprintf(1, "*** dequeueRequest: no more items\n");
+	} else {
+		dprintf(1, "*** dequeueRequest: running next\n");
+		startRequest();
+	}
+}
+
+static void queueRequest(rtype_t rtype, void *request) {
+	dprintf(1, "*** queueRequest\n");
+
+	if (list_null(requests)) {
+		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
+		startRequest();
+	} else {
+		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
+	}
+}
+
+static void memzero(char *addr, L4_Word_t size) {
+	for (int i = 0; i < size; i++) addr[i] = 0x00;
+}
+
+static void finishSwapout(void) {
+	dprintf(1, "*** finishSwapout\n");
+
+	Process *p;
+	PagerRequest *swapin, *swapout;
+	L4_Word_t *entry, frame;
+
+	// Done with the swapout
+	assert(requestsPeekType() == REQUEST_SWAPOUT);
+	swapout = (PagerRequest*) requestsUnshift();
+
+	pagerFrameFree(process_lookup(swapout->pid), swapout->addr);
+	free(swapout);
+
+	// Either the swapout was just for a free frame, or it was for
+	// a frame with existing contents
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	swapin = (PagerRequest*) requestsPeek();
+
+	p = process_lookup(swapin->pid);
+	if (p == NULL) {
+		// Process died
+		swapin->callback(swapin);
+		dequeueRequest();
+	}
+
+	// Pager is now guaranteed to find a page (note that the pager
+	// action has been separated, we reply later)
+	pagerAction(swapin);
+
+	entry = pagetableLookup(process_get_pagetable(p), swapin->addr);
+	frame = *entry & ADDRESS_MASK;
+
+	if (pinnedFrame != 0) {
+		// There is contents we need to copy across
+		dprintf(2, "*** finishSwapout: pinned frame is %p\n", pinnedFrame);
+		memcpy((char*) frame, (void*) pinnedFrame, PAGESIZE);
+		frame_free(pinnedFrame);
+		pinnedFrame = 0;
+	} else {
+		// Zero the frame for debugging, but it may be a good idea anyway
+		dprintf(2, "*** zeroing frame %p\n", (void*) frame);
+		memzero((char*) frame, PAGESIZE);
+	}
+
+	dprintf(2, "*** finishSwapout: addr=%p for pid=%d now %p\n",
+			(void*) swapin->addr, process_get_pid(p), (void*) frame);
+
+	prepareDataOut(p, swapin->addr & PAGEALIGN);
+	swapin->callback(swapin);
+	dequeueRequest();
+}
+
+static void finishSwapin(void) {
+	dprintf(1, "*** finishSwapin\n");
+	Process *p;
+	PagerRequest *request;
+	Pair args; // (pid, word)
+	L4_Word_t *entry, addr;
+
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	request = (PagerRequest*) requestsPeek();
+	p = process_lookup(request->pid);
+
+	if (p == NULL) {
+		// Process died
+		frame_free(pinnedFrame);
+		pinnedFrame = 0;
+		request->callback(request);
+		dequeueRequest();
+	}
+
+	// Either there is a frame free which we can immediately copy
+	// the fresh page in to, or there isn't in which case we need
+	// to swap something out first
+	addr = request->addr & PAGEALIGN;
+	entry = pagetableLookup(process_get_pagetable(p), addr);
+
+	// In either case the page is no longer on disk
+	assert(*entry & ONDISK_MASK);
+
+	args = PAIR(process_get_pid(p), *entry & ADDRESS_MASK);
+	list_delete(swapped, pagerSwapslotFree, &args);
+	*entry &= ~ONDISK_MASK;
+	*entry &= ~ADDRESS_MASK;
+
+	if (allocLimit > 0) {
+		// Pager is guaranteed to find a page
+		pagerAction(request);
+		L4_Word_t frame = *entry & ADDRESS_MASK;
+
+		// Copy data from pinned frame to newly allocated frame
+		memcpy((void*) frame, (void*) pinnedFrame, PAGESIZE);
+
+		// Fix caches
+		prepareDataOut(p, addr);
+
+		frame_free(pinnedFrame);
+		pinnedFrame = 0;
+		request->callback(request);
+		dequeueRequest();
+	} else {
+		// Need to swap something out before being able to continue -
+		// the swapout process will deal with the pinned frame etc
+		startSwapout();
+	}
+}
+
+static void finishSwapelf(void) {
+	PagerRequest *pr = (PagerRequest*) requestsPeek();
+	Process *p = process_lookup(pr->pid);
+	Region *r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
+
+	// Zero the area between the end of memory (i.e. the end of the region) and
+	// the end of the file (i.e. region_get_filesize)
+	L4_Word_t fileTop = region_get_base(r) + region_get_filesize(r);
+	if ((fileTop & PAGEALIGN) == (pr->addr & PAGEALIGN)) {
+		printf("zeroing from %p because of addr %p\n",
+				(void*) fileTop, (void*) pr->addr);
+		assert(region_get_size(r) >= region_get_filesize(r));
+		memzero((char*) pinnedFrame + (fileTop % PAGESIZE),
+				region_get_size(r) - region_get_filesize(r));
+	}
+
+	// Swap file is no longer the ELF file.  We could do a nice optimisation
+	// here and not do this for the code segment, but tooo much effort
+	//region_set_swapfile(r, defaultSwapfile);
+
+	// I'm 99.99% sure it's ok to do this without any other magic
+	finishSwapin();
+}
+
+static void continueSwapin(int vfsRval) {
+	PagerRequest *pr = (PagerRequest*) requestsPeek();
+
+	switch (pr->stage) {
+		case SWAPIN_OPEN: 
+			assert(vfsRval == 0);
+			swapfile_set_fd(pr->sf, vfsRval);
+
+			L4_Word_t *entry = pagetableLookup(
+					process_get_pagetable(process_lookup(pr->pid)),
+					pr->addr & ADDRESS_MASK);
+
+			lseekNonblocking(swapfile_get_fd(pr->sf),
+					*entry & ADDRESS_MASK, SEEK_SET);
+			pr->offset = 0;
+
+			pr->stage++;
+			break;
+
+		case SWAPIN_LSEEK:
+			readNonblocking(swapfile_get_fd(pr->sf),
+					min(SWAP_BUFSIZ, pr->size - pr->offset));
+			pr->stage++;
+			break;
+
+		case SWAPIN_READ:
+			assert(vfsRval > 0);
+			assert(pr->offset <= PAGESIZE);
+
+			memcpy(((char*) pinnedFrame) + pr->offset,
+					pager_buffer(virtualPager), vfsRval);
+			pr->offset += vfsRval;
+			assert(pr->offset <= pr->size);
+
+			if (pr->offset == pr->size) {
+				swapfile_close(pr->sf);
+				pr->stage++;
+			} else {
+				readNonblocking(swapfile_get_fd(pr->sf),
+						min(SWAP_BUFSIZ, pr->size - pr->offset));
+			}
+
+			break;
+
+		case SWAPIN_CLOSE:
+			pr->finish();
+			break;
+
+		default:
+			assert(! __FUNCTION__);
+	}
+}
+
+static void continueSwapout(int vfsRval) {
+	PagerRequest *pr = (PagerRequest*) requestsPeek();
+	assert(pr->offset <= PAGESIZE);
+
+	switch (pr->stage) {
+		case SWAPOUT_OPEN:
+			swapfile_set_fd(pr->sf, vfsRval);
+			pr->offset = 0;
+
+			lseekNonblocking(swapfile_get_fd(pr->sf), pr->diskAddr, SEEK_SET);
+
+			pr->stage++;
+			break;
+
+		case SWAPOUT_WRITE:
+			assert(pr->offset <= pr->size);
+
+			if (pr->offset == pr->size) {
+				swapfile_close(pr->sf);
+				pr->stage++;
+			} else {
+				int size = min(SWAP_BUFSIZ, pr->size);
+				memcpy(pager_buffer(sos_my_tid()),
+						(void*) (pr->addr + pr->offset), size);
+				writeNonblocking(swapfile_get_fd(pr->sf), size);
+				pr->offset += size;
+			}
+
+			break;
+
+		case SWAPOUT_CLOSE:
+			finishSwapout();
+			break;
+
+		default:
+			assert(! __FUNCTION__);
+	}
+}
+
+static void startSwapin(void) {
+	dprintf(2, "*** startSwapin\n");
+	Process *p;
+	PagerRequest *pr;
+	Region *r;
+
+	// pin a frame to copy in to (although "pinned" is somewhat of a misnomer
+	// since really it's just a temporary frame and nothing is really pinned)
+	pinnedFrame = frame_alloc();
+
+	// kick-start the chain of NFS requests and callbacks by opening swapfile
+	assert(requestsPeekType() == REQUEST_SWAPIN);
+	pr = requestsPeek();
+	p = process_lookup(pr->pid);
+
+	r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
+	assert(r != NULL);
+
+	if (region_get_swapfile(r) != NULL) {
+		// It is on an ELF file, need to read from that
+		pr->sf = region_get_swapfile(r);
+		/*
+		printf("region size is %p\n", (void*) region_get_filesize(r));
+		printf("region base is %p\n", (void*) region_get_base(r));
+		pr->size = region_get_filesize(r);
+		*/
+		pr->finish = finishSwapelf;
+	} else {
+		// It is the default swapfile
+		pr->sf = defaultSwapfile;
+		pr->finish = finishSwapin;
+	}
+
+	pr->size = PAGESIZE;
+	pr->stage = SWAPIN_OPEN;
+	swapfile_open(pr->sf, FM_READ);
+}
+
 static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
@@ -677,36 +1076,23 @@ static void startSwapout(void) {
 	pair_free(swapout);
 }
 
-static void startSwapin(void) {
-	dprintf(2, "*** startSwapin\n");
-	Process *p;
-	PagerRequest *pr;
-	Region *r;
+static void startRequest(void) {
+	dprintf(1, "*** startRequest\n");
+	assert(!list_null(requests));
 
-	// pin a frame to copy in to (although "pinned" is somewhat of a misnomer
-	// since really it's just a temporary frame and nothing is really pinned)
-	pinnedFrame = frame_alloc();
+	switch (requestsPeekType()) {
+		case REQUEST_SWAPOUT:
+		case REQUEST_SWAPIN:
+			startPagerRequest();
+			break;
 
-	// kick-start the chain of NFS requests and callbacks by opening swapfile
-	assert(requestsPeekType() == REQUEST_SWAPIN);
-	pr = requestsPeek();
-	p = process_lookup(pr->pid);
+		case REQUEST_ELFLOAD:
+			startElfload();
+			break;
 
-	r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
-	assert(r != NULL);
-
-	if (region_get_swapfile(r) != NULL) {
-		// It is on an ELF file, need to read from that
-		assert(!"argh");
-		pr->sf = region_get_swapfile(r);
-	} else {
-		// It is the default swapfile
-		pr->sf = defaultSwapfile;
+		default:
+			dprintf(0, "!!! startRequest: unrecognised request\n");
 	}
-
-	pr->stage = SWAPIN_OPEN;
-	pr->size = PAGESIZE;
-	swapfile_open(pr->sf, FM_READ);
 }
 
 static void startPagerRequest(void) {
@@ -735,349 +1121,6 @@ static void startPagerRequest(void) {
 		} else {
 			startSwapout();
 		}
-	}
-}
-
-static void finishElfload(int rval) {
-	assert(requestsPeekType() == REQUEST_ELFLOAD);
-	ElfloadRequest *er = (ElfloadRequest*) requestsUnshift();
-
-	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
-	free(er);
-	syscall_reply(replyTo, rval);
-}
-
-static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
-	assert((addr & ~PAGEALIGN) == 0);
-	L4_Word_t *entry;
-	L4_Word_t base = region_get_base(r);
-
-	for (int size = 0; size < region_get_size(r); size += PAGESIZE) {
-		entry = pagetableLookup(process_get_pagetable(p), base + size);
-		*entry = (addr + size) | ONDISK_MASK | ONELF_MASK;
-	}
-}
-
-static void continueElfload(int vfsRval) {
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
-	struct Elf32_Header *header;
-	Process *p;
-
-	switch (er->stage) {
-		case ELFLOAD_OPEN:
-			dprintf(0, "ELFLOAD_OPEN\n");
-			if (vfsRval < 0) {
-				dprintf(0, "*** continueElfload: failed to open\n");
-				finishElfload(-1);
-			} else {
-				er->fd = vfsRval;
-				readNonblocking(er->fd, MAX_IO_BUF);
-			}
-
-			er->stage++;
-			break;
-
-		//case ELFLOAD_CHECK_EXEC:
-		//	break;
-
-		case ELFLOAD_READ_HEADER:
-			dprintf(0, "ELFLOAD_READ_HEADER\n");
-			header = (struct Elf32_Header*) pager_buffer(sos_my_tid());
-
-			if (elf32_checkFile(header) != 0) {
-				dprintf(0, "*** continueElfload: not an ELF file\n");
-				finishElfload(-1);
-			} else {
-				p = process_init(0);
-
-				for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
-					Region *r = region_alloc(
-							REGION_OTHER,
-							elf32_getProgramHeaderVaddr(header, i),
-							elf32_getProgramHeaderMemorySize(header, i),
-							elf32_getProgramHeaderFlags(header, i), 0);
-					region_set_swapfile(r, swapfile_init(er->path));
-					process_add_region(p, r);
-					setRegionOnElf(p, r,
-							elf32_getProgramHeaderOffset(header, i) & PAGEALIGN);
-				}
-
-				process_set_name(p, er->path);
-				process_prepare(p);
-				process_set_ip(p, (void*) elf32_getEntryPoint(header));
-
-				process_dump(p);
-				process_run(p);
-				closeNonblocking(er->fd);
-				er->child = process_get_pid(p);
-			}
-
-			er->stage++;
-			break;
-
-		case ELFLOAD_CLOSE:
-			dprintf(0, "ELFLOAD_CLOSE\n");
-			finishElfload(er->child);
-			break;
-
-		default:
-			assert(!"continueElfload");
-	}
-}
-
-static void startElfload(void) {
-	assert(requestsPeekType() == REQUEST_ELFLOAD);
-
-	// Open the file and let the continuation take over
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
-	openNonblocking(NULL, FM_READ);
-}
-
-static void startRequest(void) {
-	dprintf(1, "*** startRequest\n");
-	assert(!list_null(requests));
-
-	switch (requestsPeekType()) {
-		case REQUEST_SWAPOUT:
-		case REQUEST_SWAPIN:
-			startPagerRequest();
-			break;
-
-		case REQUEST_ELFLOAD:
-			startElfload();
-			break;
-
-		default:
-			dprintf(0, "!!! startRequest: unrecognised request\n");
-	}
-}
-
-static void dequeueRequest(void) {
-	dprintf(1, "*** dequeueRequest\n");
-
-	list_unshift(requests);
-
-	if (list_null(requests)) {
-		dprintf(1, "*** dequeueRequest: no more items\n");
-	} else {
-		dprintf(1, "*** dequeueRequest: running next\n");
-		startRequest();
-	}
-}
-
-static void queueRequest(rtype_t rtype, void *request) {
-	dprintf(1, "*** queueRequest\n");
-
-	if (list_null(requests)) {
-		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
-		startRequest();
-	} else {
-		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
-	}
-}
-
-static void memzero(char *addr, L4_Word_t size) {
-	for (int i = 0; i < size; i++) addr[i] = 0x00;
-}
-
-static void finishedSwapout(void) {
-	dprintf(1, "*** finishedSwapout\n");
-
-	Process *p;
-	PagerRequest *swapin, *swapout;
-	L4_Word_t *entry, frame;
-
-	// Done with the swapout
-	assert(requestsPeekType() == REQUEST_SWAPOUT);
-	swapout = (PagerRequest*) requestsUnshift();
-
-	pagerFrameFree(process_lookup(swapout->pid), swapout->addr);
-	free(swapout);
-
-	// Either the swapout was just for a free frame, or it was for
-	// a frame with existing contents
-	assert(requestsPeekType() == REQUEST_SWAPIN);
-	swapin = (PagerRequest*) requestsPeek();
-
-	p = process_lookup(swapin->pid);
-	if (p == NULL) {
-		// Process died
-		swapin->callback(swapin);
-		dequeueRequest();
-	}
-
-	// Pager is now guaranteed to find a page (note that the pager
-	// action has been separated, we reply later)
-	pagerAction(swapin);
-
-	entry = pagetableLookup(process_get_pagetable(p), swapin->addr);
-	frame = *entry & ADDRESS_MASK;
-
-	if (pinnedFrame != 0) {
-		// There is contents we need to copy across
-		dprintf(2, "*** finishedSwapout: pinned frame is %p\n", pinnedFrame);
-		memcpy((char*) frame, (void*) pinnedFrame, PAGESIZE);
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
-	} else {
-		// Zero the frame for debugging, but it may be a good idea anyway
-		dprintf(2, "*** zeroing frame %p\n", (void*) frame);
-		memzero((char*) frame, PAGESIZE);
-	}
-
-	dprintf(2, "*** finishedSwapout: addr=%p for pid=%d now %p\n",
-			(void*) swapin->addr, process_get_pid(p), (void*) frame);
-
-	prepareDataOut(p, swapin->addr & PAGEALIGN);
-	swapin->callback(swapin);
-	dequeueRequest();
-}
-
-static void finishedSwapin(void) {
-	dprintf(1, "*** finishedSwapin\n");
-	Process *p;
-	PagerRequest *request;
-	Pair args; // (pid, word)
-	L4_Word_t *entry, addr;
-
-	assert(requestsPeekType() == REQUEST_SWAPIN);
-	request = (PagerRequest*) requestsPeek();
-	p = process_lookup(request->pid);
-
-	if (p == NULL) {
-		// Process died
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
-		request->callback(request);
-		dequeueRequest();
-	}
-
-	// Either there is a frame free which we can immediately copy
-	// the fresh page in to, or there isn't in which case we need
-	// to swap something out first
-	addr = request->addr & PAGEALIGN;
-	entry = pagetableLookup(process_get_pagetable(p), addr);
-
-	// In either case the page is no longer on disk
-	assert(*entry & ONDISK_MASK);
-
-	args = PAIR(process_get_pid(p), *entry & ADDRESS_MASK);
-	list_delete(swapped, pagerSwapslotFree, &args);
-	*entry &= ~ONDISK_MASK;
-	*entry &= ~ADDRESS_MASK;
-
-	if (allocLimit > 0) {
-		// Pager is guaranteed to find a page
-		pagerAction(request);
-		L4_Word_t frame = *entry & ADDRESS_MASK;
-
-		// Copy data from pinned frame to newly allocated frame
-		memcpy((void*) frame, (void*) pinnedFrame, PAGESIZE);
-
-		// Fix caches
-		prepareDataOut(p, addr);
-
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
-		request->callback(request);
-		dequeueRequest();
-	} else {
-		// Need to swap something out before being able to continue -
-		// the swapout process will deal with the pinned frame etc
-		startSwapout();
-	}
-}
-
-static void continueSwapin(int vfsRval) {
-	PagerRequest *pr = (PagerRequest*) requestsPeek();
-	assert(pr->offset <= PAGESIZE);
-
-	switch (pr->stage) {
-		case SWAPIN_OPEN: 
-			assert(vfsRval == 0);
-			swapfile_set_fd(pr->sf, vfsRval);
-
-			L4_Word_t *entry = pagetableLookup(
-					process_get_pagetable(process_lookup(pr->pid)),
-					pr->addr & ADDRESS_MASK);
-
-			lseekNonblocking(swapfile_get_fd(pr->sf),
-					*entry & ADDRESS_MASK, SEEK_SET);
-			pr->offset = 0;
-
-			pr->stage++;
-			break;
-
-		case SWAPIN_LSEEK:
-			readNonblocking(swapfile_get_fd(pr->sf),
-					min(SWAP_BUFSIZ, pr->size - pr->offset));
-			pr->stage++;
-			break;
-
-		case SWAPIN_READ:
-			assert(vfsRval > 0);
-
-			memcpy(((char*) pinnedFrame) + pr->offset,
-					pager_buffer(virtualPager), vfsRval);
-			pr->offset += vfsRval;
-			assert(pr->offset <= pr->size);
-
-			if (pr->offset == pr->size) {
-				swapfile_close(pr->sf);
-				pr->stage++;
-			} else {
-				readNonblocking(swapfile_get_fd(pr->sf),
-						min(SWAP_BUFSIZ, pr->size - pr->offset));
-			}
-
-			break;
-
-		case SWAPIN_CLOSE:
-			finishedSwapin();
-			break;
-
-		default:
-			assert(! __FUNCTION__);
-	}
-}
-
-static void continueSwapout(int vfsRval) {
-	PagerRequest *pr = (PagerRequest*) requestsPeek();
-	assert(pr->offset <= PAGESIZE);
-
-	switch (pr->stage) {
-		case SWAPOUT_OPEN:
-			swapfile_set_fd(pr->sf, vfsRval);
-			pr->offset = 0;
-
-			lseekNonblocking(swapfile_get_fd(pr->sf), pr->diskAddr, SEEK_SET);
-
-			pr->stage++;
-			break;
-
-		case SWAPOUT_WRITE:
-			assert(pr->offset <= pr->size);
-
-			if (pr->offset == pr->size) {
-				swapfile_close(pr->sf);
-				pr->stage++;
-			} else {
-				int size = min(SWAP_BUFSIZ, pr->size);
-				memcpy(pager_buffer(sos_my_tid()),
-						(void*) (pr->addr + pr->offset), size);
-				writeNonblocking(swapfile_get_fd(pr->sf), size);
-				pr->offset += size;
-			}
-
-			break;
-
-		case SWAPOUT_CLOSE:
-			finishedSwapout();
-			break;
-
-		default:
-			assert(! __FUNCTION__);
 	}
 }
 

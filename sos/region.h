@@ -27,6 +27,7 @@ void region_free(Region *r);
 region_type region_get_type(Region *r);
 uintptr_t region_get_base(Region *r);
 unsigned int region_get_size(Region *r);
+unsigned int region_get_filesize(Region *r);
 int region_get_rights(Region *r);
 int region_map_directly(Region *r);
 Swapfile *region_get_swapfile(Region *r);
@@ -34,6 +35,7 @@ Swapfile *region_get_swapfile(Region *r);
 // Setters
 void region_set_rights(Region *r, int rights);
 void region_set_size(Region *r, unsigned int size);
+void region_set_filesize(Region *r, unsigned int size);
 void region_set_swapfile(Region *r, Swapfile *sf);
 
 #endif // sos/region.h
