@@ -17,7 +17,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 4
 
 // Masks for page table entries
 #define ONDISK_MASK  0x00000001
@@ -26,7 +26,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 12
+#define FRAME_ALLOC_LIMIT 16
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -770,13 +770,43 @@ static void dequeueRequest(void) {
 	}
 }
 
+static void printRequests(void *contents, void *data) {
+	Pair *pair = (Pair*) contents;
+	rtype_t type = (rtype_t) pair->fst;
+	PagerRequest *pr;
+	ElfloadRequest *er;
+
+	printf("rtype: %d, ", type);
+
+	switch (type) {
+		case REQUEST_SWAPOUT:
+		case REQUEST_SWAPIN:
+			pr = (PagerRequest*) pair->snd;
+			printf("stage=%d pid=%d addr=%p\n",
+					pr->stage, pr->pid, (void*) pr->addr);
+			break;
+
+		case REQUEST_ELFLOAD:
+			er = (ElfloadRequest*) pair->snd;
+			printf("stage=%d path=%s parent=%d child=%d\n",
+					er->stage, er->path, er->parent, er->child);
+			break;
+
+		default:
+			assert(! __FUNCTION__);
+	}
+}
+
 static void queueRequest(rtype_t rtype, void *request) {
 	dprintf(1, "*** queueRequest\n");
 
 	if (list_null(requests)) {
+		dprintf(2, "*** queueRequest: list null, running request\n");
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 		startRequest();
 	} else {
+		dprintf(2, "*** queueRequest: queueing request\n");
+		list_iterate(requests, printRequests, NULL);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
 }

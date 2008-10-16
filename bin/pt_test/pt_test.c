@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define NUM_SLOTS 128
+#define NUM_SLOTS 64
 #define SLOTSIZE 196
 #define STACKSIZE 512
 
