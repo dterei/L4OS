@@ -377,6 +377,12 @@ int stat(const char *path, stat_t *buf) {
 	return rval;
 }
 
+void statNonblocking(void) {
+	L4_Msg_t msg;
+	syscall_prepare(&msg);
+	syscall(L4_rootserver, SOS_STAT, NO_REPLY, &msg);
+}
+
 /* Removees the specified file "path".
  * Returns - if successful, -1 otherwise (invalid name).
  */

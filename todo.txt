@@ -10,12 +10,15 @@ program to show this but won't be too hard.  Also won't be a hard fix.
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
-- Check exec permissions when trying to run an ELF file.
-
 - Don't ever close the default swapfile, and only ever open it
 
 - Move all the console functions from sosh in to the ELF file.  In fact, get
 rid of the sosh directly and just put it in the bin directory, then make the
 only program that runs from bootinfo is one that continually executes sosh.
 And waits for it to finish.
+
+- Stress test with multiple processes.
+
+- Test accessing regions without permissions, and also kill proceses when
+they throw exceptions.  Not very hard.
 

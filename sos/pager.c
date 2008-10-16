@@ -652,35 +652,58 @@ static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
 	}
 }
 
+static char *wordAlign(char *s) {
+	unsigned int x = (unsigned int) s;
+	x--;
+	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
+	return (char*) x;
+}
+
 static void continueElfload(int vfsRval) {
 	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
 	struct Elf32_Header *header;
+	char *buf;
+	stat_t *elfStat;
 	Process *p;
 
 	switch (er->stage) {
 		case ELFLOAD_OPEN:
-			dprintf(0, "ELFLOAD_OPEN\n");
+			dprintf(2, "ELFLOAD_OPEN\n");
 			if (vfsRval < 0) {
-				dprintf(0, "*** continueElfload: failed to open\n");
+				dprintf(1, "*** continueElfload: failed to open\n");
 				finishElfload(-1);
 			} else {
 				er->fd = vfsRval;
-				readNonblocking(er->fd, MAX_IO_BUF);
+				copyInOutData[L4_ThreadNo(sos_my_tid())] = 0;
+				strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+				statNonblocking();
 			}
 
 			er->stage++;
 			break;
 
 		case ELFLOAD_CHECK_EXEC:
-			printf("REMINDER: CHECK EXEC\n");
-			er->stage++;
+			assert(vfsRval == 0);
+
+			buf = pager_buffer(sos_my_tid());
+			elfStat = (stat_t*) wordAlign(buf + strlen(buf) + 1);
+
+			if (!(elfStat->st_fmode & FM_EXEC)) {
+				dprintf(1, "*** continueElfload: not executable\n");
+				finishElfload(-1);
+			} else {
+				readNonblocking(er->fd, MAX_IO_BUF);
+				er->stage++;
+			}
+
+			break;
 
 		case ELFLOAD_READ_HEADER:
-			dprintf(0, "ELFLOAD_READ_HEADER\n");
+			dprintf(2, "ELFLOAD_READ_HEADER\n");
 			header = (struct Elf32_Header*) pager_buffer(sos_my_tid());
 
 			if (elf32_checkFile(header) != 0) {
-				dprintf(0, "*** continueElfload: not an ELF file\n");
+				dprintf(1, "*** continueElfload: not an ELF file\n");
 				finishElfload(-1);
 			} else {
 				p = process_init(0);
@@ -713,7 +736,7 @@ static void continueElfload(int vfsRval) {
 			break;
 
 		case ELFLOAD_CLOSE:
-			dprintf(0, "ELFLOAD_CLOSE\n");
+			dprintf(2, "ELFLOAD_CLOSE\n");
 			finishElfload(er->child);
 			break;
 
@@ -897,7 +920,6 @@ static void continueSwapin(int vfsRval) {
 
 	switch (pr->stage) {
 		case SWAPIN_OPEN: 
-			assert(vfsRval == 0);
 			swapfile_set_fd(pr->sf, vfsRval);
 
 			L4_Word_t *entry = pagetableLookup(
@@ -1137,7 +1159,7 @@ static void vfsHandler(int vfsRval) {
 			break;
 
 		case REQUEST_ELFLOAD:
-			dprintf(0, "*** vfsHandler: elfload continuation\n");
+			dprintf(3, "*** vfsHandler: elfload continuation\n");
 			continueElfload(vfsRval);
 			break;
 	}
