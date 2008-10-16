@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 		r = stat(argv[argc - 1], &sbuf);
 
 		if (r < 0) {
-			printf("stat(%s) failed: %d\n", argv[argc - 1], r);
+			printf("stat(%s) failed: %s\n", argv[argc - 1], sos_error_msg(r));
 			return 0;
 		}
 
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 		if (r == SOS_VFS_EOF) {
 			break;
 		} else if (r < 0) {
-			printf("dirent(%d) failed: %d\n", i, r);
+			printf("dirent(%d) failed: %s\n", i, sos_error_msg(r));
 			break;
 		}
 
@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
 			if (args[ARG_L].set == 1) {
 				r = stat(buf, &sbuf);
 				if (r < 0) {
-					printf("stat(%s) failed: %d\n", buf, r);
+					printf("stat(%s) failed: %s\n", buf, sos_error_msg(r));
 					break;
 				}
 

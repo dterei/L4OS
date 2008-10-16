@@ -18,13 +18,13 @@ int main(int argc, char **argv) {
 
 	fd = open(file1, FM_READ);
 	if (fd < 0) {
-		printf("%s cannot be opened\n", file1);
+		printf("%s cannot be opened: %s\n", file1, sos_error_msg(fd));
 		return 1;
 	}
 
 	fd_out = open(file2, FM_WRITE);
 	if (fd_out < 0) {
-		printf("%s cannot be opened\n", file2);
+		printf("%s cannot be opened: %s\n", file2, sos_error_msg(fd));
 		close(fd);
 		return 1;
 	}
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
 	if (num_read == -1 || num_written == -1) {
 		close(fd);
 		close(fd_out);
-		printf( "error on cp\n" );
+		printf("error on cp: %s\n", sos_error_msg(fd));
 		return 1;
 	}
 
