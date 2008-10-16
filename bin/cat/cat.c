@@ -36,15 +36,17 @@ int main(int argc, char *argv[]) {
 
 	close(fd);
 
-	if (num_read == -1) {
-		printf( "error on read\n" );
-		kprint( "error on read\n" );
+	if (num_read < 0) {
+		printf("cat failed: error on read (%d)\n", num_read);
+		printf("Can't read file: %s\n", sos_error_msg(num_read));
+		kprint("error on read\n" );
 		ret = 1;
 	}
 
-	if (num_written == -1) {
-		printf( "error on write\n" );
-		kprint( "error on write\n" );
+	if (num_written < 0) {
+		printf("cat failed: error on print (%d)\n", num_write);
+		printf("Can't print file: %s\n", sos_error_msg(num_write));
+		kprint("error on write\n" );
 		ret = 1;
 	}
 
