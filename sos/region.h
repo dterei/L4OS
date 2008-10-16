@@ -30,12 +30,12 @@ unsigned int region_get_size(Region *r);
 unsigned int region_get_filesize(Region *r);
 int region_get_rights(Region *r);
 int region_map_directly(Region *r);
-Swapfile *region_get_swapfile(Region *r);
+Swapfile *region_get_elffile(Region *r);
 
 // Setters
 void region_set_rights(Region *r, int rights);
 void region_set_size(Region *r, unsigned int size);
 void region_set_filesize(Region *r, unsigned int size);
-void region_set_swapfile(Region *r, Swapfile *sf);
+void region_set_elffile(Region *r, Swapfile *sf);
 
 #endif // sos/region.h

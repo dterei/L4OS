@@ -26,7 +26,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 42
+#define FRAME_ALLOC_LIMIT 12
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -691,7 +691,7 @@ static void continueElfload(int vfsRval) {
 							elf32_getProgramHeaderVaddr(header, i),
 							elf32_getProgramHeaderMemorySize(header, i),
 							elf32_getProgramHeaderFlags(header, i), 0);
-					region_set_swapfile(r, swapfile_init(er->path));
+					region_set_elffile(r, swapfile_init(er->path));
 					region_set_filesize(r, elf32_getProgramHeaderFileSize(
 								header, i));
 					process_add_region(p, r);
@@ -871,10 +871,12 @@ static void finishSwapelf(void) {
 	PagerRequest *pr = (PagerRequest*) requestsPeek();
 	Process *p = process_lookup(pr->pid);
 	Region *r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
+	L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), pr->addr);
 
 	// Zero the area between the end of memory (i.e. the end of the region) and
 	// the end of the file (i.e. region_get_filesize)
 	L4_Word_t fileTop = region_get_base(r) + region_get_filesize(r);
+
 	if ((fileTop & PAGEALIGN) == (pr->addr & PAGEALIGN)) {
 		printf("zeroing from %p because of addr %p\n",
 				(void*) fileTop, (void*) pr->addr);
@@ -883,9 +885,8 @@ static void finishSwapelf(void) {
 				region_get_size(r) - region_get_filesize(r));
 	}
 
-	// Swap file is no longer the ELF file.  We could do a nice optimisation
-	// here and not do this for the code segment, but tooo much effort
-	//region_set_swapfile(r, defaultSwapfile);
+	// Page no longer on ELF file.  Yay.
+	*entry &= ~ONELF_MASK;
 
 	// I'm 99.99% sure it's ok to do this without any other magic
 	finishSwapin();
@@ -988,6 +989,7 @@ static void startSwapin(void) {
 	Process *p;
 	PagerRequest *pr;
 	Region *r;
+	L4_Word_t *entry;
 
 	// pin a frame to copy in to (although "pinned" is somewhat of a misnomer
 	// since really it's just a temporary frame and nothing is really pinned)
@@ -997,13 +999,15 @@ static void startSwapin(void) {
 	assert(requestsPeekType() == REQUEST_SWAPIN);
 	pr = requestsPeek();
 	p = process_lookup(pr->pid);
+	entry = pagetableLookup(process_get_pagetable(p), pr->addr);
 
 	r = list_find(process_get_regions(p), findRegion, (void*) pr->addr);
 	assert(r != NULL);
 
-	if (region_get_swapfile(r) != NULL) {
+	if (*entry & ONELF_MASK) {
 		// It is on an ELF file, need to read from that
-		pr->sf = region_get_swapfile(r);
+		assert(pr->sf != NULL);
+		pr->sf = region_get_elffile(r);
 		/*
 		printf("region size is %p\n", (void*) region_get_filesize(r));
 		printf("region base is %p\n", (void*) region_get_base(r));
@@ -1042,7 +1046,6 @@ static void startSwapout(void) {
 	// Need the region for finding the swap file
 	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
 	assert(r != NULL);
-	assert(region_get_swapfile(r) == NULL);
 	sf = defaultSwapfile;
 
 	// Make sure the frame reflects what is stored in the frame
