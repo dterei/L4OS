@@ -1,13 +1,11 @@
+#include <sos/globals.h>
 #include <sos/sos.h>
 #include <stdio.h>
 
-#include "cp.h"
-#include "sosh.h"
-
-int cp(int argc, char **argv) {
+int main(int argc, char **argv) {
 	fildes_t fd, fd_out;
 	char *file1, *file2;
-	char buf[BUF_SIZ];
+	char buf[IO_MAX_BUFFER];
 	int num_read, num_written = 0;
 
 	if (argc != 3) {
@@ -31,7 +29,7 @@ int cp(int argc, char **argv) {
 		return 1;
 	}
 
-	while ((num_read = read( fd, buf, BUF_SIZ) ) > 0) {
+	while ((num_read = read( fd, buf, IO_MAX_BUFFER) ) > 0) {
 		num_written = write(fd_out, buf, num_read);
 	}
 
