@@ -19,3 +19,6 @@ who knows).
 
 - Kill (delete) proceses when they throw exceptions.
 
+- Physical frames are being gradually consumed whenever processes are run.  Very
+odd.  Need to fix this, since it means eventually we will run out of memory...
+
