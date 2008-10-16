@@ -124,18 +124,10 @@ elfapps = []
 for dir in ls('bin'):
     elfapps.append(elf_env.Package('bin/%s' % (dir)))
 
-elfapps.append(elf_env.Package('sosh'))
-
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling
 # the Application function a number times in the app_env environment.
-userApps = [app_env.Package("sosh"),
-            #app_env.Package("bin/hello3"),
-            #app_env.Package("bin/hello4"),
-            #app_env.Package("bin/waiter1"),
-            #app_env.Package("bin/waiter2"),
-            #app_env.Package("bin/ping"),
-            app_env.Package("bin/memcheck")]
+userApps = [app_env.Package("bin/sosh")]
 
 # Memory pools
 pools = rootserver_env.IguanaDefaultMemoryPools(sos)

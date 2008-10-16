@@ -38,3 +38,5 @@ want to minimise the interface to the pager though.
 
 - Check memory leaks in pager
 
+- Don't ever close the default swapfile, and only ever open it
+
