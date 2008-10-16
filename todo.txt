@@ -46,4 +46,10 @@ even more generic, with a "type" enum or something.  ELF versus STANDARD etc.
 
 - Check exec permissions when trying to run an ELF file.
 
+- Max clists is 16, so despite having max addrspaces as 256 it will crash
+after creating something like 16 processes.  So, need to increase the #define
+(pistachio/src/caps.cc) and also free the clists and all that stuff (as per
+the todo above).
+
+- Add macros to disable the cache.
 
