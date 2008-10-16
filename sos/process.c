@@ -44,6 +44,9 @@ static L4_Word_t nextPid;
 static L4_Word_t tidOffset;
 
 Process *process_lookup(L4_Word_t key) {
+	if (key < 0 || key >= MAX_ADDRSPACES) {
+		dprintf(0, "!!! process_lookup(%d): outside range!\n", key);
+	}
 	while (sosProcs[key] == NULL) key--;
 	return sosProcs[key];
 }
@@ -268,7 +271,7 @@ void process_close_files(Process *p) {
 	VFile *pfiles = process_get_files(p);
 
 	if (pfiles == NULL) {
-		dprintf(0, "!!! process_close_files: %p has NULL open file table\n",
+		dprintf(0, "!!! process_close_files: %d has NULL open file table\n",
 				process_get_pid(p));
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
@@ -292,8 +295,6 @@ int process_kill(Process *p) {
 		// space control delete asid
 		// delete clist
 
-		sosProcs[process_get_pid(p)] = NULL;
-
 		/*
 		if (process_get_pid(p) < nextPid) {
 			nextPid = process_get_pid(p);
@@ -305,6 +306,10 @@ int process_kill(Process *p) {
 		// Invalid process
 		return (-1);
 	}
+}
+
+void process_remove(Process *p) {
+	sosProcs[process_get_pid(p)] = NULL;
 }
 
 int process_write_status(process_t *dest, int n) {

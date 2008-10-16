@@ -58,8 +58,11 @@ void process_wake_all(pid_t pid);
 // Close all files opened by a process
 void process_close_files(Process *p);
 
-// Kill a process and hide its PCB, if we're allowed to
+// Kill a process if we're allowed to
 int process_kill(Process *p);
+
+// Remove process PCB from list
+void process_remove(Process *p);
 
 // Write the status of the first n processes to dest
 int process_write_status(process_t *dest, int n);

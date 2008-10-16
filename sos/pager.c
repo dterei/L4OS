@@ -494,15 +494,19 @@ static int processDelete(L4_Word_t pid) {
 	if (p == NULL) {
 		// Already killed?
 		return 1;
-	} else if (process_kill(p) != 0) {
+	}
+	
+	if (process_kill(p) != 0) {
 		// Invalid process
 		return (-1);
 	}
 
+	// flush and close open files
+	process_close_files(p);
+	process_remove(p);
+
 	// Free all resources
 	args = PAIR(process_get_pid(p), ADDRESS_ALL);
-
-	process_close_files(p);
 	list_delete(alloced, framesFree, p);
 	list_delete(swapped, pagerSwapslotFree, &args);
 	pagetableFree(p);
