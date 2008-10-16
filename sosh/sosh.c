@@ -61,7 +61,6 @@ static int exec(int argc, char **argv) {
 	pid = process_create(argv[1]);
 
 	if (pid >= 0) {
-		//printf("Child pid=%d\n", pid);
 		if (bg == 0) {
 			process_wait(pid);
 		}
@@ -71,7 +70,12 @@ static int exec(int argc, char **argv) {
 
 	if (bg == 0) {
 		in = open("console", FM_READ);
-		assert(in>=0);
+		if (in < 0) {
+			int id = my_id();
+			printf("sosh (%d) can't open console!\n", id);
+			printf("sosh (%d) exiting\n", id);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	return 0;
