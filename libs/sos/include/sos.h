@@ -13,8 +13,8 @@
 /* VFS Return Codes */
 typedef enum {
 	SOS_VFS_OK = 0,
-	SOS_VFS_EOF = -999, // make sure not to add more then 999 return codes :)
-	SOS_VFS_ERROR,
+	SOS_VFS_EOF = -1,
+	SOS_VFS_ERROR = -999, // make sure not to add more then 999 return codes :)
 	SOS_VFS_PERM,
 	SOS_VFS_NOFILE,
 	SOS_VFS_NOVNODE,
