@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (num_written < 0) {
-		printf("cat failed: error on print (%d)\n", num_write);
-		printf("Can't print file: %s\n", sos_error_msg(num_write));
+		printf("cat failed: error on print (%d)\n", num_written);
+		printf("Can't print file: %s\n", sos_error_msg(num_written));
 		kprint("error on write\n" );
 		ret = 1;
 	}
