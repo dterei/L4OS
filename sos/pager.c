@@ -56,7 +56,6 @@ typedef enum {
 	SWAPIN_READ,
 	SWAPIN_CLOSE,
 	SWAPOUT_OPEN,
-	SWAPOUT_LSEEK,
 	SWAPOUT_WRITE,
 	SWAPOUT_CLOSE
 } pr_stage_t;
@@ -671,8 +670,9 @@ static void startSwapout(void) {
 	*entry |= diskAddr;
 
 	// We open the swapfile on each swapout
-	swapoutPr->offset = PR_OFFSET_UNDEFINED;
 	swapoutPr->diskAddr = diskAddr;
+	swapoutPr->stage = SWAPOUT_OPEN;
+	swapoutPr->size = PAGESIZE;
 	swapfile_open(sf, FM_WRITE);
 	pair_free(swapout);
 }
@@ -1046,26 +1046,38 @@ static void continueSwapout(int vfsRval) {
 	PagerRequest *pr = (PagerRequest*) requestsPeek();
 	assert(pr->offset <= PAGESIZE);
 
-	if (pr->offset == PR_OFFSET_UNDEFINED) {
-		dprintf(2, "*** continueSwapout: just opened %d, seeking\n", vfsRval);
-		swapfile_set_fd(pr->sf, vfsRval);
+	switch (pr->stage) {
+		case SWAPOUT_OPEN:
+			swapfile_set_fd(pr->sf, vfsRval);
+			pr->offset = 0;
 
-		dprintf(2, "*** continueSwapout: seeking to %p\n", (void*) pr->diskAddr);
-		lseekNonblocking(swapfile_get_fd(pr->sf), pr->diskAddr, SEEK_SET);
-		pr->offset = 0;
-	} else if (!swapfile_is_open(pr->sf)) {
-		dprintf(2, "*** continueSwapout: just closed, finished\n");
-		finishedSwapout();
-	} else if (pr->offset == PAGESIZE) {
-		dprintf(2, "*** continueSwapout: finished swapout, closing\n");
-		swapfile_close(pr->sf);
-	} else {
-		dprintf(2, "*** continueSwapout: continuing\n");
-		memcpy(pager_buffer(virtualPager),
-				(void*) (pr->addr + pr->offset), SWAP_BUFSIZ);
+			lseekNonblocking(swapfile_get_fd(pr->sf), pr->diskAddr, SEEK_SET);
 
-		writeNonblocking(swapfile_get_fd(pr->sf), SWAP_BUFSIZ);
-		pr->offset += SWAP_BUFSIZ;
+			pr->stage++;
+			break;
+
+		case SWAPOUT_WRITE:
+			assert(pr->offset <= pr->size);
+
+			if (pr->offset == pr->size) {
+				swapfile_close(pr->sf);
+				pr->stage++;
+			} else {
+				int size = min(SWAP_BUFSIZ, pr->size);
+				memcpy(pager_buffer(sos_my_tid()),
+						(void*) (pr->addr + pr->offset), size);
+				writeNonblocking(swapfile_get_fd(pr->sf), size);
+				pr->offset += size;
+			}
+
+			break;
+
+		case SWAPOUT_CLOSE:
+			finishedSwapout();
+			break;
+
+		default:
+			assert(! __FUNCTION__);
 	}
 }
 

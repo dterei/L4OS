@@ -44,3 +44,5 @@ the todo above).
 as a separate process.  And remember to zero the whole thing first, and only
 copy up to filesiz (but region goes up to memsiz).
 
+- finished -> finish
+
