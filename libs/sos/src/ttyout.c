@@ -38,12 +38,14 @@ sos_read(void *vData, long int position, size_t count, void *handle) {
 	return read(stdin_fd, vData, count);
 }
 
-void abort(void) {
-	L4_KDB_Enter("sos abort()ed");
+void
+abort(void) {
+	process_delete(my_id());
 	while (1);
 }
 
-void _Exit(int status) {
+void
+_Exit(int status) {
 	abort();
 }
 
