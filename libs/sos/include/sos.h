@@ -246,6 +246,11 @@ int getdirent(int pos, char *name, size_t nbyte);
  */
 int stat(const char *path, stat_t *buf);
 
+/* Nonblocking version of stat.  Must have done copyin already, and must
+ * do copyout afterwards.  Note complication with word alignment.
+ */
+void statNonblocking(void);
+
 /* Removees the specified file "path".
  * Returns - if successful, -1 otherwise (invalid name).
  */

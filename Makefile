@@ -42,7 +42,8 @@ on off up down reset:
 $(TARGET): $(SCONSRESULT)
 	mkdir -p $(TFTPROOT)
 	cp $(SCONSRESULT) $(TARGET) || true
-	cp $(ELFDIR)/* $(TFTPROOT)
+	chmod 755 $(ELFDIR)/*
+	cp -p $(ELFDIR)/* $(TFTPROOT)
 
 $(SCONSRESULT): on tools
 	$(SCONS)
