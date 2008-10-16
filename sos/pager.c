@@ -1395,10 +1395,12 @@ static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(3, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
 
+	Process *p = process_lookup(L4_ThreadNo(tid));
+
 	copyInPrepare(tid, src, size, append);
 
 	pager(allocPagerRequest(
-				process_get_pid(process_lookup(L4_ThreadNo(tid))),
+				process_get_pid(p),
 				(L4_Word_t) src,
 				defaultSwapfile,
 				copyInContinue));
@@ -1460,10 +1462,27 @@ static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	dprintf(3, "*** copyOut: tid=%ld dest=%p size=%d\n",
 			L4_ThreadNo(tid), dest, size);
 
+	Process *p = process_lookup(L4_ThreadNo(tid));
+
+	/*
+
+		// TODO kill the process on access violation, BUT since the pager
+		// doesn't do it anyway (how do you check??) not much point doing
+		// it here...
+
+	Region *r = list_find(process_get_regions(p), findRegion, (void*) dest);
+
+	if ((r == NULL) || ((region_get_rights(r) & FM_WRITE) == 0)) {
+		dprintf(0, "Segmentation fault (%d)\n", process_get_pid(p));
+		processDelete(process_get_pid(p));
+		return;
+	}
+	*/
+
 	copyOutPrepare(tid, dest, size, append);
 
 	pager(allocPagerRequest(
-				process_get_pid(process_lookup(L4_ThreadNo(tid))),
+				process_get_pid(p),
 				(L4_Word_t) dest,
 				defaultSwapfile,
 				copyOutContinue));
