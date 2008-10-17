@@ -29,6 +29,8 @@
 #include "vfs.h"
 
 #define VIRTPOOL_MAP_DIRECTLY 0x3
+#define CLIST_LOCAL_ID 14
+#define CLIST_USER_ID 15
 
 // Hack externs from timer.c
 extern void utimer_init(void);
