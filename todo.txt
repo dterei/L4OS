@@ -17,15 +17,12 @@ who knows).
 odd.  Need to fix this, since it means eventually we will run out of memory...
 
 - roottask read pagefault at 00000004, ip=001453e4 - deny
-Happenning after a SOS copyin
+Happenning after a SOS copyin.  This need to be fixed, happening on ps.
 
 - It is segfaulting processes (current I've only managed to do it with ls) at
 inconvenient times.
 *** pagerAction: fault on ss=7, addr=0xe5943000
 Segmentation fault (7)
-
-- It is stopping responding after what I think are COPYIN requests, and those
-only.
 
 - I've also seen a process give an exception on a high (0xe9???) address and
 thereby crash.  Well, there is a TODO to fix this but really the exception
