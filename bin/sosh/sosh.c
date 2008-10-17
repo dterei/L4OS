@@ -300,10 +300,16 @@ main(int sosh_argc, char *sosh_argv[])
 					printf("Type: %d, Mode: %d\n", sbuf.st_type, sbuf.st_fmode);
 				}
 				/* Execute the program */
-				argc = 2;
-				argv[1] = argv[0];
-				argv[0] = "exec";
-				exec(argc, argv);
+				if (argc > 31) {
+					printf("Command line has too many arguments!\n");
+				} else {
+					// shift args one up.
+					for (int i = argc - 1; i >= 0; i--) {
+						argv[i + 1] = argv[i];
+					}
+					argv[0] = "exec";
+					exec(argc + 1, argv);
+				}
 			}
 		}
 	}

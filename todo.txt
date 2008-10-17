@@ -37,3 +37,7 @@ only.
 thereby crash.  Well, there is a TODO to fix this but really the exception
 shouldn't be happenning in the first place.
 
+- Remove files.. ect, screw with nfs by changing stuff on nfs server side.
+Not that important but should be able to handle and will be a good test
+of vfs stability
+
