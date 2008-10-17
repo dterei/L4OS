@@ -90,3 +90,7 @@ dist:	tools distclean
 	    cmd="cd .. && tar -cjf aos-2006.tbz2 aos-2006";		\
 	    echo "$$cmd"; eval "$$cmd";					\
 	)
+
+listtest: sos/listtest.c sos/list.c
+	gcc -std=c99 -O -Wall -Werror -g $^ -o listtest
+
