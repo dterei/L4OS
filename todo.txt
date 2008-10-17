@@ -1,22 +1,8 @@
-- More testing of killing processes at awkward times, for example in the middle
-of swapping in or swapping out.
-
-- Stress test with multiple processes.  Okay, so there is a problem somewhere
-causing this to not work.  Not sure where, could be the pager, could be VFS
-(although I'd say most likely the pager, I've never tested it so heavily, but
-who knows).
-
 - Physical frames are being gradually consumed whenever processes are run.  Very
 odd.  Need to fix this, since it means eventually we will run out of memory...
 
 - roottask read pagefault at 00000004, ip=001453e4 - deny
-Happenning after a SOS copyin.  This need to be fixed, happening on ps.
-
-- I've also seen a process give an exception on a high (0xe9???) address and
-thereby crash.  Well, there is a TODO to fix this but really the exception
-shouldn't be happenning in the first place.
-
-- Remove files.. ect, screw with nfs by changing stuff on nfs server side.
-Not that important but should be able to handle and will be a good test
-of vfs stability
+Happenning after a SOS copyin.  This need to be fixed, happening on ps.  Oh and
+also a bunch of other stuff involving NFS now apparently.  I'm pretty confident
+this is a problem in NFS not with the linked list code.
 

@@ -40,3 +40,10 @@ want to minimise the interface to the pager though.
 
 - Don't ever close the default swapfile, and only ever open it
 
+- More testing of killing processes at awkward times, for example in the middle
+of swapping in or swapping out.
+
+- Remove files.. ect, screw with nfs by changing stuff on nfs server side.
+Not that important but should be able to handle and will be a good test
+of vfs stability
+
