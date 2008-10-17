@@ -278,6 +278,38 @@ sos_thread_new(L4_ThreadId_t tid, void *entrypoint, void *stack) {
 	return sos_thread_new_priority(tid, 0, entrypoint, stack);
 }
 
+static L4_ClistId_t localClist(void) {
+	static int haveAllocated = 0;
+	static L4_ClistId_t clist;
+
+	assert(pager_is_active());
+
+	if (!haveAllocated) {
+		clist = L4_ClistId(CLIST_LOCAL_ID);
+		please(L4_CreateClist(clist, 32));
+		please(L4_CreateIpcCap(L4_rootserver, L4_rootclist, L4_rootserver, clist));
+	}
+
+	return clist;
+}
+
+static L4_ClistId_t userClist(void) {
+	static int haveAllocated = 0;
+	static L4_ClistId_t clist;
+
+	assert(pager_is_active());
+
+	if (!haveAllocated) {
+		clist = L4_ClistId(CLIST_USER_ID);
+		please(L4_CreateClist(clist, 32));
+		please(L4_CreateIpcCap(L4_rootserver, L4_rootclist, L4_rootserver, clist));
+		please(L4_CreateIpcCap(pager_get_tid(), L4_rootclist, pager_get_tid(), clist));
+		haveAllocated = 1;
+	}
+
+	return clist;
+}
+
 // Create and start a new task
 L4_ThreadId_t
 sos_task_new(L4_Word_t task, L4_ThreadId_t pager, 
@@ -285,35 +317,18 @@ sos_task_new(L4_Word_t task, L4_ThreadId_t pager,
 	// HACK: Workaround for compiler bug, volatile qualifier stops the internal
 	// compiler error.
 	L4_SpaceId_t spaceId = L4_SpaceId(task);
-	L4_ClistId_t clistId = L4_ClistId(task);
-	int res;
+	L4_ClistId_t clistId;
 
-	res = L4_CreateClist(clistId, 32); // 32 slots
-	if (!res)
-		return ((L4_ThreadId_t) { raw : -1});
-
-	// Setup space
-	res = L4_SpaceControl(spaceId, L4_SpaceCtrl_new, clistId, utcb_fpage_s, 0, NULL);
-	if (!res)
-		return ((L4_ThreadId_t) { raw : -2});
-
-	// Give the space a cap to the root server
-	res = L4_CreateIpcCap(L4_rootserver, L4_rootclist,
-			L4_rootserver, clistId);
-	assert(res);
-
-	// And the pager
-	if (pager_is_active()) {
-		res = L4_CreateIpcCap(pager, L4_rootclist, pager, clistId);
-		assert(res);
+	if (pager_is_active() && L4_IsThreadEqual(pager, pager_get_tid())) {
+		clistId = userClist();
+	} else {
+		clistId = localClist();
 	}
 
-	// Create the thread
+	please(L4_SpaceControl(spaceId, L4_SpaceCtrl_new, clistId, utcb_fpage_s, 0, NULL));
+
 	L4_ThreadId_t tid = L4_GlobalId(task, 1);
-	res = L4_ThreadControl(tid, spaceId, L4_rootserver,
-			pager, pager, 0, (void *) utcb_base_s);
-	if (!res)
-		return ((L4_ThreadId_t) { raw : -3});
+	please(L4_ThreadControl(tid, spaceId, L4_rootserver, pager, pager, 0, (void*) utcb_base_s));
 
 	L4_Start_SpIp(tid, (L4_Word_t) stack, (L4_Word_t) entrypoint);
 

@@ -18,6 +18,7 @@
 #include "syscall.h"
 
 #define verbose 1
+#define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
 // Masks for page table entries
 #define ONDISK_MASK  0x00000001
@@ -26,7 +27,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 8
+#define FRAME_ALLOC_LIMIT 42
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -421,6 +422,15 @@ static int findRegion(void *contents, void *data) {
 			(addr < region_get_base(r) + region_get_size(r)));
 }
 
+static int findPaRegion(void *contents, void *data) {
+	// Like findRegion, but only at pagealigned granularity
+	Region *r = (Region*) contents;
+	L4_Word_t addr = (L4_Word_t) data;
+
+	return ((addr >= (region_get_base(r) & PAGEALIGN)) &&
+			(region_get_size(r), PAGESIZE));
+}
+
 static void panic(void) {
 	assert(! "DON'T PANIC");
 }
@@ -493,6 +503,8 @@ static int processDelete(L4_Word_t pid) {
 	Pair args; // (pid, word)
 
 	p = process_lookup(pid);
+
+	printf("process delete on %lu\n", pid);
 
 	if (p == NULL) {
 		// Already killed?
@@ -1080,6 +1092,17 @@ static void startSwapin(void) {
 	swapfile_open(pr->sf, FM_READ);
 }
 
+/*
+static void printRegion(void *contents, void *data) {
+	Region *r = (Region*) contents;
+
+	printf("*** region %p -> %p (%p) rights=%d\n",
+			(void*) region_get_base(r),
+			(void*) (region_get_base(r) + region_get_size(r)),
+			(void*) r, region_get_rights(r));
+}
+*/
+
 static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
@@ -1099,7 +1122,9 @@ static void startSwapout(void) {
 	frame = *entry & ADDRESS_MASK;
 
 	// Need the region for finding the swap file
-	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
+	r = list_find(process_get_regions(p), findPaRegion, (void*) swapout->snd);
+	//list_iterate(process_get_regions(p), printRegion, NULL);
+	//printf(" --- %p\n", (void*) swapout->snd);
 	assert(r != NULL);
 	sf = defaultSwapfile;
 

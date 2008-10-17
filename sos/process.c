@@ -291,15 +291,18 @@ int process_kill(Process *p) {
 		// don't want anybody killing threads (and they shouldn't be visible)
 		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
 					L4_nilthread, L4_nilthread, 0, NULL));
-		// delete caps
+
+		// delete caps?
 		// space control delete asid
+		please(L4_SpaceControl(process_get_sid(p), L4_SpaceCtrl_delete,
+				L4_rootclist, L4_Nilpage, 0, NULL));
+
 		// delete clist
 
-		/*
+		// Reuse if it's now the lowest pid
 		if (process_get_pid(p) < nextPid) {
 			nextPid = process_get_pid(p);
 		}
-		*/
 
 		return 0;
 	} else {
