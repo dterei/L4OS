@@ -17,7 +17,8 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 4
+#define verbose 1
+#define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
 // Masks for page table entries
 #define ONDISK_MASK  0x00000001
@@ -26,7 +27,7 @@
 #define ADDRESS_MASK 0xfffff000
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 16
+#define FRAME_ALLOC_LIMIT 42
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -46,6 +47,7 @@ typedef enum {
 } rtype_t;
 
 static void queueRequest(rtype_t rtype, void *request);
+static void dequeueRequest(void);
 static void startPagerRequest(void);
 static void startRequest(void);
 static void startSwapin(void);
@@ -71,6 +73,7 @@ struct PagerRequest_t {
 	L4_Word_t addr;
 	L4_Word_t diskAddr;
 	Swapfile *sf;
+	int rights;
 	int offset;
 	int size;
 	void (*finish)(void);
@@ -419,16 +422,26 @@ static int findRegion(void *contents, void *data) {
 			(addr < region_get_base(r) + region_get_size(r)));
 }
 
+static int findPaRegion(void *contents, void *data) {
+	// Like findRegion, but only at pagealigned granularity
+	Region *r = (Region*) contents;
+	L4_Word_t addr = (L4_Word_t) data;
+
+	return ((addr >= (region_get_base(r) & PAGEALIGN)) &&
+			(region_get_size(r), PAGESIZE));
+}
+
 static void panic(void) {
 	assert(! "DON'T PANIC");
 }
 
-static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr,
+static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 		Swapfile *sf, void (*callback)(PagerRequest *pr)) {
 	PagerRequest *newPr = (PagerRequest*) malloc(sizeof(PagerRequest));
 
 	newPr->pid = pid;
 	newPr->addr = addr;
+	newPr->rights = rights;
 	newPr->offset = PR_OFFSET_UNDEFINED;
 	newPr->sf = sf;
 	newPr->finish = panic;
@@ -491,6 +504,8 @@ static int processDelete(L4_Word_t pid) {
 
 	p = process_lookup(pid);
 
+	printf("process delete on %lu\n", pid);
+
 	if (p == NULL) {
 		// Already killed?
 		return 1;
@@ -525,8 +540,8 @@ static int pagerAction(PagerRequest *pr) {
 	Process *p;
 	L4_Word_t frame, *entry;
 
-	dprintf(2, "*** pagerAction: fault on ss=%d, addr=%p\n",
-			L4_SpaceNo(L4_SenderSpace()), pr->addr);
+	dprintf(2, "*** pagerAction: fault on ss=%d, addr=%p rights=%d\n",
+			L4_SpaceNo(L4_SenderSpace()), pr->addr, pr->rights);
 
 	p = process_lookup(pr->pid);
 	if (p == NULL) {
@@ -638,11 +653,12 @@ static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
 
 static void finishElfload(int rval) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
-	ElfloadRequest *er = (ElfloadRequest*) requestsUnshift();
-
+	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
+
 	free(er);
 	syscall_reply(replyTo, rval);
+	dequeueRequest();
 }
 
 static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
@@ -757,19 +773,6 @@ static void startElfload(void) {
 	openNonblocking(NULL, FM_READ);
 }
 
-static void dequeueRequest(void) {
-	dprintf(1, "*** dequeueRequest\n");
-
-	list_unshift(requests);
-
-	if (list_null(requests)) {
-		dprintf(1, "*** dequeueRequest: no more items\n");
-	} else {
-		dprintf(1, "*** dequeueRequest: running next\n");
-		startRequest();
-	}
-}
-
 static void printRequests(void *contents, void *data) {
 	Pair *pair = (Pair*) contents;
 	rtype_t type = (rtype_t) pair->fst;
@@ -797,6 +800,20 @@ static void printRequests(void *contents, void *data) {
 	}
 }
 
+static void dequeueRequest(void) {
+	dprintf(1, "*** dequeueRequest\n");
+
+	list_unshift(requests);
+
+	if (list_null(requests)) {
+		dprintf(1, "*** dequeueRequest: no more items\n");
+	} else {
+		dprintf(1, "*** dequeueRequest: running next\n");
+		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		startRequest();
+	}
+}
+
 static void queueRequest(rtype_t rtype, void *request) {
 	dprintf(1, "*** queueRequest\n");
 
@@ -806,7 +823,7 @@ static void queueRequest(rtype_t rtype, void *request) {
 		startRequest();
 	} else {
 		dprintf(2, "*** queueRequest: queueing request\n");
-		list_iterate(requests, printRequests, NULL);
+		if (verbose > 2) list_iterate(requests, printRequests, NULL);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
 }
@@ -1075,6 +1092,17 @@ static void startSwapin(void) {
 	swapfile_open(pr->sf, FM_READ);
 }
 
+/*
+static void printRegion(void *contents, void *data) {
+	Region *r = (Region*) contents;
+
+	printf("*** region %p -> %p (%p) rights=%d\n",
+			(void*) region_get_base(r),
+			(void*) (region_get_base(r) + region_get_size(r)),
+			(void*) r, region_get_rights(r));
+}
+*/
+
 static void startSwapout(void) {
 	dprintf(2, "*** startSwapout\n");
 
@@ -1094,7 +1122,9 @@ static void startSwapout(void) {
 	frame = *entry & ADDRESS_MASK;
 
 	// Need the region for finding the swap file
-	r = list_find(process_get_regions(p), findRegion, (void*) swapout->snd);
+	r = list_find(process_get_regions(p), findPaRegion, (void*) swapout->snd);
+	//list_iterate(process_get_regions(p), printRegion, NULL);
+	//printf(" --- %p\n", (void*) swapout->snd);
 	assert(r != NULL);
 	sf = defaultSwapfile;
 
@@ -1109,7 +1139,7 @@ static void startSwapout(void) {
 			(void*) swapout->snd, process_get_pid(p), (void*) frame);
 
 	// Set up the swapout
-	swapoutPr = allocPagerRequest(swapout->fst, frame, sf, NULL);
+	swapoutPr = allocPagerRequest(swapout->fst, frame, FM_READ, sf, NULL);
 	list_shift(requests, pair_alloc(REQUEST_SWAPOUT, (L4_Word_t) swapoutPr));
 
 	// Set up where on disk to put the page
@@ -1231,8 +1261,8 @@ static void virtualPagerHandler(void) {
 
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
-				pager(allocPagerRequest(process_get_pid(p),
-							L4_MsgWord(&msg, 0), defaultSwapfile, pagerContinue));
+				pager(allocPagerRequest(process_get_pid(p), L4_MsgWord(&msg, 0),
+							L4_MsgLabel(&msg), defaultSwapfile, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
@@ -1309,11 +1339,11 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case L4_EXCEPTION:
-				// TODO kill process
-				dprintf(0, "!!! virtualPagerHandler exception: ip=%lx, sp=%lx\n",
-						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
-				dprintf(0, "    cpsr=%lx exception=%lx, cause=%lx\n",
-						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
+				dprintf(0, "Exception (ip=%p sp=%p id=0x%lx cause=0x%lx pid=%d)\n",
+						(void*) L4_MsgWord(&msg, 0), (void*) L4_MsgWord(&msg, 1),
+						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4),
+						process_get_pid(p));
+				processDelete(process_get_pid(p));
 				break;
 
 			default:
@@ -1391,11 +1421,14 @@ static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(3, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
 
+	Process *p = process_lookup(L4_ThreadNo(tid));
+
 	copyInPrepare(tid, src, size, append);
 
 	pager(allocPagerRequest(
-				process_get_pid(process_lookup(L4_ThreadNo(tid))),
+				process_get_pid(p),
 				(L4_Word_t) src,
+				FM_READ,
 				defaultSwapfile,
 				copyInContinue));
 }
@@ -1456,11 +1489,29 @@ static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
 	dprintf(3, "*** copyOut: tid=%ld dest=%p size=%d\n",
 			L4_ThreadNo(tid), dest, size);
 
+	Process *p = process_lookup(L4_ThreadNo(tid));
+
+	/*
+
+		// TODO kill the process on access violation, BUT since the pager
+		// doesn't do it anyway (how do you check??) not much point doing
+		// it here...
+
+	Region *r = list_find(process_get_regions(p), findRegion, (void*) dest);
+
+	if ((r == NULL) || ((region_get_rights(r) & FM_WRITE) == 0)) {
+		dprintf(0, "Segmentation fault (%d)\n", process_get_pid(p));
+		processDelete(process_get_pid(p));
+		return;
+	}
+	*/
+
 	copyOutPrepare(tid, dest, size, append);
 
 	pager(allocPagerRequest(
-				process_get_pid(process_lookup(L4_ThreadNo(tid))),
+				process_get_pid(p),
 				(L4_Word_t) dest,
+				FM_WRITE,
 				defaultSwapfile,
 				copyOutContinue));
 }

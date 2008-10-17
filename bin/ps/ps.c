@@ -2,7 +2,7 @@
 #include <sos/globals.h>
 #include <stdio.h>
 
-#define MAX_PROCESSES 32
+#define MAX_PROCESSES 256
 
 int main(int argc, char *argv[]) {
 	process_t *process;

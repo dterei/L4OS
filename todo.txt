@@ -1,12 +1,3 @@
-- Free L4's resources when deleting process.  This involves (as mentioned in
-process.c), freeing the capabilties (to rootserver and pager), freeing the
-address space, and then freeing the capability list.  Should probably check
-that the whole address space for that process is being unmapped too.
-
-- This has been around for ages, but there is a security bug in copyin/out
-where the user can violate read/write access permissions.  Need to write a
-program to show this but won't be too hard.  Also won't be a hard fix.
-
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
 
@@ -15,23 +6,11 @@ causing this to not work.  Not sure where, could be the pager, could be VFS
 (although I'd say most likely the pager, I've never tested it so heavily, but
 who knows).
 
-- The first process that starts from sosh segfaults, the rest are ok.
-
-- Kill (delete) proceses when they throw exceptions.
-
 - Physical frames are being gradually consumed whenever processes are run.  Very
 odd.  Need to fix this, since it means eventually we will run out of memory...
 
 - roottask read pagefault at 00000004, ip=001453e4 - deny
-Happenning after a SOS copyin
-
-- It is segfaulting processes (current I've only managed to do it with ls) at
-inconvenient times.
-*** pagerAction: fault on ss=7, addr=0xe5943000
-Segmentation fault (7)
-
-- It is stopping responding after what I think are COPYIN requests, and those
-only.
+Happenning after a SOS copyin.  This need to be fixed, happening on ps.
 
 - I've also seen a process give an exception on a high (0xe9???) address and
 thereby crash.  Well, there is a TODO to fix this but really the exception
