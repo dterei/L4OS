@@ -5,6 +5,8 @@
 
 #include "list.h"
 
+#define TEST printf("TEST %d\n", __LINE__);
+
 #define RANGE 20
 
 static int deleteAll(void *contents, void *data) {
@@ -31,8 +33,16 @@ static void *sub(void *contents, void *data) {
 	return (void*) ((int) data) - ((int) contents);
 }
 
+static void printInt(void *contents, void *data) {
+	(void) printInt;
+	int *index = (int*) data;
+
+	printf("%d: %d\n", *index, (int) contents);
+	(*index)++;
+}
+
 int main(int argc, char *argv[]) {
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -44,9 +54,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -58,9 +69,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = RANGE - 1; i >= 0; i--) {
@@ -72,9 +84,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = RANGE - 1; i >= 0; i--) {
@@ -86,9 +99,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -110,9 +124,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -126,9 +141,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -142,9 +158,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -158,9 +175,62 @@ int main(int argc, char *argv[]) {
 		}
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete_first(list, deleteNone, NULL);
+
+		for (int i = 0; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+		assert(list_destroy(list) == 0);
+	}
+
+	TEST {
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete_first(list, deleteEven, NULL);
+
+		for (int i = 1; i < RANGE; i++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+		assert(list_destroy(list) == 0);
+	}
+
+	TEST {
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete_first(list, deleteOdd, NULL);
+
+		for (int i = 0; i < RANGE; i ++) {
+			if (i == 1) continue;
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+		assert(list_destroy(list) == 0);
+	}
+
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -170,9 +240,49 @@ int main(int argc, char *argv[]) {
 		list_delete(list, deleteAll, NULL);
 
 		assert(list_null(list));
+		assert(list_destroy(list) == 0);
 	}
 
-	{
+	TEST {
+		List *list = list_empty();
+
+		for (int i = 0; i < RANGE; i++) {
+			list_push(list, (void*) i);
+		}
+
+		list_delete_first(list, deleteAll, NULL);
+
+		for (int i = 1; i < RANGE; i ++) {
+			assert(list_unshift(list) == (void*) i);
+		}
+
+		assert(list_null(list));
+		assert(list_destroy(list) == 0);
+	}
+
+	TEST {
+		List *list = list_empty();
+
+		list_push(list, (void*) 10);
+		list_delete_first(list, deleteAll, NULL);
+		assert(list_null(list));
+
+		list_push(list, (void*) 11);
+		list_push(list, (void*) 12);
+		list_delete_first(list, deleteAll, NULL);
+		assert(list_unshift(list) == (void*) 12);
+		assert(list_null(list));
+
+		list_push(list, (void*) 11);
+		list_push(list, (void*) 12);
+		list_delete_first(list, deleteEven, NULL);
+		assert(list_unshift(list) == (void*) 11);
+		assert(list_null(list));
+
+		assert(list_destroy(list) == 0);
+	}
+
+	TEST {
 		List *list = list_empty();
 
 		for (int i = 0; i < RANGE; i++) {
@@ -188,6 +298,7 @@ int main(int argc, char *argv[]) {
 		tmp2 = -tmp2;
 
 		assert(tmp1 == tmp2);
+		assert(list_destroy(list) == RANGE);
 	}
 
 	return 0;

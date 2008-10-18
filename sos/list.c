@@ -28,6 +28,19 @@ List *list_empty(void) {
 	return list;
 }
 
+static int deleteWithCount(void *contents, void *data) {
+	int *count = (int*) data;
+	(*count)++;
+	return 1;
+}
+
+int list_destroy(List *list) {
+	int count = 0;
+	list_delete(list, deleteWithCount, &count);
+	free(list);
+	return count;
+}
+
 int list_null(List *list) {
 	assert(list != NULL);
 	if (list->head == NULL) {
@@ -159,11 +172,12 @@ void list_delete_first(List *list, int (*f)(void *contents, void *data),
 	assert(list != NULL);
 	Node *curr, *prev, *tmp;
 
+	int found = 0;
 	curr = list->head;
 	prev = NULL;
 
 	while (curr != NULL) {
-		if (f(curr->contents, data)) {
+		if (!found && f(curr->contents, data)) {
 			tmp = curr;
 
 			if (prev == NULL) {
@@ -174,7 +188,7 @@ void list_delete_first(List *list, int (*f)(void *contents, void *data),
 
 			curr = curr->next;
 			free(tmp);
-			break;
+			found = 1;
 		} else {
 			prev = curr;
 			curr = curr->next;

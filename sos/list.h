@@ -12,6 +12,9 @@ typedef struct List_t List;
 // Create a new empty list
 List *list_empty(void);
 
+// Destroy a list, returning the number of elements deleted
+int list_destroy(List *list);
+
 // Test if list is empty
 int list_null(List *list);
 
