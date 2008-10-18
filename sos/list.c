@@ -134,8 +134,8 @@ void *list_find(List *list, int (*f)(void *contents, void *data),
 	return NULL;
 }
 
-void list_delete(List *list, int (*f)(void *contents, void *data),
-		void *data) {
+void list_delete_n(List *list, int (*f)(void *contents, void *data),
+		void *data, int n) {
 	assert(list != NULL);
 	Node *curr, *prev, *tmp;
 
@@ -143,7 +143,7 @@ void list_delete(List *list, int (*f)(void *contents, void *data),
 	prev = NULL;
 
 	while (curr != NULL) {
-		if (f(curr->contents, data)) {
+		if ((n != 0) && f(curr->contents, data)) {
 			tmp = curr;
 
 			if (prev == NULL) {
@@ -154,6 +154,7 @@ void list_delete(List *list, int (*f)(void *contents, void *data),
 
 			curr = curr->next;
 			free(tmp);
+			n--;
 		} else {
 			prev = curr;
 			curr = curr->next;
@@ -167,39 +168,14 @@ void list_delete(List *list, int (*f)(void *contents, void *data),
 	}
 }
 
+void list_delete(List *list, int (*f)(void *contents, void *data),
+		void *data) {
+	list_delete_n(list, f, data, (-1));
+}
+
 void list_delete_first(List *list, int (*f)(void *contents, void *data),
 		void *data) {
-	assert(list != NULL);
-	Node *curr, *prev, *tmp;
-
-	int found = 0;
-	curr = list->head;
-	prev = NULL;
-
-	while (curr != NULL) {
-		if (!found && f(curr->contents, data)) {
-			tmp = curr;
-
-			if (prev == NULL) {
-				list->head = curr->next;
-			} else {
-				prev->next = curr->next;
-			}
-
-			curr = curr->next;
-			free(tmp);
-			found = 1;
-		} else {
-			prev = curr;
-			curr = curr->next;
-		}
-	}
-
-	if (list->head == NULL) {
-		list->last = NULL;
-	} else if (prev->next == NULL) {
-		list->last = prev;
-	}
+	list_delete_n(list, f, data, 1);
 }
 
 void *list_reduce(List *list, void *(*f)(void *contents, void *data),

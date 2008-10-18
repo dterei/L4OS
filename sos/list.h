@@ -38,6 +38,11 @@ void *list_pop(List *list);
 void *list_find(List *list, int (*f)(void *contents, void *data),
 		void *data);
 
+// Iterate of a list with a given function, and delete the
+// first n nodes for which the function returns 1
+void list_delete_n(List *list, int (*f)(void *contents, void *data),
+		void *data, int n);
+
 // Iterate over a list with a given function, and delete any
 // nodes for which the function returns 1
 void list_delete(List *list, int (*f)(void *contents, void *data),
