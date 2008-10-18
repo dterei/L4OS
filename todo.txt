@@ -6,3 +6,7 @@ Happenning after a SOS copyin.  This need to be fixed, happening on ps.  Oh and
 also a bunch of other stuff involving NFS now apparently.  I'm pretty confident
 this is a problem in NFS not with the linked list code.
 
+- The "DONT PANIC" assertion is getting fired.  I'm to to rewrite some of the
+ELF/swapping stuff anyway (to use mmap) so not worth fixing this yet.  Pretty
+rare anyway.
+
