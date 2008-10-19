@@ -32,6 +32,8 @@
 #define max(x, y) ((x) > (y) ? (x) : (y))
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
+#define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
+
 // Clear the message registers.  Useful to use before an L4_Reply()
 void msgClearWith(L4_Word_t x);
 

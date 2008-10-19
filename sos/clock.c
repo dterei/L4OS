@@ -5,6 +5,7 @@
 
 #include "constants.h"
 #include "pager.h"
+#include "process.h"
 #include "l4.h"
 #include "libsos.h"
 #include "syscall.h"
@@ -102,6 +103,9 @@ int register_timer(uint64_t delay, L4_ThreadId_t client) {
 	// Better to add at end probably, but more complicated so who cares
 	blocked_threads = bt;
 
+	// It is asleep now
+	process_set_state(process_lookup(L4_ThreadNo(client)), PS_STATE_SLEEP);
+
 	// Next time to check might be sooner than we will already
 	if (*OST_TIM0 == 0 || ((uint32_t) cs << 2) < *OST_TIM0) {
 		dprintf(1, "reenabling\n");
@@ -152,6 +156,7 @@ int timer_irq(L4_ThreadId_t *tid, int *send) {
 			dprintf(1, "*** timer_irq: unblocking %ld\n", L4_ThreadNo(bt->tid));
 
 			// Unblock thread
+			process_set_state(process_lookup(L4_ThreadNo(bt->tid)), PS_STATE_ALIVE);
 			syscall_reply(bt->tid, 0);
 
 			// Delete it from list

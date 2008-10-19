@@ -55,6 +55,7 @@ char *process_state_show(process_state_t state) {
 		case PS_STATE_START: return "START";
 		case PS_STATE_ALIVE: return "RUN";
 		case PS_STATE_WAIT: return "WAIT";
+		case PS_STATE_SLEEP: return "SLEEP";
 		case PS_STATE_ZOMBIE: return "ZOMBIE";
 	}
 

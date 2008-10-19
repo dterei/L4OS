@@ -1,6 +1,14 @@
 Import("*")
 
-srclist = "main.c frames.c libsos.c pager.c pair.c timer.c network.c vfs.c console.c list.c nfsfs.c thread.c syscall.c clock.c irq.c region.c process.c swapfile.c"
+from os import listdir as ls
+
+srclist = []
+blacklist = ['listtest.c']
+
+for file in ls('.'):
+    if file.endswith('.c') and file not in blacklist:
+        srclist.append(file)
+
 liblist = "l4 bootinfo c ixp_osal ixp400_xscale_sw lwip nfs serial elf sos"
 
 cppdefines = env.scons_env["CPPDEFINES"]
