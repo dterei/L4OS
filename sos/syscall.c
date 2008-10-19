@@ -96,44 +96,44 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_OPEN:
-			vfs_open(tid, pager_buffer(tid),
+			vfs_open(L4_ThreadNo(tid), pager_buffer(tid),
 					(fmode_t) L4_MsgWord(msg, 0),
 					(unsigned int) L4_MsgWord(msg, 1),
 					(unsigned int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_CLOSE:
-			vfs_close(tid, (fildes_t) L4_MsgWord(msg, 0));
+			vfs_close(L4_ThreadNo(tid), (fildes_t) L4_MsgWord(msg, 0));
 			break;
 
 		case SOS_READ:
-			vfs_read(tid,
+			vfs_read(L4_ThreadNo(tid),
 					(fildes_t) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
 					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_WRITE:
-			vfs_write(tid,
+			vfs_write(L4_ThreadNo(tid),
 					(fildes_t) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
 					(size_t) L4_MsgWord(msg, 1));
 			break;
 
 		case SOS_FLUSH:
-			vfs_flush(tid,
+			vfs_flush(L4_ThreadNo(tid),
 					(fildes_t) L4_MsgWord(msg, 0));
 			break;
 
 		case SOS_LSEEK:
-			vfs_lseek(tid,
+			vfs_lseek(L4_ThreadNo(tid),
 					(fildes_t) L4_MsgWord(msg, 0),
 					(fpos_t) L4_MsgWord(msg, 1),
 					(int) L4_MsgWord(msg, 2));
 			break;
 
 		case SOS_GETDIRENT:
-			vfs_getdirent(tid,
+			vfs_getdirent(L4_ThreadNo(tid),
 					(int) L4_MsgWord(msg, 0),
 					pager_buffer(tid),
 					(size_t) L4_MsgWord(msg, 1));
@@ -141,11 +141,12 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_STAT:
 			buf = pager_buffer(tid);
-			vfs_stat(tid, buf, (stat_t*) wordAlign(buf + strlen(buf) + 1));
+			vfs_stat(L4_ThreadNo(tid), buf,
+					(stat_t*) wordAlign(buf + strlen(buf) + 1));
 			break;
 
 		case SOS_REMOVE:
-			vfs_remove(tid, pager_buffer(tid));
+			vfs_remove(L4_ThreadNo(tid), pager_buffer(tid));
 			break;
 
 		case SOS_TIME_STAMP:

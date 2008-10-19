@@ -199,7 +199,7 @@ void process_prepare(Process *p) {
 
 	if (!p->isThread) {
 		addBuiltinRegions(p);
-		vfs_open(process_get_tid(p), STDOUT_FN, FM_WRITE, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
+		vfs_open(process_get_pid(p), STDOUT_FN, FM_WRITE, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
 	}
 }
 
@@ -273,8 +273,8 @@ void process_close_files(Process *p) {
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
 			if (pfiles[fd].vnode != NULL) {
-				vfs_flush(process_get_tid(p), fd);
-				vfs_close(process_get_tid(p), fd);
+				vfs_flush(process_get_pid(p), fd);
+				vfs_close(process_get_pid(p), fd);
 			}
 		}
 	}
