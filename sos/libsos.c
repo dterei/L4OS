@@ -104,8 +104,6 @@ libsos_init(void)
         assert(success);
     }
 
-    //utimer_init();
-
     return 0;
 }
 

@@ -38,8 +38,6 @@
 
 static void
 init_thread(void) {
-	L4_KDB_SetThreadName(sos_my_tid(), "init_thread");
-
 	network_init();
 	vfs_init();
 	pager_init();
@@ -191,7 +189,7 @@ main(void) {
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
-	process_run_rootthread("sos_initialisation", init_thread, YES_TIMESTAMP);
+	process_run_rootthread("sos_init", init_thread, YES_TIMESTAMP);
 
 	dprintf(2, "*** main: about to start syscall loop\n");
 	syscall_loop();

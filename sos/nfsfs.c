@@ -21,7 +21,6 @@ extern void nfs_timeout(void);
 static
 void
 nfsfs_timeout_thread(void) {
-	L4_KDB_SetThreadName(sos_my_tid(), "nfsfs_timeout");
 	while (1) {
 		sos_usleep(NFSFS_TIMEOUT_MS);
 		nfs_timeout();

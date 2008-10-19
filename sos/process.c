@@ -114,7 +114,6 @@ void process_set_sp(Process *p, void *sp) {
 
 void process_set_name(Process *p, const char *name) {
 	strncpy(p->info.command, name, MAX_FILE_NAME);
-	L4_KDB_SetThreadName(process_get_tid(p), p->info.command);
 }
 
 void process_set_state(Process *p, process_state_t state) {
@@ -251,9 +250,8 @@ L4_ThreadId_t process_run(Process *p, int timestamp) {
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	}
 
-	//TODO: Shouldnt need in both here and set_name
-	L4_KDB_SetThreadName(process_get_tid(p), process_get_info(p)->command);
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
+	L4_KDB_SetThreadName(process_get_tid(p), p->info.command);
 	assert(L4_ThreadNo(tid) == p->info.pid);
 
 	process_set_state(p, PS_STATE_ALIVE);
@@ -358,7 +356,7 @@ int process_write_status(process_t *dest, int n) {
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL) {
+		if (sosProcs[i] != NULL && sosProcs[i]->isThread != RUN_IN_ROOT) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
 			dest++;
@@ -396,6 +394,7 @@ void process_add_rootserver(void) {
 	rootserver->startedAt = time_stamp();
 	process_set_name(rootserver, "sos");
 	process_set_state(rootserver, PS_STATE_ALIVE);
+	L4_KDB_SetThreadName(sos_my_tid(), process_get_info(rootserver)->command);
 
 	assert(rootserver->info.pid == L4_rootserverno);
 	sosProcs[L4_rootserverno] = rootserver;
