@@ -504,8 +504,6 @@ static int processDelete(L4_Word_t pid) {
 
 	p = process_lookup(pid);
 
-	printf("process delete on %lu\n", pid);
-
 	if (p == NULL) {
 		// Already killed?
 		return 1;

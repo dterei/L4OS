@@ -58,6 +58,9 @@ void process_wake_all(pid_t pid);
 // Close all files opened by a process
 void process_close_files(Process *p);
 
+// Kill a thread
+L4_Word_t thread_kill(L4_ThreadId_t tid);
+
 // Kill a process if we're allowed to
 int process_kill(Process *p);
 

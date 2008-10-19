@@ -23,8 +23,6 @@ is a thread to do the flushing.
 
 - investigate moving the kernel heap size setting to constants.h
 
-- have the init_thread finish instead of just constantly sleeping.
-
 - bug with vfs that opening a file in write truncate mode doesn't actually
 truncate the file if its already open. Need to add a truncate function to the
 vfs so we can just call that. (At moment truncate at file creation by just creating
@@ -46,4 +44,7 @@ of swapping in or swapping out.
 - Remove files.. ect, screw with nfs by changing stuff on nfs server side.
 Not that important but should be able to handle and will be a good test
 of vfs stability
+
+- Proper thread management in SOS, then allow userspace threads?
+	- (But how to get unique thread IDs to processes)
 

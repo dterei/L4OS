@@ -4,10 +4,13 @@
 #define SLEEP_MS 10000
 
 int main(int argc, char *argv[]) {
+	char buf[32];
+
 	for (int i = 0;; i++) {
-		kprint("------------------------------------\n");
-		kprint("ping\n");
-		kprint("------------------------------------\n");
+		//kprint("------------------------------------\n");
+		sprintf(buf, "ping: up for %llu ms\n", uptime());
+		kprint(buf);
+		//kprint("------------------------------------\n");
 		usleep(SLEEP_MS * 1000);
 	}
 

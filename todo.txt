@@ -10,3 +10,8 @@ this is a problem in NFS not with the linked list code.
 ELF/swapping stuff anyway (to use mmap) so not worth fixing this yet.  Pretty
 rare anyway.
 
+- Move back to a single-threaded model, just make the syscall_reply a callback
+rather than syscall_reply.  That way a function in the pager can be called.
+I think this is nicer than the various hacks we have around the place to make
+the pager thing actually work.
+

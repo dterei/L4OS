@@ -187,11 +187,9 @@ static L4_Word_t getNextPid(void) {
 		firstIteration = 0;
 	}
 
-	// Should probably throw error here instead, but
-	// it's too much effort
+	// Should probably throw error here instead, but it's too much effort
 	assert(sosProcs[nextPid] == NULL);
-
-	return nextPid++; // FIXME increment is hack
+	return nextPid;
 }
 
 void process_prepare(Process *p) {
@@ -256,7 +254,6 @@ static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
 		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
 			sosProcs[i]->waitingOn = WAIT_NOBODY;
-			dprintf(0, "*** wakeAll: waking %d\n", process_get_pid(sosProcs[i]));
 			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
 		}
 	}
@@ -283,21 +280,24 @@ void process_close_files(Process *p) {
 	}
 }
 
+L4_Word_t thread_kill(L4_ThreadId_t tid) {
+	return L4_ThreadControl(tid, L4_nilspace,
+				L4_nilthread, L4_nilthread, L4_nilthread, 0, NULL);
+}
+
 int process_kill(Process *p) {
 	assert(p != NULL);
 
 	if (process_get_pid(p) > tidOffset && !p->isThread) {
 		// Isn't a kernel-allocated process, and isn't the pager.  Also we
 		// don't want anybody killing threads (and they shouldn't be visible)
-		please(L4_ThreadControl(process_get_tid(p), L4_nilspace, L4_nilthread,
-					L4_nilthread, L4_nilthread, 0, NULL));
+		please(thread_kill(process_get_tid(p)));
 
-		// delete caps?
-		// space control delete asid
+		// Delete address space
 		please(L4_SpaceControl(process_get_sid(p), L4_SpaceCtrl_delete,
 				L4_rootclist, L4_Nilpage, 0, NULL));
 
-		// delete clist
+		// Incidentally, we reuse the caps and cap list so no need to free
 
 		// Reuse if it's now the lowest pid
 		if (process_get_pid(p) < nextPid) {

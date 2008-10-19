@@ -66,7 +66,7 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 
 	if (L4_IpcFailed(tag)) {
 		dprintf(1, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
-		sos_print_error(L4_ErrorCode());
+		if (verbose > 1) sos_print_error(L4_ErrorCode());
 	} else {
 		dprintf(2, "*** syscall_reply to %ld success\n", L4_ThreadNo(tid));
 	}

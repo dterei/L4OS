@@ -9,7 +9,8 @@
 - Editor (user program, nothing to do with SOS unless it involves writing a few
 more system calls).  Like red.
 
-- Thread management.
+- Thread management.  As a note, this is what we need to have the init_thread
+kill itself without a hack.
 
 - Shared memory.
 

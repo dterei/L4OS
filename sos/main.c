@@ -31,7 +31,7 @@
 
 #define verbose 1
 
-#define HEAP_SIZE ONE_MEG /* 1 MB heap */
+#define HEAP_SIZE ONE_MEG
 
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
 
@@ -44,9 +44,7 @@ init_thread(void) {
 	pager_init();
 	sos_start_binfo_executables();
 
-	// TODO kill thread
-	for (;;)
-		sos_usleep(30 * 1000 * 1000);
+	for (;;) L4_Yield();
 }
 
 static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
