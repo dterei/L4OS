@@ -375,6 +375,8 @@ new_nfsfile(VNode vnode) {
 
 	nf->vnode = vnode;
 	vnode->extra = (void *) nf;
+
+	return nf;
 }
 
 /* Free the extra struct for an nfs file */
