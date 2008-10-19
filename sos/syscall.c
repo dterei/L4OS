@@ -29,7 +29,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	// make sure process/thread still exists
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	if (p == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n",L4_ThreadNo(tid));
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n", L4_ThreadNo(tid));
 		return;
 	}
 
