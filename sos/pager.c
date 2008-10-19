@@ -512,6 +512,9 @@ static int processDelete(L4_Word_t pid) {
 		// Invalid process
 		return (-1);
 	}
+	
+	// change the state
+	process_set_state(p, PS_STATE_ZOMBIE);
 
 	// flush and close open files
 	process_close_files(p);

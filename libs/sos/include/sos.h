@@ -56,6 +56,14 @@ typedef enum {
 } sos_filemodes;
 typedef uint8_t fmode_t;
 
+/* Process state modes */
+typedef enum {
+	PS_STATE_START,
+	PS_STATE_ALIVE,
+	PS_STATE_WAIT,
+	PS_STATE_ZOMBIE,
+} process_state_t;
+
 #define O_RDONLY FM_READ
 #define O_WRONLY FM_WRITE
 #define O_RDWR   (FM_READ|FM_WRITE)
@@ -100,11 +108,15 @@ typedef struct {
 	unsigned  size;  // in pages
 	unsigned  stime; // start time in msec since booting
 	unsigned  ctime; // CPU time accumulated in msec
-	char	    command[MAX_FILE_NAME]; // Name of exectuable
+	char	    command[MAX_FILE_NAME]; // Name of executable
+	process_state_t state; // state the process is in (run, wait... ect)
 } process_t;
 
-/* Get the string representation of a syscall */
+/* Get a string representation of a syscall */
 char *syscall_show(syscall_t syscall);
+
+/* Get a string representation of a process state */
+char *process_state_show(process_state_t state);
 
 /* For handling syscalls */
 #define YES_REPLY 1

@@ -1,6 +1,8 @@
 #ifndef _PROCESS_H_
 #define _PROCESS_H_
 
+#include <sos/sos.h>
+
 #include "list.h"
 #include "region.h"
 #include "pager.h"
@@ -25,6 +27,9 @@ void process_add_region(Process *p, Region *r);
 // Set the name of the process
 void process_set_name(Process *p, char *name);
 
+// Set the state of the process
+void process_set_state(Process *p, process_state_t state);
+
 // Set an initial stack pointer for the process
 void process_set_sp(Process *p, void *sp);
 
@@ -36,6 +41,9 @@ void process_prepare(Process *p);
 
 // Run a process
 L4_ThreadId_t process_run(Process *p);
+
+// Get the state of the process
+process_state_t process_get_state(Process *p);
 
 // Get the process id of a process
 pid_t process_get_pid(Process *p);

@@ -43,6 +43,13 @@ static L4_Word_t nextPid;
 // never allocate a pid below this value.
 static L4_Word_t tidOffset;
 
+// Our OS personality only supports single threaded user apps but our kernel
+// (SOS) is multithreaded. All kernel threads are created when the kernel
+// starts up and before any user threads. When a kernel thread is created we
+// increase this value by 1 to indicate the highest tid of the kernel threads.
+// So all kernel threads will be between tidOffset - topRoot_tid.
+//static L4_Word_t topRoot_tid;
+
 Process *process_lookup(L4_Word_t key) {
 	if (key < 0 || key >= MAX_ADDRSPACES) {
 		dprintf(0, "!!! process_lookup(%d): outside range!\n", key);
@@ -66,6 +73,7 @@ static Process *processAlloc(void) {
 	p->ip = NULL;
 	vfiles_init(p->files);
 	p->waitingOn = WAIT_NOBODY;
+	process_set_state(p, PS_STATE_START);
 
 	return p;
 }
@@ -74,6 +82,7 @@ Process *process_init(int isThread) {
 	// On the first process initialisation set the offset to whatever it is
 	// and disable libsos from allocation any more threads
 	if (tidOffset == 0) {
+		dprintf(0, "*** tidOffset = %d\n", tidOffset);
 		tidOffset = L4_ThreadNo(sos_peek_new_tid());
 		sos_get_new_tid_disable();
 		nextPid = tidOffset;
@@ -106,6 +115,15 @@ void process_set_sp(Process *p, void *sp) {
 
 void process_set_name(Process *p, char *name) {
 	strncpy(p->info.command, name, MAX_FILE_NAME);
+	L4_KDB_SetThreadName(process_get_tid(p), p->info.command);
+}
+
+void process_set_state(Process *p, process_state_t state) {
+	p->info.state = state;
+}
+
+process_state_t process_get_state(Process *p) {
+	return p->info.state;
 }
 
 static void *regionFindHighest(void *contents, void *data) {
@@ -219,10 +237,11 @@ L4_ThreadId_t process_run(Process *p) {
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	}
 
-	L4_KDB_SetThreadName(tid, p->info.command);
-
+	L4_KDB_SetThreadName(process_get_tid(p), process_get_info(p)->command);
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
 	assert(L4_ThreadNo(tid) == p->info.pid);
+
+	process_set_state(p, PS_STATE_ALIVE);
 
 	return tid;
 }
@@ -256,6 +275,7 @@ static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
 		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
 			sosProcs[i]->waitingOn = WAIT_NOBODY;
+			process_set_state(sosProcs[i], PS_STATE_ALIVE);
 			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
 		}
 	}
@@ -347,10 +367,12 @@ VFile *process_get_files(Process *p) {
 
 void process_wait_any(Process *waiter) {
 	waiter->waitingOn = WAIT_ANYBODY;
+	process_set_state(waiter, PS_STATE_WAIT);
 }
 
 void process_wait_for(Process *waitFor, Process *waiter) {
 	waiter->waitingOn = process_get_pid(waitFor);
+	process_set_state(waiter, PS_STATE_WAIT);
 }
 
 void process_add_rootserver(void) {
@@ -358,6 +380,7 @@ void process_add_rootserver(void) {
 
 	rootserver->startedAt = time_stamp();
 	process_set_name(rootserver, "sos");
+	process_set_state(rootserver, PS_STATE_ALIVE);
 
 	assert(rootserver->info.pid == L4_rootserverno);
 	sosProcs[L4_rootserverno] = rootserver;

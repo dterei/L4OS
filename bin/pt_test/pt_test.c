@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define NUM_SLOTS 64
-#define SLOTSIZE 196
-#define STACKSIZE 512
+#define NUM_SLOTS 128
+#define SLOTSIZE 192
+#define STACKSIZE 4096
 
 typedef int test_t;
 
