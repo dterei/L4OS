@@ -17,6 +17,7 @@ sos_error_msg(int error) {
 		case SOS_VFS_READFULL: return "File Reader Slots Full";
 		case SOS_VFS_OPEN: return "File Already Open";
 		case SOS_VFS_DIR: return "File is a Directory";
+		case SOS_VFS_EXIST: return "File Already Exists";
 		case SOS_VFS_ERROR:
 		default: return "Error Occurred";
 	}

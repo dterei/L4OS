@@ -1,4 +1,5 @@
 /* Simple shell to run on SOS */
+
 /* 
  * Orignally written by Gernot Heiser 
  * - updated by Ben Leslie 2003  
@@ -9,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <time.h>
 #include <sos/sos.h>
 #include <sos/globals.h>
 
@@ -97,12 +99,20 @@ static void prstat(const char *name) {
 	// make sure we don't go out of array
 	int t = sbuf.st_type > 2 ? 0 : sbuf.st_type;
 
-	printf("%c%c%c%c %08u 0x%08lx 0x%08lx %s\n",
+	time_t ntime = sbuf.st2_ctime / 1000;
+	char c_stime[26];
+	strftime(c_stime, 26, "%F %T", localtime(&ntime));
+
+	ntime = sbuf.st2_atime / 1000;
+	char m_stime[26];
+	strftime(m_stime, 26, "%F %T", localtime(&ntime));
+
+	printf("%c%c%c%c %10u %s %s %s\n",
 			type[t],
 			sbuf.st_fmode & FM_READ     ? 'r' : '-',
 			sbuf.st_fmode & FM_WRITE    ? 'w' : '-',
 			sbuf.st_fmode & FM_EXEC     ? 'x' : '-',
-			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
+			sbuf.st_size, c_stime, m_stime, name);
 }
 
 static int cat(int argc, char *argv[]) {

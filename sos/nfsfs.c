@@ -349,8 +349,14 @@ cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_type  = attr->type;
 	stat->st_fmode = mode_nfs2unix(attr->mode);
 	stat->st_size  = attr->size;
-	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds / 1000);
-	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds / 1000);
+	// fill in compatible time stamps
+	stat->st_ctime = attr->ctime.seconds * 1000 + attr->ctime.useconds / 1000;
+	stat->st_atime = attr->atime.seconds * 1000 + attr->atime.useconds / 1000;
+	// fill in correct time stamps
+	stat->st2_ctime = (((unsigned long long) attr->ctime.seconds) * 1000)
+		+ (((unsigned long long) attr->ctime.useconds) / 1000);
+	stat->st2_atime = (((unsigned long long) attr->atime.seconds) * 1000)
+		+ (((unsigned long long) attr->atime.useconds) / 1000);
 }
 
 /* Create the extra struct for an nfs file */

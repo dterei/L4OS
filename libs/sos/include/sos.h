@@ -73,8 +73,17 @@ typedef struct {
 	st_type_t st_type;  // file type
 	fmode_t   st_fmode; // access mode
 	size_t    st_size;  // file size in bytes
-	long	   st_ctime; // file creation time (ms since booting)
-	long	   st_atime; // file last access (open) time (ms since booting)
+	/* The fields below for storing the creation and last access time stamp
+	 * are broken since they are only 4 bytes wide and 8 bytes are needed.
+	 * However we keep them for compatability with the original sos
+	 * specification and add two additional correct time stamp fields.
+	 */
+	long st_ctime; // file creation time (ms since booting)
+	long st_atime; // file last access (open) time (ms since booting)
+	
+	/* The correct 8 byte wide unsigned time stamp fields */
+	unsigned long long st2_ctime; // file creation time (ms since booting)
+	unsigned long long st2_atime; // file last access (open) time (ms since booting)
 } stat_t;
 
 typedef int fildes_t;
