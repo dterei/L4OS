@@ -349,8 +349,8 @@ cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_type  = attr->type;
 	stat->st_fmode = mode_nfs2unix(attr->mode);
 	stat->st_size  = attr->size;
-	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds);
-	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds);
+	stat->st_ctime = (attr->ctime.seconds * 1000) + (attr->ctime.useconds / 1000);
+	stat->st_atime = (attr->atime.seconds * 1000) + (attr->atime.useconds / 1000);
 }
 
 /* Create the extra struct for an nfs file */
@@ -389,22 +389,22 @@ L4_Word_t
 status_nfs2vfs(int status) {
 	switch(status) {
 		case NFS_OK:					return SOS_VFS_OK;
+		case NFSERR_ROFS:
+		case NFSERR_ACCES:
 		case NFSERR_PERM:				return SOS_VFS_PERM;
 		case NFSERR_NOENT:			return SOS_VFS_NOVNODE;
-		case NFSERR_NAMETOOLONG:	return SOS_VFS_NOMEM;
-		case NFSERR_ISDIR:         return SOS_VFS_PATHINV;
+		case NFSERR_NAMETOOLONG:
+		case NFSERR_NODEV:         return SOS_VFS_PATHINV;
+		case NFSERR_ISDIR:         return SOS_VFS_DIR;
+		case NFSERR_EXIST:         return SOS_VFS_EXIST;
+		case NFSERR_STALE:         return SOS_VFS_CORVNODE;
 		case NFSERR_IO:
 		case NFSERR_NXIO:
-		case NFSERR_ACCES:
-		case NFSERR_EXIST:
-		case NFSERR_NODEV:
 		case NFSERR_NOTDIR:
 		case NFSERR_FBIG:
 		case NFSERR_NOSPC:
-		case NFSERR_ROFS:
 		case NFSERR_NOTEMPTY:
 		case NFSERR_DQUOT:
-		case NFSERR_STALE:
 		case NFSERR_WFLUSH:
 		default:							return SOS_VFS_ERROR; 	break;
 	}

@@ -20,6 +20,7 @@ typedef enum {
 	SOS_VFS_READFULL,
 	SOS_VFS_OPEN,
 	SOS_VFS_DIR,
+	SOS_VFS_EXIST,
 } vfs_return_t;
 
 char *sos_error_msg(int error);

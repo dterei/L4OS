@@ -17,7 +17,8 @@ int main(int argc, char **argv) {
 		snprintf(filenames[i], sizeof(FILENAME) + 8, "%s_%d_%d", FILENAME, pid, i);
 		fds[i] = open(filenames[i], FM_READ | FM_WRITE);
 		if (fds[i] < 0) {
-			printf("%s cannot be opened: %s\n", filenames[i], sos_error_msg(fds[i]));
+			printf("stressvfs (%d) :%s cannot be opened: %s\n",
+					pid, filenames[i], sos_error_msg(fds[i]));
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -37,8 +38,8 @@ int main(int argc, char **argv) {
 				}
 			}
 			if (rw < 0) {
-				printf("stressvfs: Error on write (%s) (%d) (%d) (%s)\n",
-						filenames[i], fds[i], rw, sos_error_msg(rw));
+				printf("stressvfs (%d): Error on write (%s) (%d) (%d) (%s)\n",
+						pid, filenames[i], fds[i], rw, sos_error_msg(rw));
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -53,11 +54,25 @@ int main(int argc, char **argv) {
 				}
 			}
 			if (rw < 0 && rw != SOS_VFS_EOF) {
-				printf("stressvfs: Error on read (%s) (%d) (%d) (%s)\n",
-						filenames[i], fds[i], rw, sos_error_msg(rw));
+				printf("stressvfs (%d): Error on read (%s) (%d) (%d) (%s)\n",
+						pid, filenames[i], fds[i], rw, sos_error_msg(rw));
+				exit(EXIT_FAILURE);
+			}
+
+			/* Verify it */
+			int error = 0;
+			for (int j = 0; j < DATA_SIZE; j++) {
+				if (data[j] != data2[j]) {
+					printf("stressvfs (%d): Data Corrupt! (%c != %c), (%d)\n",
+							pid, data[j], data2[j], j);
+					error = 1;
+				}
+			}
+			if (error) {
 				exit(EXIT_FAILURE);
 			}
 		}
+
 	}
 
 }
