@@ -61,6 +61,7 @@ typedef enum {
 	PS_STATE_START,
 	PS_STATE_ALIVE,
 	PS_STATE_WAIT,
+	PS_STATE_SLEEP,
 	PS_STATE_ZOMBIE,
 } process_state_t;
 
