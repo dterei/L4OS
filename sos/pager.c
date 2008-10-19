@@ -18,7 +18,6 @@
 #include "syscall.h"
 
 #define verbose 1
-#define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
 // Masks for page table entries
 #define ONDISK_MASK  0x00000001

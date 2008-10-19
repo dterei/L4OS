@@ -131,7 +131,7 @@ static void addBuiltinRegions(Process *p) {
 		dprintf(2, "Base is at %p\n", (void*) base);
 	}
 
-	base = ((base - 1) & PAGEALIGN) + PAGESIZE; // Page align up
+	base = round_up(base, PAGESIZE);
 
 	// Size of the region is zero for now, expand as we get syscalls
 	list_push(p->regions, region_alloc(REGION_HEAP,
@@ -187,9 +187,11 @@ static L4_Word_t getNextPid(void) {
 		firstIteration = 0;
 	}
 
-	// Should probably throw error here instead, but it's too much effort
-	assert(sosProcs[nextPid] == NULL);
-	return nextPid;
+	if (sosProcs[nextPid] != NULL) {
+		return NIL_PID;
+	} else {
+		return nextPid;
+	}
 }
 
 void process_prepare(Process *p) {
@@ -333,8 +335,8 @@ int process_write_status(process_t *dest, int n) {
 }
 
 process_t *process_get_info(Process *p) {
-	// If necessary, uptime stime here too
 	if (p == NULL) return NULL;
+	p->info.stime = (time_stamp() - p->startedAt);
 	return &p->info;
 }
 
