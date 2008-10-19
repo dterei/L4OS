@@ -50,6 +50,17 @@ char *syscall_show(syscall_t syscall) {
 	return "UNRECOGNISED";
 }
 
+char *process_state_show(process_state_t state) {
+	switch (state) {
+		case PS_STATE_START: return "START";
+		case PS_STATE_ALIVE: return "RUN";
+		case PS_STATE_WAIT: return "WAIT";
+		case PS_STATE_ZOMBIE: return "ZOMBIE";
+	}
+
+	return "INVALID";
+}
+
 void kprint(char *str) {
 	copyin(str, strlen(str) + 1, 0);
 

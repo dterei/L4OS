@@ -41,6 +41,16 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 
 	CACHE_FLUSH_ALL();
 
+	// ignore if process is a zombie, IPC is probably due to rootserver
+	// closing its various resources (e.g open files).
+	if (process_get_state(p) == PS_STATE_ZOMBIE ||
+			process_get_state(p) == PS_STATE_START) {
+		dprintf(0, "*** Ignoring syscall_reply request as IPC target is in a");
+		dprintf(0, " zombie or start state (p %d) (s %d)\n", process_get_pid(p),
+			process_get_state(p));
+		return;
+	}
+
 	int rval;
 	va_list va;
 	va_start(va, count);
@@ -56,6 +66,9 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 
 	if (rval == 0) {
 		dprintf(2, "*** syscall_reply to %ld success\n", L4_ThreadNo(tid));
+	} else {
+		dprintf(0, "!!! syscall_reply failed: (p %p), (ps %d) (c %d)\n", p,
+				process_get_state(p), count);
 	}
 }
 

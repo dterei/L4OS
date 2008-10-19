@@ -68,6 +68,8 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 		debug_printf("### send_ipc to %ld failed: ", L4_ThreadNo(tid));
 		if (error != 1) {
 			debug_print_L4Err(L4_ErrorCode());
+		} else {
+			debug_printf("bad IPC send type\n");
 		}
 		
 		return 1;
