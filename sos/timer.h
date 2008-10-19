@@ -4,7 +4,6 @@
 // Init the timer
 void utimer_init(void);
 
-// sos_usleep(uint32_t microseconds)
 //
 // Put the calling thread to sleep for microseconds.  This function is
 // implemented on a temporary L4 debugger api and the timer.c 'timer' driver.

@@ -579,23 +579,6 @@ sos_usleep(uint32_t microseconds)
 	utimer_sleep(microseconds);	// M4 must change to your timer
 }
 
-L4_Word_t
-getCurrentProcNum(void)
-{
-	L4_SpaceId_t sp = L4_SenderSpace();
-	if (L4_IsNilSpace(sp)) {
-		return (-1);
-	}
-
-	L4_Word_t as = L4_SpaceNo(sp);
-	if (as < 0 || as >= MAX_ADDRSPACES) {
-		dprintf(0, "!!! Invalid Address Space Number! Outside range! (%d)\n", as);
-		return (-1);
-	}
-
-	return as;
-}
-
 void
 msgClearWith(L4_Word_t x)
 {
