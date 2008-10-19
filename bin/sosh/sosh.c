@@ -105,6 +105,104 @@ static void prstat(const char *name) {
 			sbuf.st_size, sbuf.st_ctime, sbuf.st_atime, name);
 }
 
+static int cat(int argc, char *argv[]) {
+	fildes_t fd;
+	char buf[IO_MAX_BUFFER];
+	int num_read, num_written = 0, read_tot = 0, write_tot = 0;
+	int ret = 0;
+
+	if (argc != 2) {
+		printf("Usage: cat filename\n");
+		return 1;
+	}
+
+	fd = open(argv[1], FM_READ);
+	if (fd < 0) {
+		printf("%s cannot be opened\n", argv[1]);
+		return 1;
+	}
+
+	//printf("<%s>\n", argv[1]);
+
+	while ((num_read = read(fd, buf, IO_MAX_BUFFER - 1)) > 0 ) {
+		buf[num_read] = '\0';
+		// use write instead of printf as printf has some bugs with
+		// printing weird chars
+		if ((num_written = write(stdout_fd, buf, num_read)) < 0) {
+			break;
+		}
+		read_tot += num_read;
+		write_tot += num_written;
+	}
+
+	close(fd);
+
+	if (num_read < 0) {
+		printf("cat failed: error on read (%d)\n", num_read);
+		printf("Can't read file: %s\n", sos_error_msg(num_read));
+		kprint("error on read\n" );
+		ret = 1;
+	}
+
+	if (num_written < 0) {
+		printf("cat failed: error on print (%d)\n", num_written);
+		printf("Can't print file: %s\n", sos_error_msg(num_written));
+		kprint("error on write\n" );
+		ret = 1;
+	}
+
+	if (verbose > 0) {
+		sprintf(buf, "Total Read: %d, Total Write: %d\n", read_tot, write_tot);
+		printf("%s", buf);
+		kprint(buf);
+	}
+
+	return ret;
+}
+
+static int cp(int argc, char **argv) {
+	fildes_t fd, fd_out;
+	char *file1, *file2;
+	char buf[IO_MAX_BUFFER];
+	int num_read, num_written = 0;
+
+	if (argc != 3) {
+		printf("Usage: cp from to %d\n", argc);
+		return 1;
+	}
+
+	file1 = argv[1];
+	file2 = argv[2];
+
+	fd = open(file1, FM_READ);
+	if (fd < 0) {
+		printf("%s cannot be opened: %s\n", file1, sos_error_msg(fd));
+		return 1;
+	}
+
+	fd_out = open(file2, FM_WRITE);
+	if (fd_out < 0) {
+		printf("%s cannot be opened: %s\n", file2, sos_error_msg(fd));
+		close(fd);
+		return 1;
+	}
+
+	while ((num_read = read( fd, buf, IO_MAX_BUFFER) ) > 0) {
+		num_written = write(fd_out, buf, num_read);
+	}
+
+	if (num_read == -1 || num_written == -1) {
+		close(fd);
+		close(fd_out);
+		printf("error on cp: %s\n", sos_error_msg(fd));
+		return 1;
+	}
+
+	close(fd);
+	close(fd_out);
+	return 0;
+}
+
 static int ls(int argc, char **argv) {
 	int i, r;
 	char buf[IO_MAX_BUFFER];
@@ -263,6 +361,8 @@ static int time(int argc, char **argv) {
 
 struct command sosh_commands[] = {
 	{"alloc", alloc},
+	{"cat", cat},
+	{"cp", cp},
 	{"exec", exec},
 	{"help", help},
 	{"kill", kill},
