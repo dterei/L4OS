@@ -25,8 +25,9 @@
 #include "libsos.h"
 #include "network.h"
 #include "pager.h"
-#include "syscall.h"
 #include "process.h"
+#include "syscall.h"
+#include "timer.h"
 #include "vfs.h"
 
 #define verbose 1
@@ -177,6 +178,7 @@ main(void) {
 	irq_add(NSLU2_TIMESTAMP_IRQ, timestamp_irq);
 	irq_add(NSLU2_TIMER0_IRQ, timer_irq);
 
+	utimer_init();
 	start_timer();
 
 	// Rootserver needs a PCB for opening files (e.g. the swap file)
@@ -189,8 +191,7 @@ main(void) {
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
-	sos_thread_new(L4_nilthread, &init_thread,
-			((char*) frame_alloc()) + PAGESIZE - sizeof(L4_Word_t));
+	process_run_rootthread("sos_initialisation", init_thread, YES_TIMESTAMP);
 
 	dprintf(2, "*** main: about to start syscall loop\n");
 	syscall_loop();

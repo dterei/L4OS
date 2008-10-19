@@ -1,5 +1,5 @@
-#ifndef _TTYOUT_H
-#define _TTYOUT_H
+#ifndef _LIB_TTYOUT_H
+#define _LIB_TTYOUT_H
 
 #include <stdio.h>
 

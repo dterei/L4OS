@@ -1,5 +1,5 @@
-#ifndef _SOS_IPC_H
-#define _SOS_IPC_H
+#ifndef _LIB_SOS_IPC_H
+#define _LIB_SOS_IPC_H
 
 #include <stdarg.h>
 

@@ -15,10 +15,6 @@
 /******** NFS TIMEOUT THREAD ********/
 extern void nfs_timeout(void);
 
-// stack for nfs timer thread, can probably be a lot less
-#define STACK_SIZE 0x1000
-static L4_Word_t nfsfs_timer_stack[STACK_SIZE];
-
 #define MS_TO_US 1000
 #define NFSFS_TIMEOUT_MS (100 * MS_TO_US)
 
@@ -151,8 +147,10 @@ nfsfs_init(void) {
 	nfs_mnt = mnt_point;
 
 	NfsRequests = list_empty();
-	(void) sos_thread_new(L4_nilthread,
-			&nfsfs_timeout_thread, &nfsfs_timer_stack[STACK_SIZE]);
+	
+	/* Run the nfs time out thread */
+	process_run_rootthread("nfs_timeout", nfsfs_timeout_thread, YES_TIMESTAMP);
+	
 	return 0;
 }
 

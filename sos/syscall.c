@@ -29,7 +29,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	// make sure process/thread still exists
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	if (p == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n", process_get_pid(p));
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %d)\n",L4_ThreadNo(tid));
 		return;
 	}
 
@@ -45,8 +45,8 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	// closing its various resources (e.g open files).
 	if (process_get_state(p) == PS_STATE_ZOMBIE ||
 			process_get_state(p) == PS_STATE_START) {
-		dprintf(0, "*** Ignoring syscall_reply request as IPC target is in a");
-		dprintf(0, " zombie or start state (p %d) (s %d)\n", process_get_pid(p),
+		dprintf(1, "*** Ignoring syscall_reply request as IPC target is in a");
+		dprintf(1, " zombie or start state (p %d) (s %d)\n", process_get_pid(p),
 			process_get_state(p));
 		return;
 	}

@@ -43,18 +43,17 @@ static L4_Word_t nextPid;
 // never allocate a pid below this value.
 static L4_Word_t tidOffset;
 
-// Our OS personality only supports single threaded user apps but our kernel
-// (SOS) is multithreaded. All kernel threads are created when the kernel
-// starts up and before any user threads. When a kernel thread is created we
-// increase this value by 1 to indicate the highest tid of the kernel threads.
-// So all kernel threads will be between tidOffset - topRoot_tid.
-//static L4_Word_t topRoot_tid;
-
 Process *process_lookup(L4_Word_t key) {
 	if (key < 0 || key >= MAX_ADDRSPACES) {
 		dprintf(0, "!!! process_lookup(%d): outside range!\n", key);
 	}
-	while (sosProcs[key] == NULL) key--;
+
+//	// for multithreaded SOS kernel
+//	while(sosProcs[key] == NULL ) {
+//		key--;
+//	}
+
+	// for standard single threaded user apps
 	return sosProcs[key];
 }
 
@@ -73,6 +72,7 @@ static Process *processAlloc(void) {
 	p->ip = NULL;
 	vfiles_init(p->files);
 	p->waitingOn = WAIT_NOBODY;
+	p->isThread = RUN_AS_PROCESS;
 	process_set_state(p, PS_STATE_START);
 
 	return p;
@@ -82,7 +82,6 @@ Process *process_init(int isThread) {
 	// On the first process initialisation set the offset to whatever it is
 	// and disable libsos from allocation any more threads
 	if (tidOffset == 0) {
-		dprintf(0, "*** tidOffset = %d\n", tidOffset);
 		tidOffset = L4_ThreadNo(sos_peek_new_tid());
 		sos_get_new_tid_disable();
 		nextPid = tidOffset;
@@ -113,7 +112,7 @@ void process_set_sp(Process *p, void *sp) {
 	p->sp = sp;
 }
 
-void process_set_name(Process *p, char *name) {
+void process_set_name(Process *p, const char *name) {
 	strncpy(p->info.command, name, MAX_FILE_NAME);
 	L4_KDB_SetThreadName(process_get_tid(p), p->info.command);
 }
@@ -221,13 +220,28 @@ void process_prepare(Process *p) {
 	}
 }
 
-L4_ThreadId_t process_run(Process *p) {
+/* Uses a default stack size of 1 page, have to perform below steps manually if a larger
+ * stack is needed.
+ */
+Process *process_run_rootthread(const char *name, void *ip, int timestamp) {
+	Process *p = process_init(RUN_IN_ROOT);
+	process_prepare(p);
+	process_set_name(p, name);
+	process_set_ip(p, ip);
+	process_set_sp(p, (void *) (frame_alloc() + PAGESIZE - sizeof(L4_Word_t)));
+	process_run(p, timestamp);
+	return p;
+}
+
+L4_ThreadId_t process_run(Process *p, int timestamp) {
 	L4_ThreadId_t tid;
 	if (verbose > 2) process_dump(p);
 
-	p->startedAt = time_stamp();
+	if (timestamp == YES_TIMESTAMP) {
+		p->startedAt = time_stamp();
+	}
 
-	if (p->isThread) {
+	if (p->isThread == RUN_IN_ROOT) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (pager_is_active()) {
 		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
@@ -235,6 +249,7 @@ L4_ThreadId_t process_run(Process *p) {
 		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
 	}
 
+	//TODO: Shouldnt need in both here and set_name
 	L4_KDB_SetThreadName(process_get_tid(p), process_get_info(p)->command);
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
 	assert(L4_ThreadNo(tid) == p->info.pid);
@@ -341,7 +356,7 @@ int process_write_status(process_t *dest, int n) {
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL && !sosProcs[i]->isThread) {
+		if (sosProcs[i] != NULL) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
 			dest++;

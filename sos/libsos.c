@@ -22,19 +22,17 @@
 
 #include "constants.h"
 #include "l4.h"
-#include "libsos.h"
 #include "pager.h"
 #include "process.h"
 #include "region.h"
+#include "timer.h"
 #include "vfs.h"
+
+#include "libsos.h"
 
 #define VIRTPOOL_MAP_DIRECTLY 0x3
 #define CLIST_LOCAL_ID 14
 #define CLIST_USER_ID 15
-
-// Hack externs from timer.c
-extern void utimer_init(void);
-extern void utimer_sleep(uint32_t microseconds);
 
 #define verbose 1
 
@@ -106,7 +104,7 @@ libsos_init(void)
         assert(success);
     }
 
-    utimer_init();
+    //utimer_init();
 
     return 0;
 }
@@ -506,7 +504,7 @@ bootinfo_run_thread(bi_name_t tid, const bi_user_data_t *data) {
 
 	// Prepare and run the process
 	process_prepare(bip->process);
-	L4_ThreadId_t newtid = process_run(bip->process);
+	L4_ThreadId_t newtid = process_run(bip->process, YES_TIMESTAMP);
 	dprintf(2, "*** bootinfo_run_thread: process_run gave me %d\n", L4_ThreadNo(newtid));
 
 	if (newtid.raw != -1UL && newtid.raw != -2UL && newtid.raw != -3UL) {

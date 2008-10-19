@@ -99,9 +99,6 @@ struct ElfloadRequest_t {
 	pid_t child; // pid of the process created
 };
 
-// For the pager process
-#define PAGER_STACK_SIZE PAGESIZE
-
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
 static void virtualPagerHandler(void);
 
@@ -374,14 +371,7 @@ void pager_init(void) {
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
 
 	// Start the real pager process
-	Process *pager = process_init(1);
-
-	process_set_name(pager, "virtual_pager");
-	process_prepare(pager);
-	process_set_ip(pager, (void*) virtualPagerHandler);
-	process_set_sp(pager, (char*) frame_alloc() + PAGESIZE - sizeof(L4_Word_t));
-
-	process_run(pager);
+	process_run_rootthread("virtual_pager", virtualPagerHandler, YES_TIMESTAMP);
 
 	// Wait until it has actually started
 	while (!pager_is_active()) L4_Yield();
@@ -747,7 +737,7 @@ static void continueElfload(int vfsRval) {
 				process_prepare(p);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
-				process_run(p);
+				process_run(p, 1);
 				closeNonblocking(er->fd);
 				er->child = process_get_pid(p);
 			}
@@ -1326,7 +1316,12 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_DELETE:
-				syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
+				// dont try to reply to a thread we are deleting
+				if (L4_ThreadNo(tid) == L4_MsgWord(&msg, 0)) {
+					processDelete(L4_MsgWord(&msg, 0));
+				} else {
+					syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
+				}
 				break;
 
 			case SOS_PROCESS_CREATE:

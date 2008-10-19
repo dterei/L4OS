@@ -13,21 +13,23 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "queue.h"
-#include "libsos.h"
-
+#include "frames.h"
 #include "l4.h"
+#include "libsos.h"
+#include "process.h"
+#include "queue.h"
+
+#include "timer.h"
+
+#define verbose 1
 
 #if !defined(NULL)
 #define NULL ((void *) 0)
 #endif
 
-// APIs for lib sos
-extern void utimer_init(void);
-extern void utimer_sleep(uint32_t microseconds);
+static L4_ThreadId_t utimer_tid;
+static Process *utimer_p;
 
-static uint8_t utimer_stack[1][256];
-static L4_ThreadId_t utimer_tid_s;
 typedef struct utimer_entry {
 	LIST_ENTRY(utimer_entry) fChain;
 	L4_Word_t fStart;
@@ -35,7 +37,8 @@ typedef struct utimer_entry {
 	L4_ThreadId_t fTid;
 } utimer_entry_t;
 
-static void utimer(void)
+static void
+utimer(void)
 {
 	L4_KDB_SetThreadName(sos_my_tid(), "utimer");
 	L4_Accept(L4_UntypedWordsAcceptor);
@@ -82,15 +85,23 @@ static void utimer(void)
 	}
 }
 
-void utimer_init(void)
+void
+utimer_init(void)
 {
+	if (utimer_p != NULL) {
+		dprintf(0, "!!! utimer_init: timer already initialised!");
+		return;
+	}
+
 	// Start the idler
-	utimer_tid_s = sos_thread_new(L4_nilthread, &utimer, &utimer_stack[1]);
+	utimer_p = process_run_rootthread("utimer", utimer, NO_TIMESTAMP);	
+	utimer_tid = process_get_tid(utimer_p);
 }
 
 // 10 millisecond ticks
 #define US_TO_TICKS(us)		((us) / (10 * 1000))
-void utimer_sleep(uint32_t microseconds)
+void
+utimer_sleep(uint32_t microseconds)
 {
 	utimer_entry_t entry =
 	{ {0}, L4_KDB_GetTick(), (uint32_t) US_TO_TICKS(microseconds)};
@@ -99,6 +110,6 @@ void utimer_sleep(uint32_t microseconds)
 	L4_MsgAppendWord(&msg, (uintptr_t) &entry);
 	L4_MsgLoad(&msg);
 
-	L4_Call(utimer_tid_s);
+	L4_Call(utimer_tid);
 }
 

@@ -1,7 +1,7 @@
 /* Simple operating system interface */
 
-#ifndef _SOS_H
-#define _SOS_H
+#ifndef _LIB_SOS_SOS_H
+#define _LIB_SOS_SOS_H
 
 #include <stdint.h>
 #include <stdio.h>

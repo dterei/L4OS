@@ -1,7 +1,7 @@
 /* Defines some error codes used by sos */
 
-#ifndef _SOS_ERRORS_H
-#define _SOS_ERRORS_H
+#ifndef _LIB_SOS_ERRORS_H
+#define _LIB_SOS_ERRORS_H
 
 /* VFS Return Codes */
 typedef enum {

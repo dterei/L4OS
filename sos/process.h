@@ -10,7 +10,10 @@
 
 #define NIL_PID (-1)
 #define RUN_AS_PROCESS 0
-#define RUN_AS_THREAD 1
+#define RUN_IN_ROOT 1
+
+#define YES_TIMESTAMP 1
+#define NO_TIMESTAMP 0
 
 // The process data structure
 typedef struct Process_t Process;
@@ -25,7 +28,7 @@ Process *process_init(int isThread);
 void process_add_region(Process *p, Region *r);
 
 // Set the name of the process
-void process_set_name(Process *p, char *name);
+void process_set_name(Process *p, const char *name);
 
 // Set the state of the process
 void process_set_state(Process *p, process_state_t state);
@@ -39,8 +42,11 @@ void process_set_ip(Process *p, void *ip);
 // Prepare a process to be run
 void process_prepare(Process *p);
 
+// Start a new root thread (Stack size of a page).
+Process *process_run_rootthread(const char *name, void *ip, int timestamp);
+
 // Run a process
-L4_ThreadId_t process_run(Process *p);
+L4_ThreadId_t process_run(Process *p, int timestamp);
 
 // Get the state of the process
 process_state_t process_get_state(Process *p);
