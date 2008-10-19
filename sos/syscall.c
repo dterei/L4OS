@@ -2,6 +2,7 @@
 
 #include <clock/clock.h>
 #include <sos/sos.h>
+#include <sos/ipc.h>
 
 #include "cache.h"
 #include "constants.h"
@@ -19,11 +20,11 @@
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 {
-	syscall_reply_m(tid, 1, rval);
+	syscall_reply_v(tid, 1, rval);
 }
 
 void
-syscall_reply_m(L4_ThreadId_t tid, int count, ...)
+syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 {
 	// make sure process/thread still exists
 	Process *p = process_lookup(L4_ThreadNo(tid));
@@ -34,40 +35,26 @@ syscall_reply_m(L4_ThreadId_t tid, int count, ...)
 
 	// ignore if a reponse to the roottask, probably a faked syscall
 	if (L4_IsThreadEqual(tid, L4_rootserver) || L4_IsNilThread(tid)) {
-		dprintf(0, "!!! syscall_reply_m: ignoring reply to roottask\n");
+		dprintf(0, "!!! syscall_reply_v: ignoring reply to roottask\n");
 		return;
 	}
 
-	L4_MsgTag_t tag;
-
 	CACHE_FLUSH_ALL();
 
-	L4_Msg_t msg;
-	L4_MsgClear(&msg);
-	L4_Set_MsgLabel(&msg, SOS_REPLY << 4);
-
+	int rval;
 	va_list va;
 	va_start(va, count);
-	L4_Word_t w;
-	for (int i = 0; i < count; i++) {
-		w = va_arg(va, L4_Word_t);
-		L4_MsgAppendWord(&msg, w);
-	}
-	va_end(va);
-
-	L4_MsgLoad(&msg);
 
 	if (L4_IsThreadEqual(tid, pager_get_tid())) {
 		// TODO Do this nicely (either set up by the caller, or generically)
-		tag = L4_Send(tid);
+		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_SEND, 0, NULL, count, va);
 	} else {
-		tag = L4_Reply(tid);
+		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_REPLY, 0, NULL, count, va);
 	}
 
-	if (L4_IpcFailed(tag)) {
-		dprintf(1, "!!! syscall_reply to %ld failed: ", L4_ThreadNo(tid));
-		if (verbose > 1) sos_print_error(L4_ErrorCode());
-	} else {
+	va_end(va);
+
+	if (rval == 0) {
 		dprintf(2, "*** syscall_reply to %ld success\n", L4_ThreadNo(tid));
 	}
 }
@@ -150,7 +137,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 			break;
 
 		case SOS_TIME_STAMP:
-			syscall_reply_m(tid, 2,
+			syscall_reply_v(tid, 2,
 					(L4_Word_t) time_stamp(),
 					(L4_Word_t) (time_stamp() >> 32));
 			break;

@@ -466,7 +466,7 @@ static void pagerContinue(PagerRequest *pr) {
 
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(pr->pid));
 	free(pr);
-	syscall_reply_m(replyTo, 0);
+	syscall_reply_v(replyTo, 0);
 }
 
 static L4_Word_t pagerSwapslotAlloc(Process *p) {
@@ -1333,7 +1333,7 @@ static void virtualPagerHandler(void) {
 
 			case SOS_DEBUG_FLUSH:
 				pagerFlush();
-				syscall_reply_m(tid, 0);
+				syscall_reply_v(tid, 0);
 				break;
 
 			case L4_EXCEPTION:
@@ -1407,7 +1407,7 @@ static void copyInContinue(PagerRequest *pr) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyInContinue: finished\n");
-		syscall_reply_m(tid, 0);
+		syscall_reply_v(tid, 0);
 	} else {
 		pr->addr = (L4_Word_t) src;
 		dprintf(3, "*** copyInContinue: continuing\n");
@@ -1475,7 +1475,7 @@ static void copyOutContinue(PagerRequest *pr) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyOutContinue: finished\n");
-		syscall_reply_m(tid, 0);
+		syscall_reply_v(tid, 0);
 	} else {
 		pr->addr = (L4_Word_t) dest;
 		dprintf(3, "*** copyOutContinue: continuing\n");

@@ -10,6 +10,7 @@
 
 #define NULLFRAME ((L4_Word_t) (0))
 
+static int totalFrames;
 static L4_Word_t firstFree;
 static int totalInUse;
 
@@ -17,6 +18,7 @@ void frame_init(L4_Word_t low, L4_Word_t frame) {
 	L4_Word_t page, high;
 	L4_Fpage_t fpage;
 	L4_PhysDesc_t ppage;
+	totalFrames = 0;
 
 	// Make the high address page aligned (grr).
 	high = frame + 1;
@@ -34,6 +36,7 @@ void frame_init(L4_Word_t low, L4_Word_t frame) {
 	dprintf(1, "*** frame_init: trying to initialise linked list.\n");
 	for (page = low; page < high - PAGESIZE; page += PAGESIZE) {
 		*((L4_Word_t*) page) = page + PAGESIZE;
+		totalFrames++;
 	}
 
 	dprintf(1, "*** frame_init: trying to set bounds of linked list.\n");
@@ -66,5 +69,13 @@ void frame_free(L4_Word_t frame) {
 
 int frames_allocated(void) {
 	return totalInUse;
+}
+
+int frames_free(void) {
+	return totalFrames - totalInUse;
+}
+
+int frames_total(void) {
+	return totalFrames;
 }
 

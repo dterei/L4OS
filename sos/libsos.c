@@ -160,7 +160,7 @@ sos_print_error(L4_Word_t ec)
     // XXX gvdl: get page number when doc is available
     sos_logf("IPC %s error, code is 0x%lx (see p125)\n", p? "receive":"send", e);
     if (e == 4)
-	sos_logf("  Message overflow error\n");
+		 sos_logf("  Message overflow error\n");
 }
 
 void

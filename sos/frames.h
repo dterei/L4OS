@@ -18,4 +18,10 @@ void frame_free(L4_Word_t frame);
 // Query how many frames are in use
 int frames_allocated(void);
 
+// Query how many frames are free
+int frames_free(void);
+
+// Query how many frames there are in total
+int frames_total(void);
+
 #endif // sos/frames.h

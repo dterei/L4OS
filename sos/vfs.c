@@ -573,7 +573,7 @@ vfs_write_done(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
 	}
 	
 	vf[file].fp += nbyte;
-	syscall_reply_m(process_get_tid(p), 2, status, SOS_WRITE);
+	syscall_reply_v(process_get_tid(p), 2, status, SOS_WRITE);
 }
 
 /* Flush a stream */

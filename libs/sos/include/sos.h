@@ -217,8 +217,6 @@ void flushNonblocking(fildes_t file);
  * to the start of the file, current position in the file or end of the file
  * respectively.
  *
- * Note: SEEK_END not supported.
- *
  * Returns 0 on success and -1 on error.
  */
 int lseek(fildes_t file, fpos_t pos, int whence);
