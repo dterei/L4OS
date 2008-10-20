@@ -31,10 +31,5 @@ to be killed with CTRL-C.
 - Have a hard code stable program which runs and is responsible for spawning sosh.
 If sosh crashes, it starts it up again... 
 
-- Support file modes. At moment don't support append, opening files in write mode
-always truncates any existing file to zero... ect.
-
-- Banner
-
 - Fix network problem with console
 

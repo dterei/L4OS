@@ -5,8 +5,6 @@
 	- Process management (with threads)
 	- irq
 	- Bootinfo
-	- ...
-	- Filesystem stuff?
 
 - Clean up copyin/out as well, there is a lot of repetition across the two
 functions and they aren't so nice anyway.
