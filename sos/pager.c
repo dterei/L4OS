@@ -19,9 +19,6 @@
 
 #define verbose 1
 
-#define FALSE 0
-#define TRUE 1
-
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
 #define REF_MASK  (1 << 1)
