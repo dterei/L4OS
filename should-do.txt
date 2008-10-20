@@ -8,18 +8,6 @@
 	- ...
 	- Filesystem stuff?
 
-- There are comments in the code about not blocking SOS for too long on (what I
-assume is) console writing.  It's pretty negligible but yeah I can see that the
-problem does exist.  It's buffered now, so what we "need" (if we were to do it)
-is a thread to do the flushing.
-
-- investigate moving the kernel heap size setting to constants.h
-
-- bug with vfs that opening a file in write truncate mode doesn't actually
-truncate the file if its already open. Need to add a truncate function to the
-vfs so we can just call that. (At moment truncate at file creation by just creating
-a new file).
-
 - Clean up copyin/out as well, there is a lot of repetition across the two
 functions and they aren't so nice anyway.
 
@@ -32,11 +20,4 @@ want to minimise the interface to the pager though.
 
 - More testing of killing processes at awkward times, for example in the middle
 of swapping in or swapping out.
-
-- Remove files.. ect, screw with nfs by changing stuff on nfs server side.
-Not that important but should be able to handle and will be a good test
-of vfs stability
-
-- Proper thread management in SOS, then allow userspace threads?
-	- (But how to get unique thread IDs to processes)
 

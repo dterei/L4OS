@@ -6,6 +6,7 @@
 #define WRITE_SIZE 4096
 #define DATA_SIZE 1024
 #define FILENAME ".stressvfs"
+#define LOOP_MAX 1024
 
 int main(int argc, char **argv) {
 	fildes_t fds[FILES];
@@ -26,8 +27,8 @@ int main(int argc, char **argv) {
 	char *data = malloc(sizeof(char) * DATA_SIZE);
 	char *data2 = malloc(sizeof(char) * DATA_SIZE);
 
-	int nw =0, nr = 0, rw = 0;
-	while (1) {
+	int nw = 0, nr = 0, rw = 0;
+	for (int loopc = 0; loopc < LOOP_MAX; loopc++) {
 		/* Write a lot */
 		for (int i = 0; i < FILES; i++) {
 			nw = 0;

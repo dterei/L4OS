@@ -10,6 +10,8 @@ rather than syscall_reply.  That way a function in the pager can be called.
 I think this is nicer than the various hacks we have around the place to make
 the pager thing actually work.
 
+- Add process type
+
 - Get rid of FRAME_ALLOC_LIMIT before handing in.
  --> This isn't at all possible.  We can at least make it quite large though.
 
