@@ -9,8 +9,6 @@
 #include "vfs.h"
 
 #define NIL_PID (-1)
-#define RUN_AS_PROCESS 0
-#define RUN_IN_ROOT 1
 
 #define YES_TIMESTAMP 1
 #define NO_TIMESTAMP 0
@@ -21,8 +19,8 @@ typedef struct Process_t Process;
 // Find a process from a thread
 Process *process_lookup(L4_Word_t key);
 
-// Create a new process or thread
-Process *process_init(int isThread);
+// Create a new process or root thread
+Process *process_init(process_type_t type);
 
 // Add a region to a process
 void process_add_region(Process *p, Region *r);
@@ -35,6 +33,9 @@ void process_set_name(Process *p, const char *name);
 
 // Set the state of the process
 void process_set_state(Process *p, process_state_t state);
+
+// Set the ipc types the process accepts
+void process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt);
 
 // Set an initial stack pointer for the process
 void process_set_sp(Process *p, void *sp);
@@ -53,6 +54,9 @@ L4_ThreadId_t process_run(Process *p, int timestamp);
 
 // Get the state of the process
 process_state_t process_get_state(Process *p);
+
+// Get the ipc accept flag
+process_ipcfilt_t process_get_ipcfilt(Process *p);
 
 // Get the process id of a process
 pid_t process_get_pid(Process *p);

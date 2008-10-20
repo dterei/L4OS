@@ -57,15 +57,6 @@ typedef enum {
 } sos_filemodes;
 typedef uint8_t fmode_t;
 
-/* Process state modes */
-typedef enum {
-        PS_STATE_START,
-        PS_STATE_ALIVE,
-        PS_STATE_WAIT,
-        PS_STATE_SLEEP,
-        PS_STATE_ZOMBIE,
-} process_state_t;
-
 #define O_RDONLY FM_READ
 #define O_WRONLY FM_WRITE
 #define O_RDWR   (FM_READ|FM_WRITE)
@@ -105,13 +96,38 @@ extern fildes_t stdin_fd;
 /* Max size of a filename */
 #define MAX_FILE_NAME 32
 
+/* Process state modes */
+typedef enum {
+        PS_STATE_START,
+        PS_STATE_ALIVE,
+        PS_STATE_WAIT,
+        PS_STATE_SLEEP,
+        PS_STATE_ZOMBIE,
+} process_state_t;
+
+/* Process types */
+typedef enum {
+	PS_TYPE_PROCESS, /* Single threaded user space process */
+	PS_TYPE_ROOTTHREAD, /* SOS kernel thread (sos is multi threaded) */
+} process_type_t;
+
+/* Process IPC accept types (blocking or non blocking) */
+typedef enum {
+	PS_IPC_NONBLOCKING, // Only accept non blocking IPC
+	PS_IPC_ALL, // Accept all IPC
+	PS_IPC_BLOCKING, // Only accept blocking IPC
+} process_ipcfilt_t;
+
+/* Process info struct */
 typedef struct {
-        pid_t     pid;
-        unsigned  size;  // in pages
-        unsigned  stime; // start time in msec since booting
-        unsigned  ctime; // CPU time accumulated in msec
-        char            command[MAX_FILE_NAME]; // Name of executable
-        process_state_t state; // state the process is in (run, wait... ect)
+        pid_t              pid;
+        unsigned           size;  // in pages
+        unsigned           stime; // start time in msec since booting
+        unsigned           ctime; // CPU time accumulated in msec
+        char               command[MAX_FILE_NAME]; // Name of executable
+        process_state_t    state; // state the process is in (run, wait... ect)
+		  process_type_t     ps_type; // type of process
+		  process_ipcfilt_t  ipc_accept; // type of ipc process accept (blocking or non blocking).
 } process_t;
 
 /* Get a string representation of a syscall */

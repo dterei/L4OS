@@ -28,7 +28,6 @@ struct Process_t {
 	timestamp_t   startedAt;
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
-	int           isThread;
 };
 
 // Array of all PCBs
@@ -65,6 +64,8 @@ static Process *processAlloc(void) {
 	p->info.stime = 0; // decide later
 	p->info.ctime = 0; // don't ever need
 	p->info.command[0] = '\0';
+	p->info.ps_type = PS_TYPE_PROCESS;
+	p->info.ipc_accept = PS_IPC_ALL;
 
 	p->pagetable = pagetable_init();
 	p->regions = list_empty();
@@ -72,13 +73,13 @@ static Process *processAlloc(void) {
 	p->ip = NULL;
 	vfiles_init(p->files);
 	p->waitingOn = WAIT_NOBODY;
-	p->isThread = RUN_AS_PROCESS;
+
 	process_set_state(p, PS_STATE_START);
 
 	return p;
 }
 
-Process *process_init(int isThread) {
+Process *process_init(process_type_t type) {
 	// On the first process initialisation set the offset to whatever it is
 	// and disable libsos from allocation any more threads
 	if (tidOffset == 0) {
@@ -89,7 +90,7 @@ Process *process_init(int isThread) {
 
 	// Do the normal process initialisation
 	Process *p = processAlloc();
-	p->isThread = isThread;
+	p->info.ps_type = type;
 	return p;
 }
 
@@ -120,8 +121,16 @@ void process_set_state(Process *p, process_state_t state) {
 	p->info.state = state;
 }
 
+void process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt) {
+	p->info.ipc_accept = ipc_filt;
+}
+
 process_state_t process_get_state(Process *p) {
 	return p->info.state;
+}
+
+process_ipcfilt_t process_get_ipcfilt(Process *p) {
+	return p->info.ipc_accept;
 }
 
 static void *regionFindHighest(void *contents, void *data) {
@@ -215,7 +224,7 @@ void process_prepare(Process *p) {
 	p->info.pid = getNextPid();
 	sosProcs[p->info.pid] = p;
 
-	if (!p->isThread) {
+	if (p->info.ps_type != PS_TYPE_ROOTTHREAD) {
 		addBuiltinRegions(p);
 		vfs_open(process_get_pid(p), STDOUT_FN, FM_WRITE, FM_UNLIMITED_RW, FM_UNLIMITED_RW);
 	}
@@ -233,7 +242,7 @@ L4_Word_t process_append_region(Process *p, size_t size, int rights) {
  * stack is needed.
  */
 Process *process_run_rootthread(const char *name, void *ip, int timestamp) {
-	Process *p = process_init(RUN_IN_ROOT);
+	Process *p = process_init(PS_TYPE_ROOTTHREAD);
 	process_prepare(p);
 	process_set_name(p, name);
 	process_set_ip(p, ip);
@@ -250,7 +259,7 @@ L4_ThreadId_t process_run(Process *p, int timestamp) {
 		p->startedAt = time_stamp();
 	}
 
-	if (p->isThread == RUN_IN_ROOT) {
+	if (p->info.ps_type == PS_TYPE_ROOTTHREAD) {
 		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
 	} else if (pager_is_active()) {
 		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
@@ -331,7 +340,7 @@ L4_Word_t thread_kill(L4_ThreadId_t tid) {
 int process_kill(Process *p) {
 	assert(p != NULL);
 
-	if (process_get_pid(p) > tidOffset && !p->isThread) {
+	if (process_get_pid(p) > tidOffset && p->info.ps_type != PS_TYPE_ROOTTHREAD) {
 		// Isn't a kernel-allocated process, and isn't the pager.  Also we
 		// don't want anybody killing threads (and they shouldn't be visible)
 		please(thread_kill(process_get_tid(p)));
@@ -364,7 +373,7 @@ int process_write_status(process_t *dest, int n) {
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL && sosProcs[i]->isThread != RUN_IN_ROOT) {
+		if (sosProcs[i] != NULL && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
 			dest++;

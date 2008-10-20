@@ -421,7 +421,8 @@ void pager_init(void) {
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
 
 	// Start the real pager process
-	process_run_rootthread("virtual_pager", virtualPagerHandler, YES_TIMESTAMP);
+	Process *p = process_run_rootthread("virtual_pager", virtualPagerHandler, YES_TIMESTAMP);
+	process_set_ipcfilt(p, PS_IPC_NONBLOCKING);
 
 	// Wait until it has actually started
 	while (!pager_is_active()) L4_Yield();
@@ -773,7 +774,7 @@ static void continueElfload(int vfsRval) {
 				dprintf(1, "*** continueElfload: not an ELF file\n");
 				finishElfload(-1);
 			} else {
-				p = process_init(0);
+				p = process_init(PS_TYPE_PROCESS);
 
 				for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
 					Region *r = region_alloc(
@@ -793,7 +794,7 @@ static void continueElfload(int vfsRval) {
 				process_prepare(p);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
-				process_run(p, 1);
+				process_run(p, YES_TIMESTAMP);
 				closeNonblocking(er->fd);
 				er->child = process_get_pid(p);
 			}

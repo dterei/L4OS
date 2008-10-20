@@ -55,8 +55,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	va_list va;
 	va_start(va, count);
 
-	if (L4_IsThreadEqual(tid, pager_get_tid())) {
-		// TODO Do this nicely (either set up by the caller, or generically)
+	if (process_get_ipcfilt(p) == PS_IPC_NONBLOCKING) {
 		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_SEND, 0, NULL, count, va);
 	} else {
 		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_REPLY, 0, NULL, count, va);
@@ -85,7 +84,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 	char *buf;
 
 	if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-		dprintf(1, "*** syscall_handle: got tid=%ld tag=%s\n",
+		dprintf(2, "*** syscall_handle: got tid=%ld tag=%s\n",
 				L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
 	}
 
