@@ -41,6 +41,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_PHYSUSE: return "SOS_PHYSUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
 		case SOS_MEMLOC: return "SOS_MEMLOC";
+		case SOS_MMAP: return "SOS_MMAP";
 		case SOS_SHARE_VM: return "SOS_SHARE_VM";
 		case L4_PAGEFAULT: return "L4_PAGEFAULT";
 		case L4_INTERRUPT: return "L4_INTERRUPT";
@@ -336,6 +337,12 @@ L4_Word_t memloc(L4_Word_t addr) {
 L4_ThreadId_t vpager(void) {
 	L4_Word_t id = ipc_send_simple_0(L4_rootserver, SOS_VPAGER, YES_REPLY);
 	return L4_GlobalId(id, 1);
+}
+
+void *mmap(void *addr, size_t size, fmode_t rights, char *path, off_t offset) {
+	copyin(path, strlen(path) + 1, 0);
+	return (void*) ipc_send_simple_4(vpager(), SOS_MMAP, YES_REPLY,
+			(L4_Word_t) addr, size, rights, offset);
 }
 
 /* 
