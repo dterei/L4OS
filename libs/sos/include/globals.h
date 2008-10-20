@@ -19,10 +19,6 @@
 #error FALSE is not defined to 0
 #endif
 
-#ifndef NULL
-#define NULL       0L 
-#endif
-
 #define NFS_HEADER 180
 #define NFS_BUFSIZ 1280
 
