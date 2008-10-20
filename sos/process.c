@@ -221,6 +221,14 @@ void process_prepare(Process *p) {
 	}
 }
 
+L4_Word_t process_append_region(Process *p, size_t size, int rights) {
+	L4_Word_t base = (L4_Word_t) list_reduce(p->regions, regionFindHighest, 0);
+	base = round_up(base, PAGESIZE);
+	list_push(p->regions, region_alloc(REGION_OTHER, base, size, rights, 0));
+	process_dump(p);
+	return base;
+}
+
 /* Uses a default stack size of 1 page, have to perform below steps manually if a larger
  * stack is needed.
  */

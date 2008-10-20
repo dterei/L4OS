@@ -3,6 +3,9 @@
 #ifndef _LIB_SOS_GLOBALS_H
 #define _LIB_SOS_GLOBALS_H
 
+#define FALSE 0
+#define TRUE 1
+
 #define NFS_HEADER 180
 #define NFS_BUFSIZ 1280
 

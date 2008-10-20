@@ -27,6 +27,9 @@ Process *process_init(int isThread);
 // Add a region to a process
 void process_add_region(Process *p, Region *r);
 
+// Append a region to a process of a certain size and rights
+L4_Word_t process_append_region(Process *p, size_t size, int rights);
+
 // Set the name of the process
 void process_set_name(Process *p, const char *name);
 

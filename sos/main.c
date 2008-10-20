@@ -32,8 +32,6 @@
 
 #define verbose 1
 
-#define HEAP_SIZE ONE_MEG
-
 #define IRQ_MASK (1 << SOS_IRQ_NOTIFY_BIT)
 
 static void
@@ -166,7 +164,7 @@ main(void) {
 			low, high, (high - low) / ONE_MEG);
 
 	// Initialise the various monolithic things
-	frame_init((low + HEAP_SIZE), high);
+	frame_init(low, high);
 
 	// Add irq information
 	irq_init();
