@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SIZE 4096
-#define BLOCK 512
-
 int main(int argc, char *argv[]) {
+	const int SIZE = 4096;
+	const int BLOCK = 512;
+
 	if (argc < 3) {
 		printf("usage: %s address file\n", argv[0]);
 		return 1;

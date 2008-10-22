@@ -1,5 +1,6 @@
 #include <elf/elf.h>
 #include <sos/sos.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,7 @@
 #define REF_MASK  (1 << 1)
 #define MMAP_MASK (1 << 2)
 #define ELF_MASK  (1 << 4)
+#define TEMP_MASK  (1 << 4)
 #define ADDRESS_MASK PAGEALIGN
 
 // Limiting the number of user frames
@@ -65,13 +67,14 @@ struct Request_t {
 	rtype_t type; // type of request
 	void *data;   // data associated with type
 	int stage;    // stage in callbacks
-	void (*finish)(Request *r, int success);
+	void (*finish)(int success);
 };
 
 static List *requests; // [(rtype_t, rdata)]
 
+static void queueRequests(int n, ...);
 static void queueRequest(rtype_t rtype, void *request);
-static void queueRequest2(rtype_t rtype, void *request);
+static void queueRequest2(Request *req);
 static void dequeueRequest(void);
 static void dequeueRequest2(void);
 static void startPagerRequest(void);
@@ -85,6 +88,7 @@ static void startWrite(void);
 
 // For reading and writing
 typedef struct ReadRequest_t {
+	pid_t pid;
 	L4_Word_t dst;
 	L4_Word_t src;
 	int size;
@@ -106,6 +110,7 @@ typedef enum {
 typedef read_stage_t write_stage_t;
 
 #define STAGE_WRITE STAGE_READ
+#define allocWriteRequest allocReadRequest
 
 // Demand paging
 #define SWAP_BUFSIZ 1024
@@ -142,7 +147,7 @@ struct Pagefault_t {
 	void (*finish)(Pagefault *fault);
 };
 
-static L4_Word_t pinnedFrame;
+static L4_Word_t swapinFrame;
 
 // ELF loading
 typedef enum {
@@ -201,6 +206,19 @@ L4_ThreadId_t pager_get_tid(void) {
 
 int pager_is_active(void) {
 	return !L4_IsThreadEqual(virtualPager, L4_nilthread);
+}
+
+static void pagedump(char *addr) {
+	(void) pagedump;
+	const int PER_ROW = 32;
+	for (int row = 0; row < PAGESIZE; row += PER_ROW) {
+		printf("%04x:", row);
+		for (int col = 0; col < PER_ROW; col += 2) {
+			printf(" %02x", 0x000000ff & *(addr++));
+			printf("%02x", 0x000000ff & *(addr++));
+		}
+		printf("\n");
+	}
 }
 
 static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
@@ -537,7 +555,7 @@ static void pagerContinue(PagerRequest *pr) {
 }
 
 static void pagefaultFinish(Pagefault *fault) {
-	dprintf(3, "*** %s: finished with %d\n", fault->pid);
+	dprintf(2, "*** %s: finished with %d\n", __FUNCTION__, fault->pid);
 
 	L4_ThreadId_t tid = process_get_tid(process_lookup(fault->pid));
 	free(fault);
@@ -688,7 +706,7 @@ static int pagerAction(PagerRequest *pr) {
 
 // Handle a page fault.  This will return 0 on success, and 1 if it must be
 // queue and tried again later (e.g. if a page must swapped, etc).
-static int pagefaultHandle(Pagefault *fault) {
+static rtype_t pagefaultHandle(Pagefault *fault) {
 	Process *p;
 	L4_Word_t frame, *entry;
 
@@ -721,33 +739,33 @@ static int pagefaultHandle(Pagefault *fault) {
 	dprintf(3, "*** %s: found entry %p\n", __FUNCTION__, (void*) *entry);
 
 	if (*entry & SWAP_MASK) {
-		dprintf(2, "*** %s: page is swapped (%p)\n", __FUNCTION__, (void*) *entry);
+		dprintf(2, "*** %s: page %p swapped\n", __FUNCTION__, (void*) *entry);
 		return REQUEST_SWAPIN;
 	} else if (*entry & MMAP_MASK) {
-		// On disk, queue this request for later
-		dprintf(2, "*** %s: page is on disk (%p)\n", __FUNCTION__, (void*) *entry);
+		dprintf(2, "*** %s: page %p mmapped\n", __FUNCTION__, (void*) *entry);
 		return REQUEST_MMAP_READ;
-	} else if ((frame & ADDRESS_MASK) != 0) {
-		// Already appears in page table as a frame, just got unmapped
-		// (probably to update the refbit)
-		dprintf(3, "*** %s: got unmapped\n", __FUNCTION__);
+	} else if ((frame != 0) && ((*entry & TEMP_MASK) == 0)) {
+		dprintf(2, "*** %s: page %p unmapped\n", __FUNCTION__, (void*) *entry);
 	} else if (region_map_directly(r)) {
-		// Wants to be mapped directly (bootinfo code/data probably).
-		dprintf(3, "*** %s: mapping directly\n", __FUNCTION__);
+		dprintf(2, "*** %s: mapping directly\n", __FUNCTION__); // bootinfo
 		frame = fault->addr & PAGEALIGN;
 	} else {
-		// Didn't appear in frame table so we need to allocate a new one.
-		// However there are potentially no free frames.
-		dprintf(3, "*** %s: allocating frame\n", __FUNCTION__);
+		dprintf(2, "*** %s: allocating frame\n", __FUNCTION__);
 
 		frame = pagerFrameAlloc(p, fault->addr & PAGEALIGN);
 		assert((frame & ~ADDRESS_MASK) == 0); // no flags set
 
 		if (frame == 0) {
 			dprintf(2, "*** %s: no free frames\n", __FUNCTION__);
-			//queueRequest2(REQUEST_PAGEFAULT, pr);
 			return REQUEST_PAGEFAULT;
 		}
+	}
+
+	// If it was faulting due to the frame only being temporary, copy it across
+	if ((*entry & TEMP_MASK) != 0) {
+		dprintf(2, "*** %s: %p was only temporary\n", __FUNCTION__, *entry);
+		memcpy((void*) frame, (void*) (*entry & ADDRESS_MASK), PAGESIZE);
+		frame_free(*entry & ADDRESS_MASK);
 	}
 
 	// Cannot possibly have any other flags, except TODO when writable mmap
@@ -771,15 +789,31 @@ static void pager(PagerRequest *pr) {
 	}
 }
 
+static void panic2(int success) {
+	assert(!"panic2");
+}
+
+static Request *allocRequest(rtype_t type, void *data) {
+	Request *req = (Request*) malloc(sizeof(Request));
+
+	req->type = type;
+	req->data = data;
+	req->stage = 0;
+	req->finish = panic2;
+
+	return req;
+}
+
 static void pager2(Pagefault *fault) {
-	int requestNeeded = pagefaultHandle(fault);
+	dprintf(1, "*** %s\n", __FUNCTION__);
+	rtype_t requestNeeded = pagefaultHandle(fault);
 
 	if (requestNeeded == REQUEST_NONE) {
 		dprintf(2, "*** %s: finished request\n", __FUNCTION__);
 		fault->finish(fault);
 	} else {
 		dprintf(2, "*** %s: delay request\n", __FUNCTION__);
-		queueRequest2(requestNeeded, fault);
+		queueRequest2(allocRequest(REQUEST_PAGEFAULT, fault));
 	}
 }
 
@@ -932,6 +966,32 @@ static void printRequests(void *contents, void *data) {
 	}
 }
 
+static void printRequests2(void *contents, void *data) {
+	Request *req = (Request*) contents;
+
+	printf("type: %d, ", req->type);
+
+	switch (req->type) {
+		case REQUEST_NONE:
+		case REQUEST_SWAPOUT:
+		case REQUEST_SWAPIN:
+		case REQUEST_ELFLOAD:
+		case REQUEST_MMAP_READ:
+			assert(0);
+			break;
+
+		case REQUEST_PAGEFAULT:
+		case REQUEST_WRITE:
+		case REQUEST_READ:
+			break;
+
+		default:
+			assert(! __FUNCTION__);
+	}
+
+	printf("\n");
+}
+
 static void dequeueRequest(void) {
 	dprintf(1, "*** dequeueRequest\n");
 
@@ -949,7 +1009,6 @@ static void dequeueRequest(void) {
 
 static void dequeueRequest2(void) {
 	dprintf(1, "*** %s\n", __FUNCTION__);
-	(void) dequeueRequest2;
 
 	printf("WARNING make sure data is freed\n");
 	free(list_unshift(requests));
@@ -958,7 +1017,7 @@ static void dequeueRequest2(void) {
 		dprintf(1, "*** %s: no more items\n", __FUNCTION__);
 	} else {
 		dprintf(1, "*** %s: running next\n", __FUNCTION__);
-		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		if (verbose > 2) list_iterate(requests, printRequests2, NULL);
 		startRequest2();
 	}
 }
@@ -973,39 +1032,30 @@ static void queueRequest(rtype_t rtype, void *request) {
 		startRequest();
 	} else {
 		dprintf(2, "*** queueRequest: queueing request\n");
-		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		if (verbose > 2) list_iterate(requests, printRequests2, NULL);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
 }
 
-static void panic2(Request *req, int success) {
-	assert(!"panic2");
+static void queueRequest2(Request *req) {
+	queueRequests(1, req);
 }
 
-static Request *allocRequest(rtype_t type, void *data) {
-	Request *req = (Request*) malloc(sizeof(Request));
+static void queueRequests(int n, ...) {
+	if (verbose > 2) list_iterate(requests, printRequests2, NULL);
+	int startImmediately = list_null(requests);
 
-	req->type = type;
-	req->data = data;
-	req->stage = 0;
-	req->finish = panic2;
+	va_list va;
+	va_start(va, n);
 
-	return req;
-}
+	for (int i = 0; i < n; i++) {
+		list_push(requests, va_arg(va, Request*));
+	}
 
-static void queueRequest2(rtype_t type, void *data) {
-	dprintf(1, "*** %s\n", __FUNCTION__);
+	va_end(va);
 
-	Request *req = allocRequest(type, data);
-
-	if (list_null(requests)) {
-		dprintf(2, "*** %s: list null, running request\n", __FUNCTION__);
-		list_push(requests, req);
+	if (startImmediately) {
 		startRequest2();
-	} else {
-		dprintf(2, "*** %s: queueing request\n", __FUNCTION__);
-		if (verbose > 2) list_iterate(requests, printRequests, NULL);
-		list_push(requests, req);
 	}
 }
 
@@ -1043,12 +1093,12 @@ static void finishSwapout(void) {
 	entry = pagetableLookup(process_get_pagetable(p), swapin->addr);
 	frame = *entry & ADDRESS_MASK;
 
-	if (pinnedFrame != 0) {
+	if (swapinFrame != 0) {
 		// There is contents we need to copy across
-		dprintf(2, "*** finishSwapout: pinned frame is %p\n", pinnedFrame);
-		memcpy((char*) frame, (void*) pinnedFrame, PAGESIZE);
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
+		dprintf(2, "*** finishSwapout: pinned frame is %p\n", swapinFrame);
+		memcpy((char*) frame, (void*) swapinFrame, PAGESIZE);
+		frame_free(swapinFrame);
+		swapinFrame = 0;
 	} else {
 		// Zero the frame for debugging, but it may be a good idea anyway
 		dprintf(2, "*** zeroing frame %p\n", (void*) frame);
@@ -1061,6 +1111,18 @@ static void finishSwapout(void) {
 	prepareDataOut(p, swapin->addr & PAGEALIGN);
 	swapin->callback(swapin);
 	dequeueRequest();
+}
+
+static void finishSwapout2(int success) {
+	assert(success);
+	dprintf(1, "*** %s\n", __FUNCTION__);
+
+	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_WRITE);
+	WriteRequest *writeReq = (WriteRequest*) req->data;
+
+	free(writeReq);
+	dequeueRequest2();
 }
 
 static void finishSwapin(void) {
@@ -1077,8 +1139,8 @@ static void finishSwapin(void) {
 
 	if (p == NULL) {
 		// Process died
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
+		frame_free(swapinFrame);
+		swapinFrame = 0;
 		request->callback(request);
 		dequeueRequest();
 	}
@@ -1103,13 +1165,13 @@ static void finishSwapin(void) {
 		L4_Word_t frame = *entry & ADDRESS_MASK;
 
 		// Copy data from pinned frame to newly allocated frame
-		memcpy((void*) frame, (void*) pinnedFrame, PAGESIZE);
+		memcpy((void*) frame, (void*) swapinFrame, PAGESIZE);
 
 		// Fix caches
 		prepareDataOut(p, addr);
 
-		frame_free(pinnedFrame);
-		pinnedFrame = 0;
+		frame_free(swapinFrame);
+		swapinFrame = 0;
 		request->callback(request);
 		dequeueRequest();
 	} else {
@@ -1117,6 +1179,18 @@ static void finishSwapin(void) {
 		// the swapout process will deal with the pinned frame etc
 		startSwapout();
 	}
+}
+
+static void finishSwapin2(int success) {
+	assert(success);
+	dprintf(1, "*** %s\n", __FUNCTION__);
+
+	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_READ);
+	ReadRequest *readReq = (ReadRequest*) req->data;
+
+	free(readReq);
+	dequeueRequest2();
 }
 
 static void finishSwapelf(void) {
@@ -1134,7 +1208,7 @@ static void finishSwapelf(void) {
 		dprintf(2, "*** finishSwapelf: zeroing from %p because of addr %p\n",
 				(void*) fileTop, (void*) pr->addr);
 		assert(region_get_size(r) >= region_get_filesize(r));
-		memset((char*) pinnedFrame + (fileTop % PAGESIZE), 0x00,
+		memset((char*) swapinFrame + (fileTop % PAGESIZE), 0x00,
 				region_get_size(r) - region_get_filesize(r));
 	}
 
@@ -1146,14 +1220,15 @@ static void finishSwapelf(void) {
 }
 
 static void continueRead(int vfsRval) {
-	dprintf(2, "*** %s\n", __FUNCTION__);
+	dprintf(2, "*** %s: vfsRval=%d\n", __FUNCTION__, vfsRval);
 	Request *req = (Request*) list_peek(requests);
 	ReadRequest *readReq = (ReadRequest*) req->data;
 
 	switch (req->stage) {
 		case STAGE_OPEN:
+			dprintf(2, "*** %s: STAGE_OPEN\n", __FUNCTION__);
 			if (vfsRval < 0) {
-				req->finish(req, FALSE);
+				req->finish(FALSE);
 			} else {
 				req->stage++;
 				readReq->fd = vfsRval;
@@ -1164,6 +1239,7 @@ static void continueRead(int vfsRval) {
 			break;
 
 		case STAGE_LSEEK:
+			dprintf(2, "*** %s: STAGE_LSEEK\n", __FUNCTION__);
 			assert(vfsRval == 0);
 			req->stage++;
 			readNonblocking(readReq->fd, min(IO_MAX_BUFFER, readReq->size));
@@ -1171,8 +1247,10 @@ static void continueRead(int vfsRval) {
 			break;
 
 		case STAGE_READ:
+			dprintf(2, "*** %s: STAGE_READ\n", __FUNCTION__);
 			assert(vfsRval >= 0);
-			memcpy((void*) readReq->dst, pager_buffer(sos_my_tid()), vfsRval);
+			memcpy((void*) (readReq->dst + readReq->offset),
+					pager_buffer(sos_my_tid()), vfsRval);
 			readReq->offset += vfsRval;
 			assert(readReq->offset <= readReq->size);
 
@@ -1181,7 +1259,7 @@ static void continueRead(int vfsRval) {
 					req->stage++;
 					close(readReq->fd);
 				} else {
-					req->finish(req, TRUE);
+					req->finish(TRUE);
 				}
 			} else {
 				assert(vfsRval > 0);
@@ -1192,7 +1270,8 @@ static void continueRead(int vfsRval) {
 			break;
 
 		case STAGE_CLOSE:
-			req->finish(req, TRUE);
+			dprintf(2, "*** %s: STAGE_CLOSE\n", __FUNCTION__);
+			req->finish(TRUE);
 
 			break;
 
@@ -1207,36 +1286,33 @@ static void startRead(void) {
 
 	dprintf(1, "*** startRead: path=%s\n", readReq->path);
 
-	if (readReq->closeOnComplete) {
-		req->stage = STAGE_OPEN;
-		openNonblocking(readReq->path, FM_READ | FM_WRITE);
-	} else {
-		assert(readReq->fd > 0);
-		req->stage = STAGE_LSEEK;
-		continueRead(readReq->fd);
-	}
+	req->stage = STAGE_OPEN;
+	strncpy(pager_buffer(sos_my_tid()), readReq->path, MAX_IO_BUF);
+	openNonblocking(NULL, FM_READ | FM_WRITE);
 }
 
 static void continueWrite(int vfsRval) {
-	dprintf(2, "*** %s\n", __FUNCTION__);
+	dprintf(2, "*** %s, vfsRval=%d\n", __FUNCTION__, vfsRval);
 	Request *req = (Request*) list_peek(requests);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
 	size_t size;
 
 	switch (req->stage) {
 		case STAGE_OPEN:
+			dprintf(2, "*** %s: STAGE_OPEN\n", __FUNCTION__);
 			if (vfsRval < 0) {
-				req->finish(req, FALSE);
+				req->finish(FALSE);
 			} else {
 				req->stage++;
 				writeReq->fd = vfsRval;
 				writeReq->offset = 0;
-				lseekNonblocking(writeReq->fd, writeReq->offset, SEEK_SET);
+				lseekNonblocking(writeReq->fd, writeReq->dst, SEEK_SET);
 			}
 
 			break;
 
 		case STAGE_LSEEK:
+			dprintf(2, "*** %s: STAGE_LSEEK\n", __FUNCTION__);
 			assert(vfsRval == 0);
 			req->stage++;
 			size = min(IO_MAX_BUFFER, writeReq->size);
@@ -1246,6 +1322,7 @@ static void continueWrite(int vfsRval) {
 			break;
 
 		case STAGE_WRITE:
+			dprintf(2, "*** %s: STAGE_WRITE\n", __FUNCTION__);
 			assert(vfsRval >= 0);
 			writeReq->offset += vfsRval;
 			assert(writeReq->offset <= writeReq->size);
@@ -1255,39 +1332,36 @@ static void continueWrite(int vfsRval) {
 					req->stage++;
 					closeNonblocking(writeReq->fd);
 				} else {
-					req->finish(req, TRUE);
+					req->finish(TRUE);
 				}
 			} else {
 				assert(vfsRval > 0);
 				size = min(IO_MAX_BUFFER, writeReq->size - writeReq->offset);
 				memcpy(pager_buffer(sos_my_tid()),
 						(void*) (writeReq->src + writeReq->offset), size);
+				writeNonblocking(writeReq->fd, size);
 			}
 
 			break;
 
 		case STAGE_CLOSE:
-			req->finish(req, TRUE);
+			dprintf(2, "*** %s: STAGE_CLOSE\n", __FUNCTION__);
+			req->finish(TRUE);
 
 			break;
 	}
 }
 
 static void startWrite(void) {
-	Request *req = (Request*) requestsPeek();
+	Request *req = (Request*) list_peek(requests);
 	assert(req->type == REQUEST_WRITE);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
 
 	dprintf(1, "*** startWrite: path=%s\n", writeReq->path);
 
-	if (writeReq->closeOnComplete) {
-		req->stage = STAGE_OPEN;
-		openNonblocking(writeReq->path, FM_READ | FM_WRITE);
-	} else {
-		assert(writeReq->fd > 0);
-		req->stage = STAGE_LSEEK;
-		continueWrite(writeReq->fd);
-	}
+	req->stage = STAGE_OPEN;
+	strncpy(pager_buffer(sos_my_tid()), writeReq->path, MAX_IO_BUF);
+	openNonblocking(NULL, FM_READ | FM_WRITE);
 }
 
 static void finishMMapRead(Request *req, int success) {
@@ -1330,7 +1404,7 @@ static void continueSwapin(int vfsRval) {
 			assert(vfsRval > 0);
 			assert(pr->offset <= PAGESIZE);
 
-			memcpy(((char*) pinnedFrame) + pr->offset,
+			memcpy(((char*) swapinFrame) + pr->offset,
 					pager_buffer(virtualPager), vfsRval);
 			pr->offset += vfsRval;
 			assert(pr->offset <= pr->size);
@@ -1404,7 +1478,7 @@ static void startSwapin(void) {
 
 	// pin a frame to copy in to (although "pinned" is somewhat of a misnomer
 	// since really it's just a temporary frame and nothing is really pinned)
-	pinnedFrame = frame_alloc();
+	swapinFrame = frame_alloc();
 
 	// kick-start the chain of NFS requests and callbacks by opening swapfile
 	assert(requestsPeekType() == REQUEST_SWAPIN);
@@ -1429,6 +1503,62 @@ static void startSwapin(void) {
 	pr->size = PAGESIZE;
 	pr->stage = SWAPIN_OPEN;
 	swapfile_open(pr->sf, FM_READ);
+}
+
+static ReadRequest *allocReadRequest(
+		L4_Word_t dst, L4_Word_t src, int size, char *path) {
+	ReadRequest *readReq = (ReadRequest*) malloc(sizeof(ReadRequest));
+
+	readReq->dst = dst;
+	readReq->src = src;
+	readReq->size = size;
+	readReq->offset = 0;
+	readReq->path = path;
+	readReq->fd = VFS_NIL_FILE;
+	readReq->closeOnComplete = 0;
+
+	return readReq;
+}
+
+static void startSwapin2(void) {
+	dprintf(2, "*** %s\n", __FUNCTION__);
+
+	Process *p;
+	Request *faultReq, *req;
+	Pagefault *fault;
+	ReadRequest *readReq;
+	L4_Word_t *entry;
+	L4_Word_t frame;
+
+	// The data for the swapin comes from the head of the queue
+	faultReq = (Request*) list_peek(requests);
+	assert(faultReq->type == REQUEST_PAGEFAULT);
+	fault = (Pagefault*) faultReq->data;
+
+	p = process_lookup(fault->pid);
+
+	// Reserve a temporary frame to read in to
+	frame = frame_alloc();
+	dprintf(2, "*** %s: temporary frame is %p\n", __FUNCTION__, (void*) frame);
+
+	// Set up the read request
+	entry = pagetableLookup(process_get_pagetable(p), fault->addr);
+
+	dprintf(2, "*** %s: reading from %p in to %p\n", __FUNCTION__,
+			(void*) (*entry & ADDRESS_MASK), (void*) frame);
+
+	readReq = allocReadRequest(frame, *entry & ADDRESS_MASK,
+			PAGESIZE, SWAPFILE_FN);
+	req = allocRequest(REQUEST_READ, readReq);
+	req->finish = finishSwapin2;
+
+	// Update page table with temporary frame etc
+	*entry &= ~(ADDRESS_MASK | SWAP_MASK);
+	*entry |= frame | TEMP_MASK;
+
+	// Push the swapin to the head of the queue
+	list_shift(requests, req);
+	startRequest2();
 }
 
 /*
@@ -1499,21 +1629,6 @@ static void startSwapout(void) {
 	pair_free(swapout);
 }
 
-static WriteRequest *allocWriteRequest(
-		L4_Word_t dst, L4_Word_t src, int size, char *path) {
-	WriteRequest *writeReq = (WriteRequest*) malloc(sizeof(WriteRequest));
-
-	writeReq->dst = dst;
-	writeReq->src = src;
-	writeReq->size = size;
-	writeReq->offset = 0;
-	writeReq->path = path;
-	writeReq->fd = VFS_NIL_FILE;
-	writeReq->closeOnComplete = 0;
-
-	return writeReq;
-}
-
 static void startSwapout2(void) {
 	dprintf(2, "*** %s\n", __FUNCTION__);
 
@@ -1530,6 +1645,7 @@ static void startSwapout2(void) {
 
 	entry = pagetableLookup(process_get_pagetable(p), swapout->snd);
 	frame = *entry & ADDRESS_MASK;
+	pagerFrameFree(p, frame);
 
 	// Fix caches
 	assert((swapout->snd & ~PAGEALIGN) == 0);
@@ -1554,6 +1670,8 @@ static void startSwapout2(void) {
 	// Make the request
 	writeReq = allocWriteRequest(diskAddr, frame, PAGESIZE, SWAPFILE_FN);
 	req = allocRequest(REQUEST_WRITE, writeReq);
+
+	req->finish = finishSwapout2;
 
 	list_shift(requests, req);
 	startRequest2();
@@ -1594,17 +1712,29 @@ static void startRequest(void) {
 static void startPagefault(void) {
 	dprintf(2, "*** %s\n", __FUNCTION__);
 	Request *req = (Request*) list_peek(requests);
-	int requestNeeded = pagefaultHandle((Pagefault*) req->data);
+	Pagefault *fault;
+	rtype_t requestNeeded = pagefaultHandle((Pagefault*) req->data);
 
-	if (requestNeeded == REQUEST_PAGEFAULT) {
-		// Need to swap something out
-		startSwapout2();
-	} else {
-		// Can return now
-		assert(requestNeeded == REQUEST_NONE);
-		Pagefault *fault = (Pagefault*) req->data;
-		free(req);
-		fault->finish(fault);
+	switch (requestNeeded) {
+		case REQUEST_NONE:
+			// Can return now
+			fault = (Pagefault*) req->data;
+			fault->finish(fault);
+			dequeueRequest2();
+			break;
+
+		case REQUEST_PAGEFAULT:
+			// Need to swap something out
+			startSwapout2();
+			break;
+
+		case REQUEST_SWAPIN:
+			// Need to swap something in
+			startSwapin2();
+			break;
+
+		default:
+			assert(!"default");
 	}
 }
 
@@ -1669,7 +1799,7 @@ static void startPagerRequest(void) {
 		// Afterwards, may have to swap something out
 	} else {
 		// Needed to swap something out
-		assert(pinnedFrame == 0);
+		assert(swapinFrame == 0);
 
 		if (allocLimit > 0) {
 			// In the meantime a frame has become free
@@ -1683,7 +1813,7 @@ static void startPagerRequest(void) {
 static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
 
-	switch (requestsPeekType()) {
+	switch (((Request*) list_peek(requests))->type) {
 		case REQUEST_SWAPOUT:
 			dprintf(3, "*** demandPager: swapout continuation\n");
 			continueSwapout(vfsRval);
@@ -1710,7 +1840,7 @@ static void vfsHandler(int vfsRval) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -1817,7 +1947,7 @@ static void virtualPagerHandler(void) {
 		L4_MsgStore(tag, &msg);
 
 		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-			dprintf(2, "*** %s: tid=%ld tag=%s\n", __FUNCTION__,
+			dprintf(3, "*** %s: tid=%ld tag=%s\n", __FUNCTION__,
 					L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
 		}
 
@@ -1936,7 +2066,7 @@ static void virtualPagerHandler(void) {
 						L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 		}
 
-		dprintf(2, "*** virtualPagerHandler: finished %s from %d\n",
+		dprintf(3, "*** virtualPagerHandler: finished %s from %d\n",
 				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
 	}
 }
