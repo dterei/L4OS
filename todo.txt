@@ -15,6 +15,8 @@ the pager thing actually work.
 
 - Get rid of FRAME_ALLOC_LIMIT before handing in.
  --> This isn't at all possible.  We can at least make it quite large though.
+ --> (david) What is wrong with how I have changed the pager to set the allocLimit
+ to the available frames determined when the frame table starts up?
 
 - Finish mmap.  (wishlist: make it work for writing too, since then we really
 would have mmap and it would be awesome).
@@ -23,10 +25,17 @@ would have mmap and it would be awesome).
 
 - Set MAX_THEADS to 256.  Perhaps arrange so that 4 address spaces aren't being
 wasted on the network/init/pager threads.
+ --> (david) Yeah sure, I kind of like having them stored in the process struct but they
+ do artificially use up process slots. Maybe we can have a different process list
+ for kernel threads (except for sos which stays where it is).
+ --> (david) Why change max threads to 256? I just changed the PID allocator
+ to use MAX_ADDRESSES instead of threads and have tested allocating up to the max
+ processes quite extensively.
 
 - Look at putting all the statically allocate data structures (currently
 created with frame_alloc) as actual static data structures.
+ --> Why? we moved away from this before?
 
-- Check there are no sideeffects in assertions (so that we can disable them
+- Check there are no side effects in assertions (so that we can disable them
 easily when we hand in).
 
