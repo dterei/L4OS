@@ -8,11 +8,6 @@ not being freed properly.
 ELF/swapping stuff anyway (to use mmap) so not worth fixing this yet.  Pretty
 rare anyway.
 
-- Move back to a single-threaded model, just make the syscall_reply a callback
-rather than syscall_reply.  That way a function in the pager can be called.
-I think this is nicer than the various hacks we have around the place to make
-the pager thing actually work.
-
 - Get rid of FRAME_ALLOC_LIMIT before handing in.
  --> This isn't at all possible.  We can at least make it quite large though.
 
@@ -20,4 +15,6 @@ the pager thing actually work.
 would have mmap and it would be awesome).
 
 - Documentation.
+
+- Check for rights in copyin/out, pagefaults
 
