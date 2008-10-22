@@ -1678,6 +1678,8 @@ static void virtualPagerHandler(void) {
 		dprintf(2, "*** virtualPagerHandler: finished %s from %d\n",
 				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
 	}
+
+	dprintf(0, "!!! virtualPagerHandler: loop failed!\n");
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {

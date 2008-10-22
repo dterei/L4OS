@@ -8,12 +8,14 @@ int main(int argc, char *argv[]) {
 
 	printf("Forkbomb spawned: %d\n", id);
 	int child1 = process_create(PROGRAM);
-	//int child2 = process_create(PROGRAM);
+	int child2 = process_create(PROGRAM);
 
-	if (child1 >= 0) {
-		printf("Forkbomb spawning new: %d\n", child1);
+	if (child1 >= 0 && (id % 2 == 1 || child2 < 0)) {
+		printf("Forkbomb spawning new child1: %d\n", child1);
 		process_wait(child1);
-		//process_wait(child2);
+	} else if (child2 >= 0) {
+		printf("Forkbomb spawning new child2: %d\n", child2);
+		process_wait(child2);
 	}
 
 	printf("Forkbomb dying: %d\n", id);

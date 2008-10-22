@@ -39,3 +39,6 @@ created with frame_alloc) as actual static data structures.
 - Check there are no side effects in assertions (so that we can disable them
 easily when we hand in).
 
+- Forkbomb runs fine when just creating 1 process but forking out 2 each run causes a
+segmentation fork after a little while (around 30 processes).
+
