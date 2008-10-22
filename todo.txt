@@ -18,3 +18,12 @@ would have mmap and it would be awesome).
 
 - Check for rights in copyin/out, pagefaults
 
+- Set MAX_THEADS to 256.  Perhaps arrange so that 4 address spaces aren't being
+wasted on the network/init/pager threads.
+
+- Look at putting all the statically allocate data structures (currently
+created with frame_alloc) as actual static data structures.
+
+- Check there are no sideeffects in assertions (so that we can disable them
+easily when we hand in).
+
