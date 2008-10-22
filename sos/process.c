@@ -12,6 +12,7 @@
 #include "syscall.h"
 
 #define STDOUT_FN "console"
+#define PS_PLACEHOLDER (Process *) (0x00000001)
 
 #define WAIT_ANYBODY (-1)
 #define WAIT_NOBODY (-2)
@@ -34,15 +35,15 @@ struct Process_t {
 static Process *sosProcs[MAX_ADDRSPACES];
 
 // The next pid to allocate
-static L4_Word_t nextPid;
+static pid_t nextPid;
 
 // All pids below this value have already been allocated by libsos
 // as threadids, and all over SOS it has been assumed that there is
 // a 1:1 mapping between pid and tid (and sid incidentally), so just
 // never allocate a pid below this value.
-static L4_Word_t tidOffset;
+static pid_t tidOffset;
 
-Process *process_lookup(L4_Word_t key) {
+Process *process_lookup(pid_t key) {
 	if (key < 0 || key >= MAX_ADDRSPACES) {
 		dprintf(0, "!!! process_lookup(%d): outside range!\n", key);
 	}
@@ -59,7 +60,7 @@ Process *process_lookup(L4_Word_t key) {
 static Process *processAlloc(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
-	p->info.pid = 0;   // decide later
+	p->info.pid = NIL_PID;   // decide later
 	p->info.size = 0;  // fill in as we go
 	p->info.stime = 0; // decide later
 	p->info.ctime = 0; // don't ever need
@@ -83,7 +84,7 @@ Process *process_init(process_type_t type) {
 	// On the first process initialisation set the offset to whatever it is
 	// and disable libsos from allocation any more threads
 	if (tidOffset == 0) {
-		tidOffset = L4_ThreadNo(sos_peek_new_tid());
+		tidOffset = (pid_t) L4_ThreadNo(sos_peek_new_tid());
 		sos_get_new_tid_disable();
 		nextPid = tidOffset;
 	}
@@ -115,6 +116,7 @@ void process_set_sp(Process *p, void *sp) {
 
 void process_set_name(Process *p, const char *name) {
 	strncpy(p->info.command, name, MAX_FILE_NAME);
+	L4_KDB_SetThreadName(process_get_tid(p), name);
 }
 
 void process_set_state(Process *p, process_state_t state) {
@@ -191,8 +193,8 @@ void process_dump(Process *p) {
 	printf("*** ip: %p\n", p->ip);
 }
 
-static L4_Word_t getNextPid(void) {
-	L4_Word_t oldPid = nextPid;
+static pid_t getNextPid(void) {
+	pid_t oldPid = nextPid;
 	int firstIteration = 1;
 
 	while (sosProcs[nextPid] != NULL) {
@@ -205,7 +207,7 @@ static L4_Word_t getNextPid(void) {
 		nextPid++;
 
 		// Gone past the end, loop around
-		if (nextPid > MAX_THREADS) {
+		if (nextPid >= MAX_ADDRSPACES) {
 			nextPid = tidOffset;
 		}
 
@@ -219,9 +221,20 @@ static L4_Word_t getNextPid(void) {
 	}
 }
 
+pid_t reserve_pid(void) {
+	pid_t pid = getNextPid();
+	dprintf(3, "reserving pid: %d\n", pid);
+	if (pid != NIL_PID) {
+		sosProcs[pid] = PS_PLACEHOLDER;
+	} 
+	return pid;
+}
+
 void process_prepare(Process *p) {
 	// Register with the collection of PCBs
-	p->info.pid = getNextPid();
+	if (p->info.pid == NIL_PID) {
+		p->info.pid = getNextPid();
+	}
 	sosProcs[p->info.pid] = p;
 
 	if (p->info.ps_type != PS_TYPE_ROOTTHREAD) {
@@ -302,7 +315,7 @@ List *process_get_regions(Process *p) {
 }
 
 static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
-	for (int i = tidOffset; i < MAX_ADDRSPACES; i++) {
+	for (pid_t i = tidOffset; i < MAX_ADDRSPACES; i++) {
 		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
 			sosProcs[i]->waitingOn = WAIT_NOBODY;
 			process_set_state(sosProcs[i], PS_STATE_ALIVE);
@@ -407,11 +420,11 @@ void process_wait_for(Process *waitFor, Process *waiter) {
 
 void process_add_rootserver(void) {
 	Process *rootserver = processAlloc();
-
 	rootserver->startedAt = time_stamp();
+
+	process_get_info(rootserver)->pid = L4_rootserverno;
 	process_set_name(rootserver, "sos");
 	process_set_state(rootserver, PS_STATE_ALIVE);
-	L4_KDB_SetThreadName(sos_my_tid(), process_get_info(rootserver)->command);
 
 	assert(rootserver->info.pid == L4_rootserverno);
 	sosProcs[L4_rootserverno] = rootserver;

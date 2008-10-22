@@ -8,7 +8,7 @@
 #include "pager.h"
 #include "vfs.h"
 
-#define NIL_PID (-1)
+#define NIL_PID (pid_t) (-1)
 
 #define YES_TIMESTAMP 1
 #define NO_TIMESTAMP 0
@@ -16,8 +16,11 @@
 // The process data structure
 typedef struct Process_t Process;
 
+// Get and reserve a pid for future use
+pid_t reserve_pid(void);
+
 // Find a process from a thread
-Process *process_lookup(L4_Word_t key);
+Process *process_lookup(pid_t key);
 
 // Create a new process or root thread
 Process *process_init(process_type_t type);

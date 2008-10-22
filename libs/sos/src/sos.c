@@ -261,7 +261,7 @@ int fremove(const char *path) {
 pid_t process_create(const char *path) {
 	copyin((void*) path, strlen(path) + 1, 0);
 
-	return ipc_send_simple_0(vpager(), SOS_PROCESS_CREATE, YES_REPLY);
+	return (pid_t) ipc_send_simple_0(vpager(), SOS_PROCESS_CREATE, YES_REPLY);
 }
 
 /* 

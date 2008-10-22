@@ -27,7 +27,8 @@
 #define ADDRESS_MASK PAGEALIGN
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 42
+#define FRAME_ALLOC_LIMIT 400
+static int totalPages;
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -139,14 +140,13 @@ typedef enum {
 	ELFLOAD_CLOSE,
 } elfload_stage_t;
 
-typedef struct ElfloadRequest_t ElfloadRequest;
-struct ElfloadRequest_t {
+typedef struct {
 	elfload_stage_t stage;
 	char *path;  // path to executable
 	fildes_t fd; // file descriptor (when opened)
 	pid_t parent; // pid of the process that made the request
 	pid_t child; // pid of the process created
-};
+} ElfloadRequest;
 
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
 static void virtualPagerHandler(void);
@@ -404,7 +404,9 @@ static void *requestsUnshift(void) {
 
 void pager_init(void) {
 	// Set up lists
-	allocLimit = FRAME_ALLOC_LIMIT;
+	//totalPages = FRAME_ALLOC_LIMIT;
+	totalPages = frames_free();
+	allocLimit = totalPages;
 	alloced = list_empty();
 	swapped = list_empty();
 	mmapped = list_empty();
@@ -452,7 +454,7 @@ static int heapGrow(uintptr_t *base, unsigned int nb) {
 }
 
 static int memoryUsage(void) {
-	return FRAME_ALLOC_LIMIT - allocLimit;
+	return totalPages - allocLimit;
 }
 
 static int findRegion(void *contents, void *data) {
@@ -492,12 +494,14 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 }
 
 static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
-	ElfloadRequest *er = (ElfloadRequest*) malloc(sizeof(ElfloadRequest));
+	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
 
-	er->stage = 0;
-	er->path = path;
-	er->fd = VFS_NIL_FILE;
-	er->parent = caller;
+	if (er != NULL) {
+		er->stage = 0;
+		er->path = path;
+		er->fd = VFS_NIL_FILE;
+		er->parent = caller;
+	}
 
 	return er;
 }
@@ -701,7 +705,7 @@ static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
 
 static void finishElfload(int rval) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
 
 	free(er);
@@ -728,7 +732,7 @@ static char *wordAlign(char *s) {
 }
 
 static void continueElfload(int vfsRval) {
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	struct Elf32_Header *header;
 	char *buf;
 	stat_t *elfStat;
@@ -791,6 +795,7 @@ static void continueElfload(int vfsRval) {
 				}
 
 				process_set_name(p, er->path);
+				process_get_info(p)->pid = er->child;
 				process_prepare(p);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
@@ -816,7 +821,7 @@ static void startElfload(void) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
 
 	// Open the file and let the continuation take over
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
 	openNonblocking(NULL, FM_READ);
 }
@@ -838,7 +843,7 @@ static void printRequests(void *contents, void *data) {
 			break;
 
 		case REQUEST_ELFLOAD:
-			er = (ElfloadRequest*) pair->snd;
+			er = (ElfloadRequest *) pair->snd;
 			printf("stage=%d path=%s parent=%d child=%d\n",
 					er->stage, er->path, er->parent, er->child);
 			break;
@@ -1532,7 +1537,9 @@ static void virtualPagerHandler(void) {
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
-	Process *p;
+	Process *p = NULL;;
+	ElfloadRequest *er = NULL;
+	pid_t pid = NIL_PID;
 	L4_Word_t tmp;
 
 	for (;;) {
@@ -1622,8 +1629,23 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				queueRequest(REQUEST_ELFLOAD,
-						allocElfloadRequest(pager_buffer(tid), process_get_pid(p)));
+				pid = reserve_pid();
+				if (pid != NIL_PID) {
+					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p));
+				}
+
+				if (er == NULL || pid == NIL_PID) {
+					dprintf(0, "Out of processes!\n");
+					syscall_reply(tid, -1);
+					if (er != NULL) {
+						free(er);
+					}
+				} else {
+					er->child = pid;
+					queueRequest(REQUEST_ELFLOAD, er);
+				}
+				er = NULL;
+				pid = NIL_PID;
 				break;
 
 			case SOS_DEBUG_FLUSH:
