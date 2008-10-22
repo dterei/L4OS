@@ -340,9 +340,161 @@ static int pid(int argc, char **argv) {
 	return 0;
 }
 
+static int memdump(int argc, char **argv) {
+	const int SIZE = 4096;
+	const int BLOCK = 512;
+
+	if (argc < 3) {
+		printf("usage: %s address file\n", argv[0]);
+		return 1;
+	}
+
+	printf("Start memdump\n");
+
+	char *dump = (char*) (atoi(argv[1]) & ~(SIZE - 1));
+
+	if (dump == NULL) {
+		printf("must give in decimal form\n");
+		return 1;
+	} else {
+		printf("dumping %p\n", dump);
+	}
+
+	fildes_t out = open(argv[2], FM_WRITE);
+
+	// touch it first
+	int nWritten = write(out, dump, BLOCK);
+	printf("physically at %p\n", (void*) memloc((L4_Word_t) dump));
+
+	while (nWritten < SIZE) {
+		nWritten += write(out, dump + nWritten, BLOCK);
+		printf("memdump: writen %d bytes\n", nWritten);
+	}
+
+	close(out);
+
+	return 0;
+}
+
 static int segfault(int argc, char **argv) {
 	int *null = NULL;
 	return *null;
+}
+
+
+typedef int test_t;
+
+static int soshtest(int argc, char **argv) {
+	int i, j, passed;
+	test_t **buf;
+	const int NUM_SLOTS = 128;
+	const int SLOTSIZE = 192;
+	const int STACKSIZE = 4096;
+	test_t stack[STACKSIZE];
+
+	// Test heap
+
+	printf("allocating heap\n");
+
+	buf = (test_t**) malloc(NUM_SLOTS * sizeof(test_t*));
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		buf[i] = (test_t*) malloc(SLOTSIZE * sizeof(test_t));
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+	}
+
+	printf("\nfilling heap with first test values\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+
+		for (j = 0; j < SLOTSIZE; j++) {
+			buf[i][j] = i*i + j;
+		}
+	}
+
+	printf("\ntesting heap\n");
+
+	// Do in two rounds in case memory is going crazy
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		passed = 1;
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+
+		for (j = 0; j < SLOTSIZE; j++) {
+			if (buf[i][j] != i*i + j) {
+				printf("pt_test: failed for i=%d j=%d (%d vs %d)\n",
+						i, j, buf[i][i], i*i + j);
+				passed = 0;
+			}
+		}
+	}
+
+	// Try a different touch value
+
+	printf("\ntesting for a second time\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		for (j = 0; j < SLOTSIZE; j++) {
+			buf[i][j] = (i - 1) * (i - 2) * (j + 1);
+		}
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+	}
+
+	// And again
+
+	printf("\nverifing\n");
+
+	for (i = 0; i < NUM_SLOTS; i++) {
+		passed = 1;
+
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+
+		for (j = 0; j < SLOTSIZE; j++) {
+			if (buf[i][j] != (i - 1) * (i - 2) * (j + 1)) {
+				printf("pt_test: failed for i=%d j=%d (%d vs %d)\n",
+						i, j, buf[i][i], (i - 1) * (i - 2) * (j + 1));
+				passed = 0;
+			}
+		}
+	}
+
+
+	// Test stack
+
+	printf("\ntesting stack\n");
+
+	for (i = 0; i < STACKSIZE; i++) {
+		stack[i] = i*i - i;
+	}
+
+	for (i = 0; i < STACKSIZE; i++) {
+		if (stack[i] != i*i - i) {
+			printf("pt_test: failed for i=%d\n", i);
+		}
+	}
+
+	printf("\ndone\n");
+
+	return 0;
 }
 
 /*
@@ -377,8 +529,10 @@ struct command sosh_commands[] = {
 	{"help", help},
 	{"kill", kill},
 	{"ls", ls},
+	{"memdump", memdump},
 	{"pid", pid},
 	{"segfault", segfault},
+	{"soshtest", soshtest},
 	//{"time", time},
 	{"null", NULL}
 };

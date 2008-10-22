@@ -2,7 +2,7 @@
 #define _SOS_CACHE_H_
 
 // Comment this out to re-enable the cache
-//#define SOS_NO_CACHE
+#define SOS_NO_CACHE
 
 #ifdef SOS_NO_CACHE
 	#define DEFAULT_MEMORY L4_UncachedMemory

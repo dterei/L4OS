@@ -60,7 +60,7 @@ LABEL(preempt_handler)            /* If preempt we restart here */
                                 so that it knows to yield at the end of its timeslice */
 
 	/* Load branch address */
-	ldr	ip, [ip]
+	/* ldr	ip, [ip] */
 
 	stmdb	sp!, {r4-r11}
 	mov	lr, pc
