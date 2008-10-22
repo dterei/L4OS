@@ -550,8 +550,8 @@ static int processDelete(L4_Word_t pid) {
 	return 0;
 }
 
-// Handle a page fault.  This will return 0 on success, and 1 if it must be
-// queue and tried again later (e.g. if a page must swapped, etc).
+// Handle a page fault.  Will return the type of request needed to complete
+// the page fault, if any.
 static rtype_t pagefaultHandle(Pagefault *fault) {
 	Process *p;
 	L4_Word_t frame, *entry;
@@ -902,6 +902,7 @@ static void finishSwapelf(void) {
 static void continueRead(int vfsRval) {
 	dprintf(2, "*** %s: vfsRval=%d\n", __FUNCTION__, vfsRval);
 	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_READ);
 	ReadRequest *readReq = (ReadRequest*) req->data;
 
 	switch (req->stage) {
@@ -913,6 +914,7 @@ static void continueRead(int vfsRval) {
 				req->stage++;
 				readReq->fd = vfsRval;
 				readReq->offset = 0;
+				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) readReq->src);
 				lseekNonblocking(readReq->fd, readReq->src, SEEK_SET);
 			}
 
@@ -962,9 +964,10 @@ static void continueRead(int vfsRval) {
 
 static void startRead(void) {
 	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_READ);
 	ReadRequest *readReq = (ReadRequest*) req->data;
 
-	dprintf(1, "*** startRead: path=%s\n", readReq->path);
+	dprintf(1, "*** startRead: path=\"%s\"\n", readReq->path);
 
 	req->stage = STAGE_OPEN;
 	strncpy(pager_buffer(sos_my_tid()), readReq->path, MAX_IO_BUF);
@@ -974,6 +977,7 @@ static void startRead(void) {
 static void continueWrite(int vfsRval) {
 	dprintf(2, "*** %s, vfsRval=%d\n", __FUNCTION__, vfsRval);
 	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_WRITE);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
 	size_t size;
 
@@ -986,6 +990,7 @@ static void continueWrite(int vfsRval) {
 				req->stage++;
 				writeReq->fd = vfsRval;
 				writeReq->offset = 0;
+				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) writeReq->dst);
 				lseekNonblocking(writeReq->fd, writeReq->dst, SEEK_SET);
 			}
 
@@ -1037,7 +1042,7 @@ static void startWrite(void) {
 	assert(req->type == REQUEST_WRITE);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
 
-	dprintf(1, "*** startWrite: path=%s\n", writeReq->path);
+	dprintf(1, "*** %s: path=\"%s\"\n", __FUNCTION__, writeReq->path);
 
 	req->stage = STAGE_OPEN;
 	strncpy(pager_buffer(sos_my_tid()), writeReq->path, MAX_IO_BUF);
@@ -1104,8 +1109,10 @@ static void startSwapin2(void) {
 	req->finish = finishSwapin2;
 
 	// Update page table with temporary frame etc
+	dprintf(2, "*** %s: entry was %p, now ", __FUNCTION__, *entry);
 	*entry &= ~(ADDRESS_MASK | SWAP_MASK);
 	*entry |= frame | TEMP_MASK;
+	dprintf(2, "%p\n", *entry);
 
 	// Push the swapin to the head of the queue
 	list_shift(requests, req);

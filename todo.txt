@@ -27,3 +27,8 @@ created with frame_alloc) as actual static data structures.
 - Check there are no sideeffects in assertions (so that we can disable them
 easily when we hand in).
 
+- Replace assertions with killing/deleting the offending process.  Since, the
+failed assertions will probably be due to the process doing something stupid.
+
+- Page fault should invalidate cache?  But the cache is turned off...
+

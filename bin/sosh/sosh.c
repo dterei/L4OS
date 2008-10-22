@@ -335,6 +335,33 @@ static int alloc(int argc, char **argv) {
 	return 0;
 }
 
+static int flood(int argc, char **argv) {
+	int from;
+	int size = (4096 - 32);
+	L4_Word_t *buf = (L4_Word_t*) malloc(size);
+
+	printf("---> memory for %s allocated at %p (%lu)\n",
+			argv[1], buf, (L4_Word_t) buf);
+
+	printf("---> memory for %s physically at %p\n",
+			argv[1], (void*) memloc((L4_Word_t) buf));
+
+	printf("---> stack (%p) is at %p\n",
+			&buf, (void*) memloc((L4_Word_t) &buf));
+
+	if (argc > 1) {
+		from = atoi(argv[1]);
+	} else {
+		from = 0;
+	}
+
+	for (int i = 0; i < (size / sizeof(L4_Word_t)); i++) {
+		buf[i] = from++;
+	}
+
+	return 0;
+}
+
 static int pid(int argc, char **argv) {
 	printf("%u\n", my_id());
 	return 0;
@@ -380,7 +407,6 @@ static int segfault(int argc, char **argv) {
 	int *null = NULL;
 	return *null;
 }
-
 
 typedef int test_t;
 
@@ -526,6 +552,7 @@ struct command sosh_commands[] = {
 	{"cat", cat},
 	{"cp", cp},
 	{"exec", exec},
+	{"flood", flood},
 	{"help", help},
 	{"kill", kill},
 	{"ls", ls},
