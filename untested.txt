@@ -1,7 +1,5 @@
 - Copyin/Copyout over a page boundary when the pages are on disk.
 
-- spawn lots of processes to max limit.
-
 - Pulling the network in the pager - mmap should block forever, while all
 pagefualts should still continue (assumin they don't require the network).
 
