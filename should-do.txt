@@ -6,9 +6,6 @@
 	- irq
 	- Bootinfo
 
-- Clean up copyin/out as well, there is a lot of repetition across the two
-functions and they aren't so nice anyway.
-
 - Move process deleting back to process.c (from pager.c) if possible.  Still
 want to minimise the interface to the pager though.
 
