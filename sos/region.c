@@ -32,7 +32,7 @@ void region_free(Region *r) {
 	}
 
 	// if region isn't default swap file then free it.
-	if (!swapfile_is_default(r->elffile) && r->elffile != NULL) {
+	if (r->elffile != NULL && !swapfile_is_default(r->elffile)) {
 		swapfile_free(r->elffile);
 	}
 
