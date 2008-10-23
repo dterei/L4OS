@@ -42,7 +42,7 @@ Swapfile *swapfile_init(char *path) {
 	assert(sizeof(Swapfile) == PAGESIZE);
 	Swapfile *sf;
 
-	sf = (Swapfile*) frame_alloc();
+	sf = (Swapfile*) frame_alloc(FA_SWAPFILE);
 
 	for (int i = 0; i < SWAPSIZE - 1; i++) {
 		sf->slots[i] = i + 1;
@@ -74,12 +74,20 @@ int swapfile_is_open(Swapfile *sf) {
 	return (sf->data.fd != VFS_NIL_FILE);
 }
 
+int swapfile_is_default(Swapfile *sf) {
+	return strncmp(sf->data.path, SWAPFILE_FN, MAX_FILE_NAME) == 0 ? 1 : 0;
+}
+
 void swapfile_close(Swapfile *sf) {
 	dprintf(1, "*** swapfile_close path=%s\n", sf->data.path);
 	assert(sf->data.fd != VFS_NIL_FILE);
 
 	closeNonblocking(sf->data.fd);
 	sf->data.fd = VFS_NIL_FILE;
+}
+
+void swapfile_free(Swapfile *sf) {
+	frame_free((L4_Word_t) sf);
 }
 
 int swapfile_get_usage(Swapfile *sf) {

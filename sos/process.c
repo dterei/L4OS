@@ -259,7 +259,8 @@ Process *process_run_rootthread(const char *name, void *ip, int timestamp) {
 	process_prepare(p);
 	process_set_name(p, name);
 	process_set_ip(p, ip);
-	process_set_sp(p, (void *) (frame_alloc() + PAGESIZE - sizeof(L4_Word_t)));
+	process_set_sp(p, (void *)
+			(frame_alloc(FA_STACK) + PAGESIZE - sizeof(L4_Word_t)));
 	process_run(p, timestamp);
 	return p;
 }

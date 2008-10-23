@@ -165,7 +165,7 @@ typedef struct Pagetable1_t {
 
 Pagetable *pagetable_init(void) {
 	assert(sizeof(Pagetable1) == PAGESIZE);
-	Pagetable1 *pt = (Pagetable1*) frame_alloc();
+	Pagetable1 *pt = (Pagetable1*) frame_alloc(FA_PAGETABLE1);
 
 	for (int i = 0; i < PAGEWORDS; i++) {
 		pt->pages2[i] = NULL;
@@ -212,7 +212,7 @@ static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 
 	if (level1->pages2[offset1] == NULL) {
 		assert(sizeof(Pagetable2) == PAGESIZE);
-		level1->pages2[offset1] = (Pagetable2*) frame_alloc();
+		level1->pages2[offset1] = (Pagetable2*) frame_alloc(FA_PAGETABLE2);
 
 		for (int i = 0; i < PAGEWORDS; i++) {
 			level1->pages2[offset1]->pages[i] = 0;
@@ -261,11 +261,11 @@ static L4_Word_t *allocFrames(int n) {
 	assert(n > 0);
 	L4_Word_t frame, nextFrame;
 
-	frame = frame_alloc();
+	frame = frame_alloc(FA_ALLOCFRAMES);
 	n--;
 
 	for (int i = 1; i < n; i++) {
-		nextFrame = frame_alloc();
+		nextFrame = frame_alloc(FA_ALLOCFRAMES);
 		assert((frame + i * PAGESIZE) == nextFrame);
 	}
 
@@ -379,7 +379,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 		dprintf(1, "*** pagerFrameAlloc: allocLimit reached\n");
 		frame = 0;
 	} else {
-		frame = frame_alloc();
+		frame = frame_alloc(FA_PAGERALLOC);
 		dprintf(1, "*** pagerFrameAlloc: allocated frame %p\n", frame);
 		list_push(alloced, pair_alloc(process_get_pid(p), page));
 
@@ -1125,7 +1125,7 @@ static void startSwapin2(void) {
 	p = process_lookup(fault->pid);
 
 	// Reserve a temporary frame to read in to
-	frame = frame_alloc();
+	frame = frame_alloc(FA_PAGERALLOC);
 	dprintf(2, "*** %s: temporary frame is %p\n", __FUNCTION__, (void*) frame);
 
 	// Set up the read request

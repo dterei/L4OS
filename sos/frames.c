@@ -46,7 +46,7 @@ void frame_init(L4_Word_t low, L4_Word_t frame) {
 	totalInUse = 0;
 }
 
-L4_Word_t frame_alloc(void) {
+L4_Word_t frame_alloc(alloc_codes_t reason) {
 	static L4_Word_t alloc;
 
 	alloc = firstFree;
@@ -58,6 +58,7 @@ L4_Word_t frame_alloc(void) {
 		// There is no free memory.
 	}
 
+	dprintf(2, "frames: allocated frame for %d: %p\n", reason, alloc);
 	return alloc;
 }
 
@@ -65,6 +66,7 @@ void frame_free(L4_Word_t frame) {
 	*((L4_Word_t*) frame) = firstFree;
 	firstFree = frame;
 	totalInUse--;
+	dprintf(2, "frames: free'd frame: %p\n", frame);
 }
 
 int frames_allocated(void) {
