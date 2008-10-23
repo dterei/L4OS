@@ -59,9 +59,6 @@ LABEL(preempt_handler)            /* If preempt we restart here */
 	str	r1, [r4, #4] /* Let current lock holder know there is contention
                                 so that it knows to yield at the end of its timeslice */
 
-	/* Load branch address */
-	ldr	ip, [ip]
-
 	stmdb	sp!, {r4-r11}
 	mov	lr, pc
 	/* do the system call */

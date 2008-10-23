@@ -50,9 +50,9 @@ typedef enum {
 
 /* file modes */
 typedef enum {
-        FM_WRITE = 1,
-        FM_READ = 2,
-        FM_EXEC = 4,
+        FM_READ = 4,
+        FM_WRITE = 2,
+        FM_EXEC = 1,
         FM_NOTRUNC = 8,
 } sos_filemodes;
 typedef uint8_t fmode_t;

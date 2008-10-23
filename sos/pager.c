@@ -556,6 +556,12 @@ static int pagerAction(PagerRequest *pr) {
 		return 0;
 	}
 
+	if ((region_get_rights(r) & pr->rights) == 0) {
+		printf("Permission fault (%d)\n", process_get_pid(p));
+		processDelete(process_get_pid(p));
+		return 0;
+	}
+
 	// Place in, or retrieve from, page table.
 	dprintf(3, "*** pagerAction: finding entry\n");
 	entry = pagetableLookup(process_get_pagetable(p), pr->addr);
@@ -1221,7 +1227,7 @@ static void virtualPagerHandler(void) {
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
 				pager(allocPagerRequest(process_get_pid(p), L4_MsgWord(&msg, 0),
-							L4_MsgLabel(&msg), defaultSwapfile, pagerContinue));
+							L4_Label(tag) & 0x7, defaultSwapfile, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
