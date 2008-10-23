@@ -765,7 +765,7 @@ static void printRequests(void *contents, void *data) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -978,7 +978,7 @@ static void continueSwapin(int vfsRval) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -1017,7 +1017,7 @@ static void continueSwapout(int vfsRval) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 

@@ -1,13 +1,8 @@
-- The "DONT PANIC" assertion is getting fired.
-
 - Use a smarter way of limiting frames.  Namely, when they "start running out"
 begin to swap out user frames.  If a kernel frame alloc ever fails, then kill
 the process using the most frames and try again.
 
 - Documentation.
-
-- Check there are no side effects in assertions (so that we can disable them
-easily when we hand in).
 
 - Replace assertions with killing/deleting the offending process.  Since, the
 failed assertions will probably be due to the process doing something stupid.
