@@ -6,7 +6,7 @@
 #include "frames.h"
 #include "l4.h"
 
-#define verbose 3
+#define verbose 1
 
 #define NULLFRAME ((L4_Word_t) (0))
 
