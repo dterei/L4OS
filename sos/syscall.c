@@ -90,7 +90,7 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 	switch(TAG_SYSLAB(tag)) {
 		case SOS_KERNEL_PRINT:
-			pager_buffer(tid)[MAX_IO_BUF - 1] = '\0';
+			pager_buffer(tid)[COPY_BUFSIZ - 1] = '\0';
 			printf("%s", pager_buffer(tid));
 			break;
 

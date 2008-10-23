@@ -367,8 +367,8 @@ void pager_init(void) {
 	requests = list_empty();
 
 	// Grab a bunch of frames to use for copyin/copyout
-	assert((PAGESIZE % MAX_IO_BUF) == 0);
-	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
+	assert((PAGESIZE % COPY_BUFSIZ) == 0);
+	int numFrames = ((MAX_THREADS * COPY_BUFSIZ) / PAGESIZE);
 
 	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
 	copyInOutBuffer = (char*) allocFrames(numFrames);
@@ -663,7 +663,7 @@ static void continueElfload(int vfsRval) {
 			} else {
 				er->fd = vfsRval;
 				copyInOutData[L4_ThreadNo(sos_my_tid())] = 0;
-				strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+				strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
 				statNonblocking();
 			}
 
@@ -680,7 +680,7 @@ static void continueElfload(int vfsRval) {
 				dprintf(1, "*** continueElfload: not executable\n");
 				finishElfload(-1);
 			} else {
-				readNonblocking(er->fd, MAX_IO_BUF);
+				readNonblocking(er->fd, COPY_BUFSIZ);
 				er->stage++;
 			}
 
@@ -738,7 +738,7 @@ static void startElfload(void) {
 
 	// Open the file and let the continuation take over
 	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
+	strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
 	openNonblocking(NULL, FM_READ);
 }
 
@@ -1349,7 +1349,7 @@ static void virtualPagerHandler(void) {
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {
-	return &copyInOutBuffer[L4_ThreadNo(tid) * MAX_IO_BUF];
+	return &copyInOutBuffer[L4_ThreadNo(tid) * COPY_BUFSIZ];
 }
 
 static void copyInContinue(PagerRequest *pr) {
@@ -1363,7 +1363,7 @@ static void copyInContinue(PagerRequest *pr) {
 	prepareDataIn(p, addr);
 
 	// Data about the copyin operation.
-	L4_Word_t size = min(MAX_IO_BUF, LO_HALF(copyInOutData[process_get_pid(p)]));
+	L4_Word_t size = min(COPY_BUFSIZ, LO_HALF(copyInOutData[process_get_pid(p)]));
 	L4_Word_t offset = HI_HALF(copyInOutData[process_get_pid(p)]);
 
 	// Continue copying in from where we left off
@@ -1433,7 +1433,7 @@ static void copyOutContinue(PagerRequest *pr) {
 	L4_Word_t addr = pr->addr & PAGEALIGN;
 
 	// Data about the copyout operation.
-	L4_Word_t size = min(MAX_IO_BUF, LO_HALF(copyInOutData[process_get_pid(p)]));
+	L4_Word_t size = min(COPY_BUFSIZ, LO_HALF(copyInOutData[process_get_pid(p)]));
 	L4_Word_t offset = HI_HALF(copyInOutData[process_get_pid(p)]);
 
 	// Continue copying out from where we left off
