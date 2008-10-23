@@ -33,13 +33,14 @@ static void *sub(void *contents, void *data) {
 	return (void*) ((int) data) - ((int) contents);
 }
 
+/*
 static void printInt(void *contents, void *data) {
-	(void) printInt;
 	int *index = (int*) data;
 
 	printf("%d: %d\n", *index, (int) contents);
 	(*index)++;
 }
+*/
 
 int main(int argc, char *argv[]) {
 	TEST {

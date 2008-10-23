@@ -199,6 +199,7 @@ static int framesFree(void *contents, void *data) {
 	if ((pid_t) curr->fst == process_get_pid(p)) {
 		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
 		pagerFrameFree(p, *entry & ADDRESS_MASK);
+		free(curr);
 		return 1;
 	} else {
 		return 0;
