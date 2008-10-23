@@ -5,11 +5,17 @@
 
 int main(int argc, char *argv[]) {
 	int id = my_id();
+	char buf[8];
 
-	printf("+%d ", id);
+	sprintf(buf, "+%d ", id);
+	kprint(buf);
+
 	process_create(PROGRAM);
 	process_create(PROGRAM);
-	printf("-%d ", id);
+
+	sprintf(buf, "-%d ", id);
+	kprint(buf);
+
 	return 0;
 }
 

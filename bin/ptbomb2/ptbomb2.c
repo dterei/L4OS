@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <sos/sos.h>
 
-#define PROGRAM "pt_test"
+#define PROGRAM "pt_test2"
 #define SLEEP_MS 1000
 
 int main(int argc, char *argv[]) {
