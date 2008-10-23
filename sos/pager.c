@@ -79,7 +79,7 @@ struct PagerRequest_t {
 	int rights;
 	int offset;
 	int size;
-	void (*finish)(void);
+	void (*swapinFinish)(void);
 	void (*callback)(PagerRequest *pr);
 };
 
@@ -440,7 +440,7 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 	newPr->rights = rights;
 	newPr->offset = PR_OFFSET_UNDEFINED;
 	newPr->sf = sf;
-	newPr->finish = panic;
+	newPr->swapinFinish = panic;
 	newPr->callback = callback;
 
 	return newPr;
@@ -486,6 +486,7 @@ static int pagerSwapslotFree(void *contents, void *data) {
 	if ((curr->fst == args->fst) &&
 			((curr->snd == args->snd) || (curr->snd == ADDRESS_ALL))) {
 		swapslot_free(defaultSwapfile, curr->snd);
+		pair_free(curr);
 		return 1;
 	} else {
 		return 0;
@@ -770,7 +771,7 @@ static void printRequests(void *contents, void *data) {
 static void dequeueRequest(void) {
 	dprintf(1, "*** dequeueRequest\n");
 
-	list_unshift(requests);
+	pair_free(list_unshift(requests));
 
 	if (list_null(requests)) {
 		dprintf(1, "*** dequeueRequest: no more items\n");
@@ -972,7 +973,7 @@ static void continueSwapin(int vfsRval) {
 			break;
 
 		case SWAPIN_CLOSE:
-			pr->finish();
+			pr->swapinFinish();
 			break;
 
 		default:
@@ -1043,11 +1044,11 @@ static void startSwapin(void) {
 		// It is on an ELF file, need to read from that
 		assert(pr->sf != NULL);
 		pr->sf = region_get_elffile(r);
-		pr->finish = finishSwapelf;
+		pr->swapinFinish = finishSwapelf;
 	} else {
 		// It is the default swapfile
 		pr->sf = defaultSwapfile;
-		pr->finish = finishSwapin;
+		pr->swapinFinish = finishSwapin;
 	}
 
 	pr->size = PAGESIZE;
