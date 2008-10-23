@@ -22,13 +22,15 @@
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
 #define REF_MASK  (1 << 1)
-#define MMAP_MASK (1 << 2)
-#define ELF_MASK  (1 << 4)
+#define ELF_MASK  (1 << 2)
 #define ADDRESS_MASK PAGEALIGN
+
+// Ensure the kernel always has frames
+#define KERNEL_FRAME_BUFFER 128
+static int totalPages;
 
 // Limiting the number of user frames
 #define FRAME_ALLOC_LIMIT 400
-static int totalPages;
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -38,35 +40,12 @@ static List *swapped; // [(pid, word)]
 #define PR_OFFSET_UNDEFINED (-1)
 static Swapfile *defaultSwapfile;
 
-// Tracking mmapped frames
-typedef struct MMap_t {
-	pid_t pid;
-	L4_Word_t memAddr;
-	L4_Word_t dskAddr;
-	size_t size;
-	char path[MAX_FILE_NAME];
-} MMap;
-
-static List *mmapped; // [MMap]
-
 // Asynchronous pager requests
 typedef enum {
 	REQUEST_SWAPOUT,
 	REQUEST_SWAPIN,
-	REQUEST_MMAP_READ,
 	REQUEST_ELFLOAD,
-	REQUEST_READ,
-	REQUEST_WRITE,
 } rtype_t;
-
-typedef struct Request_t Request;
-struct Request_t {
-	pid_t pid;    // pid of requester
-	rtype_t type; // type of request
-	void *data;   // data associated with type
-	int stage;    // stage in callbacks
-	void (*finish)(Request *r, int success);
-};
 
 static List *requests; // [(rtype_t, rdata)]
 
@@ -76,32 +55,6 @@ static void startPagerRequest(void);
 static void startRequest(void);
 static void startSwapin(void);
 static void startSwapout(void);
-static void startMMapRead(void);
-static void startRead(void);
-static void startWrite(void);
-
-// For reading and writing
-typedef struct ReadRequest_t {
-	L4_Word_t dst;
-	L4_Word_t src;
-	int size;
-	int offset;
-	char *path;
-	fildes_t fd;
-	int closeOnComplete;
-} ReadRequest;
-
-typedef ReadRequest WriteRequest;
-
-typedef enum {
-	STAGE_OPEN,
-	STAGE_LSEEK,
-	STAGE_READ,
-	STAGE_CLOSE
-} read_stage_t;
-
-#define STAGE_WRITE STAGE_READ
-typedef read_stage_t write_stage_t;
 
 // Demand paging
 #define SWAP_BUFSIZ 1024
@@ -126,7 +79,7 @@ struct PagerRequest_t {
 	int rights;
 	int offset;
 	int size;
-	void (*finish)(void);
+	void (*swapinFinish)(void);
 	void (*callback)(PagerRequest *pr);
 };
 
@@ -142,7 +95,7 @@ typedef enum {
 
 typedef struct {
 	elfload_stage_t stage;
-	char *path;  // path to executable
+	char path[MAX_FILE_NAME];  // path to executable
 	fildes_t fd; // file descriptor (when opened)
 	pid_t parent; // pid of the process that made the request
 	pid_t child; // pid of the process created
@@ -156,11 +109,12 @@ static void virtualPagerHandler(void);
 #define LO_HALF(word) ((word) & 0x0000ffff)
 #define HI_HALF_MASK 0xffff0000
 #define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
+#define HI_SHIFT(word) ((word) << 16)
 
 static L4_Word_t *copyInOutData;
 static char *copyInOutBuffer;
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
-static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);
+static void copyOut(L4_ThreadId_t tid, void *dst, size_t size, int append);
 
 typedef struct Pagetable2_t {
 	L4_Word_t pages[PAGEWORDS];
@@ -245,6 +199,7 @@ static int framesFree(void *contents, void *data) {
 	if ((pid_t) curr->fst == process_get_pid(p)) {
 		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
 		pagerFrameFree(p, *entry & ADDRESS_MASK);
+		free(curr);
 		return 1;
 	} else {
 		return 0;
@@ -404,12 +359,11 @@ static void *requestsUnshift(void) {
 
 void pager_init(void) {
 	// Set up lists
-	//totalPages = FRAME_ALLOC_LIMIT;
-	totalPages = frames_free();
+	totalPages = FRAME_ALLOC_LIMIT;
+	//totalPages = frames_free();
 	allocLimit = totalPages;
 	alloced = list_empty();
 	swapped = list_empty();
-	mmapped = list_empty();
 	requests = list_empty();
 
 	// Grab a bunch of frames to use for copyin/copyout
@@ -487,7 +441,7 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 	newPr->rights = rights;
 	newPr->offset = PR_OFFSET_UNDEFINED;
 	newPr->sf = sf;
-	newPr->finish = panic;
+	newPr->swapinFinish = panic;
 	newPr->callback = callback;
 
 	return newPr;
@@ -498,7 +452,7 @@ static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
 
 	if (er != NULL) {
 		er->stage = 0;
-		er->path = path;
+		strncpy(er->path, path, MAX_FILE_NAME);
 		er->fd = VFS_NIL_FILE;
 		er->parent = caller;
 	}
@@ -533,6 +487,7 @@ static int pagerSwapslotFree(void *contents, void *data) {
 	if ((curr->fst == args->fst) &&
 			((curr->snd == args->snd) || (curr->snd == ADDRESS_ALL))) {
 		swapslot_free(defaultSwapfile, curr->snd);
+		pair_free(curr);
 		return 1;
 	} else {
 		return 0;
@@ -572,6 +527,7 @@ static int processDelete(L4_Word_t pid) {
 	list_delete(swapped, pagerSwapslotFree, &args);
 	pagetableFree(p);
 	list_iterate(process_get_regions(p), regionsFree, NULL);
+	list_destroy(process_get_regions(p));
 
 	// Wake all waiting processes
 	process_wake_all(process_get_pid(p));
@@ -605,6 +561,12 @@ static int pagerAction(PagerRequest *pr) {
 		return 0;
 	}
 
+	if ((region_get_rights(r) & pr->rights) == 0) {
+		printf("Permission fault (%d)\n", process_get_pid(p));
+		processDelete(process_get_pid(p));
+		return 0;
+	}
+
 	// Place in, or retrieve from, page table.
 	dprintf(3, "*** pagerAction: finding entry\n");
 	entry = pagetableLookup(process_get_pagetable(p), pr->addr);
@@ -615,12 +577,6 @@ static int pagerAction(PagerRequest *pr) {
 		// On disk, queue a swapin request
 		dprintf(2, "*** pagerAction: page is on disk (%p)\n", (void*) *entry);
 		queueRequest(REQUEST_SWAPIN, pr);
-		return 0;
-	} else if (*entry & MMAP_MASK) {
-		// Mapped to memory and hasn't been read yet.
-		// TODO change this when mmapped writing is implemented
-		dprintf(2, "*** pagerAction: page is mmapped (%p)\n", (void*) *entry);
-		queueRequest(REQUEST_MMAP_READ, pr);
 		return 0;
 	} else if ((frame & ADDRESS_MASK) != 0) {
 		// Already appears in page table as a frame, just got unmapped
@@ -661,46 +617,6 @@ static void pager(PagerRequest *pr) {
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
 	}
-}
-
-static void copyInPrepare(L4_ThreadId_t tid, void *src, size_t size,
-		int append) {
-	dprintf(3, "*** copyInPrepare: tid=%ld src=%p size=%d\n",
-			L4_ThreadNo(tid), src, size);
-
-	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
-	int newSize = LO_HALF(data);
-	int base = HI_HALF(data);
-
-	if (append) {
-		newSize += size;
-	} else {
-		newSize = size;
-		base = 0;
-	}
-
-	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
-	copyInOutData[L4_ThreadNo(tid)] = data;
-}
-
-static void copyOutPrepare(L4_ThreadId_t tid, void *dest, size_t size,
-		int append) {
-	dprintf(3, "*** copyOutPrepare: tid=%ld dest=%p size=%d\n",
-			L4_ThreadNo(tid), dest, size);
-
-	L4_Word_t data = copyInOutData[L4_ThreadNo(tid)];
-	int newSize = LO_HALF(data);
-	int base = HI_HALF(data);
-
-	if (append) {
-		newSize += size;
-	} else {
-		newSize = size;
-		base = 0;
-	}
-
-	data = LO_HALF(newSize) | (LO_HALF(base) << 16);
-	copyInOutData[L4_ThreadNo(tid)] = data;
 }
 
 static void finishElfload(int rval) {
@@ -849,14 +765,14 @@ static void printRequests(void *contents, void *data) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
 static void dequeueRequest(void) {
 	dprintf(1, "*** dequeueRequest\n");
 
-	list_unshift(requests);
+	pair_free(list_unshift(requests));
 
 	if (list_null(requests)) {
 		dprintf(1, "*** dequeueRequest: no more items\n");
@@ -879,10 +795,6 @@ static void queueRequest(rtype_t rtype, void *request) {
 		if (verbose > 2) list_iterate(requests, printRequests, NULL);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
-}
-
-static void memzero(char *addr, L4_Word_t size) {
-	for (int i = 0; i < size; i++) addr[i] = 0x00;
 }
 
 static void finishSwapout(void) {
@@ -927,7 +839,7 @@ static void finishSwapout(void) {
 	} else {
 		// Zero the frame for debugging, but it may be a good idea anyway
 		dprintf(2, "*** zeroing frame %p\n", (void*) frame);
-		memzero((char*) frame, PAGESIZE);
+		memset((char*) frame, 0x00, PAGESIZE);
 	}
 
 	dprintf(2, "*** finishSwapout: addr=%p for pid=%d now %p\n",
@@ -1007,7 +919,7 @@ static void finishSwapelf(void) {
 		dprintf(2, "*** finishSwapelf: zeroing from %p because of addr %p\n",
 				(void*) fileTop, (void*) pr->addr);
 		assert(region_get_size(r) >= region_get_filesize(r));
-		memzero((char*) pinnedFrame + (fileTop % PAGESIZE),
+		memset((char*) pinnedFrame + (fileTop % PAGESIZE), 0x00,
 				region_get_size(r) - region_get_filesize(r));
 	}
 
@@ -1016,157 +928,6 @@ static void finishSwapelf(void) {
 
 	// I'm 99.99% sure it's ok to do this without any other magic
 	finishSwapin();
-}
-
-static void continueRead(int vfsRval) {
-	Request *req = (Request*) requestsPeek();
-	ReadRequest *readReq = (ReadRequest*) req->data;
-
-	switch (req->stage) {
-		case STAGE_OPEN:
-			if (vfsRval < 0) {
-				req->finish(req, FALSE);
-			} else {
-				req->stage++;
-				readReq->fd = vfsRval;
-				readReq->offset = 0;
-				lseekNonblocking(readReq->fd, readReq->src, SEEK_SET);
-			}
-
-			break;
-
-		case STAGE_LSEEK:
-			assert(vfsRval == 0);
-			req->stage++;
-			readNonblocking(readReq->fd, min(IO_MAX_BUFFER, readReq->size));
-
-			break;
-
-		case STAGE_READ:
-			assert(vfsRval >= 0);
-			memcpy((void*) readReq->dst, pager_buffer(sos_my_tid()), vfsRval);
-			readReq->offset += vfsRval;
-			assert(readReq->offset <= readReq->size);
-
-			if (readReq->offset == readReq->size) {
-				if (readReq->closeOnComplete) {
-					req->stage++;
-					close(readReq->fd);
-				} else {
-					req->finish(req, TRUE);
-				}
-			} else {
-				assert(vfsRval > 0);
-				readNonblocking(readReq->fd,
-						min(IO_MAX_BUFFER, readReq->size - readReq->offset));
-			}
-
-			break;
-
-		case STAGE_CLOSE:
-			req->finish(req, TRUE);
-
-			break;
-
-		default:
-			assert(! __FUNCTION__);
-	}
-}
-
-static void startRead(void) {
-	Request *req = (Request*) requestsPeek();
-	ReadRequest *readReq = (ReadRequest*) req->data;
-
-	dprintf(1, "*** startRead: path=%s\n", readReq->path);
-
-	if (readReq->closeOnComplete) {
-		req->stage = STAGE_OPEN;
-		openNonblocking(readReq->path, FM_READ);
-	} else {
-		assert(readReq->fd > 0);
-		req->stage = STAGE_LSEEK;
-		continueRead(readReq->fd);
-	}
-}
-
-static void continueWrite(int vfsRval) {
-	Request *req = (Request*) requestsPeek();
-	WriteRequest *writeReq = (WriteRequest*) req->data;
-	size_t size;
-
-	switch (req->stage) {
-		case STAGE_OPEN:
-			if (vfsRval < 0) {
-				req->finish(req, FALSE);
-			} else {
-				req->stage++;
-				writeReq->fd = vfsRval;
-				writeReq->offset = 0;
-				lseekNonblocking(writeReq->fd, writeReq->offset, SEEK_SET);
-			}
-
-			break;
-
-		case STAGE_LSEEK:
-			assert(vfsRval == 0);
-			req->stage++;
-			size = min(IO_MAX_BUFFER, writeReq->size);
-			memcpy(pager_buffer(sos_my_tid()), (void*) writeReq->src, size);
-			writeNonblocking(writeReq->fd, size);
-
-			break;
-
-		case STAGE_WRITE:
-			assert(vfsRval >= 0);
-			writeReq->offset += vfsRval;
-			assert(writeReq->offset <= writeReq->size);
-
-			if (writeReq->offset == writeReq->size) {
-				if (writeReq->closeOnComplete) {
-					req->stage++;
-					closeNonblocking(writeReq->fd);
-				} else {
-					req->finish(req, TRUE);
-				}
-			} else {
-				assert(vfsRval > 0);
-				size = min(IO_MAX_BUFFER, writeReq->size - writeReq->offset);
-				memcpy(pager_buffer(sos_my_tid()),
-						(void*) (writeReq->src + writeReq->offset), size);
-			}
-
-			break;
-
-		case STAGE_CLOSE:
-			req->finish(req, TRUE);
-
-			break;
-	}
-}
-
-static void startWrite(void) {
-	Request *req = (Request*) requestsPeek();
-	WriteRequest *writeReq = (WriteRequest*) req->data;
-
-	dprintf(1, "*** startWrite: path=%s\n", writeReq->path);
-
-	if (writeReq->closeOnComplete) {
-		req->stage = STAGE_OPEN;
-		openNonblocking(writeReq->path, FM_WRITE);
-	} else {
-		assert(writeReq->fd > 0);
-		req->stage = STAGE_LSEEK;
-		continueWrite(writeReq->fd);
-	}
-}
-
-static void finishMMapRead(Request *req, int success) {
-	(void) finishMMapRead;
-	dprintf(2, "*** finishMMapRead\n");
-}
-
-static void startMMapRead(void) {
-	dprintf(2, "*** startMMapRead\n");
 }
 
 static void continueSwapin(int vfsRval) {
@@ -1213,11 +974,11 @@ static void continueSwapin(int vfsRval) {
 			break;
 
 		case SWAPIN_CLOSE:
-			pr->finish();
+			pr->swapinFinish();
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -1256,7 +1017,7 @@ static void continueSwapout(int vfsRval) {
 			break;
 
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -1284,11 +1045,11 @@ static void startSwapin(void) {
 		// It is on an ELF file, need to read from that
 		assert(pr->sf != NULL);
 		pr->sf = region_get_elffile(r);
-		pr->finish = finishSwapelf;
+		pr->swapinFinish = finishSwapelf;
 	} else {
 		// It is the default swapfile
 		pr->sf = defaultSwapfile;
-		pr->finish = finishSwapin;
+		pr->swapinFinish = finishSwapin;
 	}
 
 	pr->size = PAGESIZE;
@@ -1373,20 +1134,8 @@ static void startRequest(void) {
 			startPagerRequest();
 			break;
 
-		case REQUEST_MMAP_READ:
-			startMMapRead();
-			break;
-
 		case REQUEST_ELFLOAD:
 			startElfload();
-			break;
-
-		case REQUEST_READ:
-			startRead();
-			break;
-
-		case REQUEST_WRITE:
-			startWrite();
 			break;
 
 		default:
@@ -1442,18 +1191,8 @@ static void vfsHandler(int vfsRval) {
 			continueElfload(vfsRval);
 			break;
 
-		case REQUEST_READ:
-			dprintf(3, "*** vfsHandler: read continuation\n");
-			continueRead(vfsRval);
-			break;
-
-		case REQUEST_WRITE:
-			dprintf(3, "*** vfsHandler: write continuation\n");
-			continueWrite(vfsRval);
-			break;
-
 		default:
-			assert(! __FUNCTION__);
+			assert(!"default");
 	}
 }
 
@@ -1462,70 +1201,6 @@ static void pagerFlush(void) {
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
 	}
-}
-
-static MMap *allocMMap(pid_t pid,
-		L4_Word_t memAddr, L4_Word_t dskAddr, size_t size, char *path) {
-	MMap *new = (MMap*) malloc(sizeof(MMap));
-
-	new->pid = pid;
-	new->memAddr = memAddr;
-	new->dskAddr = dskAddr;
-	new->size = size;
-	strncpy(new->path, path, MAX_FILE_NAME);
-
-	return new;
-}
-
-static L4_Word_t memoryMap(pid_t pid, L4_Word_t addr, size_t size,
-		fmode_t rights, char *path, off_t offset) {
-	Process *p;
-	L4_Word_t loc;
-	L4_Word_t *entry;
-	off_t curOffset;
-
-	// Some sanity checks
-	p = process_lookup(pid);
-
-	if ((offset & ~PAGEALIGN) != 0) {
-		return 0;
-	}
-
-	if (rights & FM_WRITE) {
-		dprintf(0, "!!! memoryMap: writing not supported\n");
-		return 0;
-	}
-
-	// Find out where to put the region
-	if (addr == 0) {
-		loc = process_append_region(p, size, rights);
-	} else {
-		if ((addr & ~PAGEALIGN) != 0) {
-			return 0;
-		} else {
-			process_add_region(p,
-					region_alloc(REGION_OTHER, addr, rights, size, 0));
-			loc = addr;
-		}
-	}
-
-	// Insert in to the tracked mmaps and page table
-	for (curOffset = 0; curOffset < size; curOffset += PAGESIZE) {
-		MMap *new = allocMMap(pid, addr + curOffset, offset + curOffset,
-				min(size - curOffset, PAGESIZE), path);
-		entry = pagetableLookup(process_get_pagetable(p), new->memAddr);
-
-		if ((*entry & ADDRESS_MASK) != 0) {
-			dprintf(0, "!!! memoryMap: %p for %d already appears as %p\n",
-					(void*) new->memAddr, pid, (void*) *entry);
-			free(new);
-		} else {
-			list_push(mmapped, new);
-			*entry = new->dskAddr | MMAP_MASK;
-		}
-	}
-
-	return loc;
 }
 
 static void virtualPagerHandler(void) {
@@ -1557,7 +1232,7 @@ static void virtualPagerHandler(void) {
 		switch (TAG_SYSLAB(tag)) {
 			case L4_PAGEFAULT:
 				pager(allocPagerRequest(process_get_pid(p), L4_MsgWord(&msg, 0),
-							L4_MsgLabel(&msg), defaultSwapfile, pagerContinue));
+							L4_Label(tag) & 0x7, defaultSwapfile, pagerContinue));
 				break;
 
 			case SOS_COPYIN:
@@ -1653,15 +1328,6 @@ static void virtualPagerHandler(void) {
 				syscall_reply_v(tid, 0);
 				break;
 
-			case SOS_MMAP:
-				syscall_reply(tid, (L4_Word_t) memoryMap(process_get_pid(p),
-						(L4_Word_t) L4_MsgWord(&msg, 0),
-						(size_t) L4_MsgWord(&msg, 1),
-						(fmode_t) L4_MsgWord(&msg, 2),
-						pager_buffer(tid),
-						(off_t) L4_MsgWord(&msg, 3)));
-				break;
-
 			case L4_EXCEPTION:
 				dprintf(0, "Exception (ip=%p sp=%p id=0x%lx cause=0x%lx pid=%d)\n",
 						(void*) L4_MsgWord(&msg, 0), (void*) L4_MsgWord(&msg, 1),
@@ -1697,41 +1363,34 @@ static void copyInContinue(PagerRequest *pr) {
 	prepareDataIn(p, addr);
 
 	// Data about the copyin operation.
-	L4_Word_t size = LO_HALF(copyInOutData[process_get_pid(p)]);
+	L4_Word_t size = min(MAX_IO_BUF, LO_HALF(copyInOutData[process_get_pid(p)]));
 	L4_Word_t offset = HI_HALF(copyInOutData[process_get_pid(p)]);
 
 	// Continue copying in from where we left off
-	char *dest = pager_buffer(process_get_tid(p)) + offset;
-	dprintf(3, "*** copyInContinue: size=%ld offset=%ld dest=%p\n",
-			size, offset, dest);
+	char *dst = pager_buffer(process_get_tid(p)) + offset;
 
 	// Assume it's already there - this function should only get
 	// called as a continutation from the pager, so no problem
 	char *src = (char*) (*pagetableLookup(process_get_pagetable(p), addr)
 			& ADDRESS_MASK);
 	src += pr->addr & ~PAGEALIGN;
-	dprintf(3, "*** copyInContinue: src=%p\n", src);
 
 	// Start the copy - if we reach a page boundary then pause computation
 	// since we can assume that it goes out to disk and waits a long time
-	dprintf(4, "*** copyInContinue contents: ");
-	while ((offset < size) && (offset < MAX_IO_BUF)) {
-		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
-		*dest = *src;
+	while (offset < size) {
+		*dst = *src;
 
-		dest++;
+		dst++;
 		src++;
 		offset++;
 
 		if (isPageAligned(src)) break; // continue from next page boundary
 	}
-	dprintf(4, "\n");
 
 	copyInOutData[process_get_pid(p)] = size | (offset << 16);
-	assert(offset < MAX_IO_BUF); // XXX silently fail?
 
 	// Reached end - either we finished the copy, or we reached a boundary
-	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
+	if (offset == size) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyInContinue: finished\n");
@@ -1746,17 +1405,24 @@ static void copyInContinue(PagerRequest *pr) {
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append) {
 	dprintf(3, "*** copyIn: tid=%ld src=%p size=%d\n",
 			L4_ThreadNo(tid), src, size);
-
 	Process *p = process_lookup(L4_ThreadNo(tid));
 
-	copyInPrepare(tid, src, size, append);
+	// Prepare to copy in
+	size_t newSize = LO_HALF(copyInOutData[process_get_pid(p)]);
+	L4_Word_t newBase = HI_HALF(copyInOutData[process_get_pid(p)]);
 
-	pager(allocPagerRequest(
-				process_get_pid(p),
-				(L4_Word_t) src,
-				FM_READ,
-				defaultSwapfile,
-				copyInContinue));
+	if (append) {
+		newSize += size;
+	} else {
+		newSize = size;
+		newBase = 0;
+	}
+
+	copyInOutData[process_get_pid(p)] = LO_HALF(newSize) | HI_SHIFT(newBase);
+
+	// Force a page fault to start the process
+	pager(allocPagerRequest( process_get_pid(p), (L4_Word_t) src,
+				FM_READ, defaultSwapfile, copyInContinue));
 }
 
 static void copyOutContinue(PagerRequest *pr) {
@@ -1767,78 +1433,64 @@ static void copyOutContinue(PagerRequest *pr) {
 	L4_Word_t addr = pr->addr & PAGEALIGN;
 
 	// Data about the copyout operation.
-	L4_Word_t size = LO_HALF(copyInOutData[process_get_pid(p)]);
+	L4_Word_t size = min(MAX_IO_BUF, LO_HALF(copyInOutData[process_get_pid(p)]));
 	L4_Word_t offset = HI_HALF(copyInOutData[process_get_pid(p)]);
 
 	// Continue copying out from where we left off
 	char *src = pager_buffer(process_get_tid(p)) + offset;
-	dprintf(3, "*** copyOutContinue: size=%ld offset=%ld src=%p\n",
-			size, offset, src);
-
-	char *dest = (char*) (*pagetableLookup(process_get_pagetable(p), addr)
+	char *dst = (char*) (*pagetableLookup(process_get_pagetable(p), addr)
 				& ADDRESS_MASK);
-	dest += pr->addr & ~PAGEALIGN;
-	dprintf(3, "*** copyOutContinue: dest=%p\n", dest);
+	dst += pr->addr & ~PAGEALIGN;
 
 	// Start the copy, same story as copyin
-	dprintf(4, "*** copyOutContinue contents: ");
-	while ((offset < size) && (offset < MAX_IO_BUF)) {
-		dprintf(4, "%02x->%02x ", *dest & 0x000000ff, *src & 0x000000ff);
-		*dest = *src;
+	while (offset < size) {
+		*dst = *src;
 
-		dest++;
+		dst++;
 		src++;
 		offset++;
 
-		if (isPageAligned(dest)) break; // continue from next page boundary
+		if (isPageAligned(dst)) break; // continue from next page boundary
 	}
-	dprintf(4, "\n");
 
-	copyInOutData[process_get_pid(p)] = size | (offset << 16);
-	assert(offset < MAX_IO_BUF); // XXX silently fail?
+	// Remember data
+	copyInOutData[process_get_pid(p)] = size | HI_SHIFT(offset);
 
+	// Fix caches
 	prepareDataOut(p, addr);
 
-	if ((offset >= size) || (offset >= MAX_IO_BUF)) {
+	if (offset == size) {
 		L4_ThreadId_t tid = process_get_tid(p);
 		free(pr);
 		dprintf(3, "*** copyOutContinue: finished\n");
 		syscall_reply_v(tid, 0);
 	} else {
-		pr->addr = (L4_Word_t) dest;
+		pr->addr = (L4_Word_t) dst;
 		dprintf(3, "*** copyOutContinue: continuing\n");
 		pager(pr);
 	}
 }
 
-static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append) {
-	dprintf(3, "*** copyOut: tid=%ld dest=%p size=%d\n",
-			L4_ThreadNo(tid), dest, size);
-
+static void copyOut(L4_ThreadId_t tid, void *dst, size_t size, int append) {
+	dprintf(3, "*** copyOut: tid=%ld dst=%p size=%d\n",
+			L4_ThreadNo(tid), dst, size);
 	Process *p = process_lookup(L4_ThreadNo(tid));
 
-	/*
+	// Prepare to copy out
+	size_t newSize = LO_HALF(copyInOutData[process_get_pid(p)]);
+	L4_Word_t newBase = HI_HALF(copyInOutData[process_get_pid(p)]);
 
-		// TODO kill the process on access violation, BUT since the pager
-		// doesn't do it anyway (how do you check??) not much point doing
-		// it here...
-
-	Region *r = list_find(process_get_regions(p), findRegion, (void*) dest);
-
-	if ((r == NULL) || ((region_get_rights(r) & FM_WRITE) == 0)) {
-		dprintf(0, "Segmentation fault (%d)\n", process_get_pid(p));
-		processDelete(process_get_pid(p));
-		return;
+	if (append) {
+		newSize += size;
+	} else {
+		newSize = size;
+		newBase = 0;
 	}
-	*/
 
-	copyOutPrepare(tid, dest, size, append);
+	copyInOutData[process_get_pid(p)] = LO_HALF(newSize) | HI_SHIFT(newBase);
 
-	pager(allocPagerRequest(
-				process_get_pid(p),
-				(L4_Word_t) dest,
-				FM_WRITE,
-				defaultSwapfile,
-				copyOutContinue));
+	// Force a page fault to start the process
+	pager(allocPagerRequest(process_get_pid(p), (L4_Word_t) dst,
+				FM_WRITE, defaultSwapfile, copyOutContinue));
 }
 

@@ -28,5 +28,3 @@ directory basically should be associated somehow with a filesystem.
 - Have a hard code stable program which runs and is responsible for spawning sosh.
 If sosh crashes, it starts it up again... 
 
-- Fix network problem with console
-

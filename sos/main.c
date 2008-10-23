@@ -135,9 +135,9 @@ syscall_loop(void) {
 				break;
 
 			case L4_EXCEPTION:
-				dprintf(0, "!!! syscall_loop exception: ip=%lx, sp=%lx\n",
-						L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
-				dprintf(0, "    cpsr=%lx exception=%lx, cause=%lx\n",
+				dprintf(0, "!!! syscall_loop exception: pid=%d ip=%lx sp=%lx\n",
+						L4_SpaceNo(L4_SenderSpace()), L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+				dprintf(0, "    cpsr=%lx exception=%lx cause=%lx\n",
 						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
 				send = 0;
 				break;

@@ -1,38 +1,14 @@
-- The "DONT PANIC" assertion is getting fired.  I'm to to rewrite some of the
-ELF/swapping stuff anyway (to use mmap) so not worth fixing this yet.  Pretty
-rare anyway.
-
-- Move back to a single-threaded model, just make the syscall_reply a callback
-rather than syscall_reply.  That way a function in the pager can be called.
-I think this is nicer than the various hacks we have around the place to make
-the pager thing actually work.
-
-- Get rid of FRAME_ALLOC_LIMIT before handing in.
- --> This isn't at all possible.  We can at least make it quite large though.
- --> (david) What is wrong with how I have changed the pager to set the allocLimit
- to the available frames determined when the frame table starts up?
-
-- Finish mmap.  (wishlist: make it work for writing too, since then we really
-would have mmap and it would be awesome).
+- Use a smarter way of limiting frames.  Namely, when they "start running out"
+begin to swap out user frames.  If a kernel frame alloc ever fails, then kill
+the process using the most frames and try again.
 
 - Documentation.
 
-- Set MAX_THEADS to 256.  Perhaps arrange so that 4 address spaces aren't being
-wasted on the network/init/pager threads.
- --> (david) Yeah sure, I kind of like having them stored in the process struct but they
- do artificially use up process slots. Maybe we can have a different process list
- for kernel threads (except for sos which stays where it is).
- --> (david) Why change max threads to 256? I just changed the PID allocator
- to use MAX_ADDRESSES instead of threads and have tested allocating up to the max
- processes quite extensively.
-
-- Look at putting all the statically allocate data structures (currently
-created with frame_alloc) as actual static data structures.
- --> Why? we moved away from this before?
-
-- Check there are no side effects in assertions (so that we can disable them
-easily when we hand in).
+- Replace assertions with killing/deleting the offending process.  Since, the
+failed assertions will probably be due to the process doing something stupid.
 
 - Forkbomb runs fine when just creating 1 process but forking out 2 each run causes a
 segmentation fork after a little while (around 30 processes).
+
+- Likewise, there are exceptions on forkbomb.
 
