@@ -48,12 +48,6 @@ Process *process_lookup(pid_t key) {
 		dprintf(0, "!!! process_lookup(%d): outside range!\n", key);
 	}
 
-//	// for multithreaded SOS kernel
-//	while(sosProcs[key] == NULL ) {
-//		key--;
-//	}
-
-	// for standard single threaded user apps
 	return sosProcs[key];
 }
 

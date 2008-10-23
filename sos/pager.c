@@ -22,13 +22,15 @@
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
 #define REF_MASK  (1 << 1)
-#define MMAP_MASK (1 << 2)
-#define ELF_MASK  (1 << 4)
+#define ELF_MASK  (1 << 2)
 #define ADDRESS_MASK PAGEALIGN
+
+// Ensure the kernel always has frames
+#define KERNEL_FRAME_BUFFER 128
+static int totalPages;
 
 // Limiting the number of user frames
 #define FRAME_ALLOC_LIMIT 400
-static int totalPages;
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -356,8 +358,8 @@ static void *requestsUnshift(void) {
 
 void pager_init(void) {
 	// Set up lists
-	//totalPages = FRAME_ALLOC_LIMIT;
-	totalPages = frames_free();
+	totalPages = FRAME_ALLOC_LIMIT;
+	//totalPages = frames_free();
 	allocLimit = totalPages;
 	alloced = list_empty();
 	swapped = list_empty();
@@ -523,6 +525,7 @@ static int processDelete(L4_Word_t pid) {
 	list_delete(swapped, pagerSwapslotFree, &args);
 	pagetableFree(p);
 	list_iterate(process_get_regions(p), regionsFree, NULL);
+	list_destroy(process_get_regions(p));
 
 	// Wake all waiting processes
 	process_wake_all(process_get_pid(p));
