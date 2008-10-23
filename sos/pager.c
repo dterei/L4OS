@@ -989,7 +989,8 @@ static void startRead(void) {
 		dprintf(2, "%s: not open\n", __FUNCTION__);
 		req->stage = STAGE_OPEN;
 		strncpy(pager_buffer(sos_my_tid()), readReq->path, MAX_IO_BUF);
-		openNonblocking(NULL, readReq->rights);
+		//openNonblocking(NULL, readReq->rights);
+		openNonblocking(NULL, FM_READ);
 	}
 }
 
@@ -1105,12 +1106,12 @@ static int findMMap(void *contents, void *data) {
 	MMap *mmap = (MMap*) contents;
 	Pair *pair = (Pair*) data; // (pid, word)
 
-	printf("mmap: pid=%d, memAddr=%p, dskAddr=%p, size=%d, path=%s\n",
+	printf("mmap: pid=%d memAddr=%p dskAddr=%p size=%d rights=%d path=%s\n",
 			mmap->pid, (void*) mmap->memAddr, (void*) mmap->dskAddr,
-			mmap->size, mmap->path);
+			mmap->size, mmap->rights, mmap->path);
 
 	if ((mmap->pid == pair->fst) && (pair->snd >= mmap->memAddr) &&
-			(pair->snd < (mmap->memAddr + mmap->size))) {
+			(pair->snd < (mmap->memAddr + PAGESIZE))) {
 		return 1;
 	} else {
 		return 0;
