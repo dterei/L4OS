@@ -10,3 +10,5 @@ failed assertions will probably be due to the process doing something stupid.
 - Forkbomb runs fine when just creating 1 process but forking out 2 each run causes a
 segmentation fork after a little while (around 30 processes).
 
+- Likewise, there are exceptions on forkbomb.
+
