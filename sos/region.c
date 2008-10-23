@@ -27,6 +27,15 @@ Region *region_alloc(region_type type, uintptr_t base,
 }
 
 void region_free(Region *r) {
+	if (r == NULL) {
+		return;
+	}
+
+	// if region isn't default swap file then free it.
+	if (r->elffile != NULL && !swapfile_is_default(r->elffile)) {
+		swapfile_free(r->elffile);
+	}
+
 	free(r);
 }
 

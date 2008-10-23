@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include <time.h>
+#include <l4/kdebug.h>
 #include <sos/sos.h>
 #include <sos/globals.h>
 
@@ -338,7 +339,31 @@ static int alloc(int argc, char **argv) {
 static int flood(int argc, char **argv) {
 	int from;
 	int size = (4096 - 32);
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('x');
+	L4_KDB_PrintChar('\n');
 	L4_Word_t *buf = (L4_Word_t*) malloc(size);
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('y');
+	L4_KDB_PrintChar('\n');
 
 	printf("---> memory allocated at %p (%lu)\n",
 			buf, (L4_Word_t) buf);

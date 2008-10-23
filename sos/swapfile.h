@@ -17,8 +17,14 @@ void swapfile_open(Swapfile *sf, int rights);
 // Test if a swapfile is open (compares to fd)
 int swapfile_is_open(Swapfile *sf);
 
+// Test if the swapfile is the system wide default
+int swapfile_is_default(Swapfile *sf);
+
 // Close a swapfile (non blocking)
 void swapfile_close(Swapfile *sf);
+
+// Free the swapfile
+void swapfile_free(Swapfile *sf);
 
 // Get the slots in use by a swap file
 int swapfile_get_usage(Swapfile *sf);

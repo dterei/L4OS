@@ -64,12 +64,11 @@
 #include <stdlib.h>
 
 #include "../k_r_malloc.h"
+#include "../../../../sos/frames.h"
 
 #define NALLOC 0x1000
 
 #define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
-
-extern L4_Word_t frame_alloc(void);
 
 Header *_kr_malloc_freep = NULL;
 
@@ -79,7 +78,7 @@ Header *morecore(unsigned nu) {
 	Header *up;
 
 	nb = round_up(nu * sizeof(Header), NALLOC);
-	cp = (uintptr_t) frame_alloc();
+	cp = (uintptr_t) frame_alloc(FA_MORECORE);
 
 	if (cp == 0) {
 		return NULL;

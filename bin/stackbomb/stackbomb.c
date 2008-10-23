@@ -1,7 +1,13 @@
 #include <stdio.h>
 #include <sos/sos.h>
 
-#define MAX_DEPTH 100
+#define MAX_DEPTH 40
+
+/* Doesn't really stackbomb very well, seems to be far more cpu
+ * bound then blowing out the stack.
+ *
+ * Use stackbomb2 instead.
+ */
 
 static int naive_fib(int n) {
 	if (n <= 0) return 0;
