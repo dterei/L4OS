@@ -30,3 +30,5 @@ segmentation fork after a little while (around 30 processes).
 - Get rid of FRAME_ALLOC_LIMIT, but if the kernel needs a frame and there are
 none left then kill the process using the most memory.
 
+- Fix the stat stuff in continueRead and continueWrite, why isn't it working?
+

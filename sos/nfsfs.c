@@ -333,10 +333,7 @@ remove_request(NFS_BaseRequest *rq) {
 static
 fmode_t
 mode_nfs2unix(fmode_t mode) {
-	return
-		(((mode & 0x1) >> 0) << 2) |
-		(((mode & 0x4) >> 2) << 1) |
-		(((mode & 0x2) >> 1) << 0);
+	return mode;
 }
 
 /* Copy the relavent entriees from attr to buf */

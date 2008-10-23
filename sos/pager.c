@@ -56,7 +56,6 @@ typedef enum {
 	REQUEST_SWAPOUT,
 	REQUEST_SWAPIN,
 	REQUEST_MMAP_READ,
-	REQUEST_ELFLOAD,
 	REQUEST_READ,
 	REQUEST_WRITE,
 } rtype_t;
@@ -86,14 +85,16 @@ typedef struct ReadRequest_t {
 	L4_Word_t src;
 	int size;
 	int offset;
-	char *path;
+	char path[MAX_FILE_NAME];
 	fildes_t fd;
 	int alwaysOpen;
+	int rights;
 } ReadRequest;
 typedef ReadRequest WriteRequest;
 
 typedef enum {
 	STAGE_OPEN,
+	STAGE_STAT,
 	STAGE_LSEEK,
 	STAGE_READ,
 	STAGE_CLOSE
@@ -102,16 +103,6 @@ typedef read_stage_t write_stage_t;
 
 #define STAGE_WRITE STAGE_READ
 #define allocWriteRequest allocReadRequest
-
-typedef enum {
-	SWAPIN_OPEN,
-	SWAPIN_LSEEK,
-	SWAPIN_READ,
-	SWAPIN_CLOSE,
-	SWAPOUT_OPEN,
-	SWAPOUT_WRITE,
-	SWAPOUT_CLOSE
-} pr_stage_t;
 
 typedef struct Pagefault_t Pagefault;
 struct Pagefault_t {
@@ -122,23 +113,11 @@ struct Pagefault_t {
 };
 
 // ELF loading
-typedef enum {
-	ELFLOAD_OPEN,
-	ELFLOAD_CHECK_EXEC,
-	ELFLOAD_READ_HEADER,
-	ELFLOAD_CLOSE,
-} elfload_stage_t;
-
-/*
-typedef struct ElfloadRequest_t ElfloadRequest;
-struct ElfloadRequest_t {
-	elfload_stage_t stage;
-	char *path;  // path to executable
-	fildes_t fd; // file descriptor (when opened)
-	pid_t parent; // pid of the process that made the request
-	pid_t child; // pid of the process created
-};
-*/
+typedef struct ElfloadRequest_t {
+	char path[MAX_FILE_NAME]; // path to executable
+	pid_t parent;             // pid of the process that made the request
+	pid_t child;              // pid of the process created
+} ElfloadRequest;
 
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
 static void virtualPagerHandler(void);
@@ -454,30 +433,30 @@ static int findRegion(void *contents, void *data) {
 			(addr < region_get_base(r) + region_get_size(r)));
 }
 
-static int findPaRegion(void *contents, void *data) {
-	(void) findPaRegion;
-	// Like findRegion, but only at pagealigned granularity
-	Region *r = (Region*) contents;
-	L4_Word_t addr = (L4_Word_t) data;
-
-	return ((addr >= (region_get_base(r) & PAGEALIGN)) &&
-			(region_get_size(r), PAGESIZE));
-}
-
-/*
-static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
+static ElfloadRequest *allocElfload(char *path, pid_t caller, pid_t child) {
 	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
 
-	if (er != NULL) {
-		er->stage = 0;
-		er->path = path;
-		er->fd = VFS_NIL_FILE;
-		er->parent = caller;
-	}
+	strncpy(er->path, path, MAX_FILE_NAME);
+	er->parent = caller;
+	er->child = child;
 
 	return er;
 }
-*/
+
+static MMap *allocMMap(pid_t pid,
+		L4_Word_t memAddr, L4_Word_t dskAddr, size_t size, char *path) {
+	MMap *new = (MMap*) malloc(sizeof(MMap));
+
+	new->pid = pid;
+	new->memAddr = memAddr;
+	new->dskAddr = dskAddr;
+	new->size = size;
+	strncpy(new->path, path, MAX_FILE_NAME);
+
+	printf("dont forget to free MMap too\n");
+
+	return new;
+}
 
 static void pagefaultFinish(Pagefault *fault) {
 	dprintf(2, "*** %s: finished with %d\n", __FUNCTION__, fault->pid);
@@ -635,7 +614,7 @@ static rtype_t pagefaultHandle(Pagefault *fault) {
 }
 
 static void panic2(int success) {
-	assert(!"panic2");
+	assert(!"panic");
 }
 
 static Request *allocRequest(rtype_t type, void *data) {
@@ -647,6 +626,22 @@ static Request *allocRequest(rtype_t type, void *data) {
 	req->finish = panic2;
 
 	return req;
+}
+
+static ReadRequest *allocReadRequest(
+		L4_Word_t dst, L4_Word_t src, int size, char *path) {
+	ReadRequest *readReq = (ReadRequest*) malloc(sizeof(ReadRequest));
+
+	readReq->dst = dst;
+	readReq->src = src;
+	readReq->size = size;
+	readReq->offset = 0;
+	strncpy(readReq->path, path, MAX_FILE_NAME);
+	readReq->fd = VFS_NIL_FILE;
+	readReq->rights = FM_READ | FM_WRITE;
+	readReq->alwaysOpen = FALSE;
+
+	return readReq;
 }
 
 static void pager2(Pagefault *fault) {
@@ -662,137 +657,104 @@ static void pager2(Pagefault *fault) {
 	}
 }
 
-/*
-static void finishElfload(int rval) {
-	assert(requestsPeekType() == REQUEST_ELFLOAD);
-	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
-	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
-
-	free(er);
-	syscall_reply(replyTo, rval);
-	dequeueRequest();
-}
-*/
-
-static void setRegionOnElf(Process *p, Region *r, L4_Word_t addr) {
-	(void) setRegionOnElf;
+static void setRegionMMap(Process *p, Region *r, L4_Word_t addr) {
 	assert((addr & ~PAGEALIGN) == 0);
 	L4_Word_t *entry;
 	L4_Word_t base = region_get_base(r);
 
 	for (int size = 0; size < region_get_size(r); size += PAGESIZE) {
 		entry = pagetableLookup(process_get_pagetable(p), base + size);
-		*entry = (addr + size) | SWAP_MASK | ELF_MASK;
+		*entry = (addr + size) | MMAP_MASK;
 	}
 }
 
-/*
 static char *wordAlign(char *s) {
 	unsigned int x = (unsigned int) s;
 	x--;
 	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
 	return (char*) x;
 }
-*/
 
-/*
-static void continueElfload(int vfsRval) {
-	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
+static void finishElfload(int success) {
+	dprintf(2, "*** %s: success = %d\n", __FUNCTION__, success);
+
+	Request *req;
+	ReadRequest *readReq;
+	ElfloadRequest *elfReq;
 	struct Elf32_Header *header;
-	char *buf;
-	stat_t *elfStat;
 	Process *p;
+	L4_ThreadId_t parent;
+	L4_Word_t diskAddr;
 
-	switch (er->stage) {
-		case ELFLOAD_OPEN:
-			dprintf(2, "ELFLOAD_OPEN\n");
-			if (vfsRval < 0) {
-				dprintf(1, "*** continueElfload: failed to open\n");
-				finishElfload(-1);
-			} else {
-				er->fd = vfsRval;
-				copyInOutData[L4_ThreadNo(sos_my_tid())] = 0;
-				strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
-				statNonblocking();
-			}
+	req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_READ);
+	readReq = (ReadRequest*) req->data;
+	list_unshift(requests);
 
-			er->stage++;
-			break;
+	assert(((Request*) list_peek(requests))->type == REQUEST_ELFLOAD);
+	elfReq = (ElfloadRequest*) ((Request*) list_peek(requests))->data;
+	header = (struct Elf32_Header*) readReq->dst;
+	parent = process_get_tid(process_lookup(elfReq->parent));
 
-		case ELFLOAD_CHECK_EXEC:
-			assert(vfsRval == 0);
+	if (!success) {
+		dprintf(1, "*** %s: failed\n", __FUNCTION__);
+		syscall_reply(parent, -1);
+	} else if (elf32_checkFile(header) != 0) {
+		dprintf(1, "*** %s: not an ELF file\n", __FUNCTION__);
+		syscall_reply(parent, -1);
+	} else {
+		p = process_init(PS_TYPE_PROCESS);
 
-			buf = pager_buffer(sos_my_tid());
-			elfStat = (stat_t*) wordAlign(buf + strlen(buf) + 1);
+		for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
+			Region *r = region_alloc(
+					REGION_OTHER,
+					elf32_getProgramHeaderVaddr(header, i),
+					elf32_getProgramHeaderMemorySize(header, i),
+					elf32_getProgramHeaderFlags(header, i), 0);
+			diskAddr = elf32_getProgramHeaderOffset(header, i) & PAGEALIGN;
+			process_add_region(p, r);
+			setRegionMMap(p, r, diskAddr);
+			list_push(mmapped, allocMMap(
+					process_get_pid(p), region_get_base(r), diskAddr,
+					elf32_getProgramHeaderFileSize(header, i), elfReq->path));
+		}
 
-			if (!(elfStat->st_fmode & FM_EXEC)) {
-				dprintf(1, "*** continueElfload: not executable\n");
-				finishElfload(-1);
-			} else {
-				readNonblocking(er->fd, MAX_IO_BUF);
-				er->stage++;
-			}
+		process_set_name(p, elfReq->path);
+		process_get_info(p)->pid = elfReq->child;
+		process_prepare(p);
+		process_set_ip(p, (void*) elf32_getEntryPoint(header));
+		if (verbose > 1) process_dump(p);
+		process_run(p, YES_TIMESTAMP);
 
-			break;
-
-		case ELFLOAD_READ_HEADER:
-			dprintf(2, "ELFLOAD_READ_HEADER\n");
-			header = (struct Elf32_Header*) pager_buffer(sos_my_tid());
-
-			if (elf32_checkFile(header) != 0) {
-				dprintf(1, "*** continueElfload: not an ELF file\n");
-				finishElfload(-1);
-			} else {
-				p = process_init(PS_TYPE_PROCESS);
-
-				for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
-					Region *r = region_alloc(
-							REGION_OTHER,
-							elf32_getProgramHeaderVaddr(header, i),
-							elf32_getProgramHeaderMemorySize(header, i),
-							elf32_getProgramHeaderFlags(header, i), 0);
-					region_set_elffile(r, swapfile_init(er->path));
-					region_set_filesize(r, elf32_getProgramHeaderFileSize(
-								header, i));
-					process_add_region(p, r);
-					setRegionOnElf(p, r,
-							elf32_getProgramHeaderOffset(header, i) & PAGEALIGN);
-				}
-
-				process_set_name(p, er->path);
-				process_get_info(p)->pid = er->child;
-				process_prepare(p);
-				process_set_ip(p, (void*) elf32_getEntryPoint(header));
-
-				process_run(p, YES_TIMESTAMP);
-				closeNonblocking(er->fd);
-				er->child = process_get_pid(p);
-			}
-
-			er->stage++;
-			break;
-
-		case ELFLOAD_CLOSE:
-			dprintf(2, "ELFLOAD_CLOSE\n");
-			finishElfload(er->child);
-			break;
-
-		default:
-			assert(!"continueElfload");
+		syscall_reply(parent, process_get_pid(p));
 	}
-}
-*/
 
-/*
+	free(req);
+	frame_free(readReq->dst);
+	free(readReq);
+	free(elfReq);
+	dequeueRequest2();
+}
+
 static void startElfload(void) {
-	assert(requestsPeekType() == REQUEST_ELFLOAD);
+	Request *req;
+	ReadRequest *readReq;
+	ElfloadRequest *elfReq;
 
-	// Open the file and let the continuation take over
-	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
-	openNonblocking(NULL, FM_READ | FM_WRITE);
+	assert(((Request*) list_peek(requests))->type == REQUEST_ELFLOAD);
+	elfReq = (ElfloadRequest*) ((Request*) list_peek(requests))->data;
+
+	// MAX_IO_BUF because we don't really know the size yet (but it will be
+	// less than a kilobyte!) and frame_alloc for temp storage (must free)
+	readReq = allocReadRequest(frame_alloc(FA_PAGERALLOC),
+			0, MAX_IO_BUF, elfReq->path);
+	readReq->rights = FM_READ | FM_EXEC;
+	req = allocRequest(REQUEST_READ, readReq);
+	req->finish = finishElfload;
+
+	list_shift(requests, req);
+	startRequest2();
 }
-*/
 
 static void printRequests2(void *contents, void *data) {
 	Request *req = (Request*) contents;
@@ -915,6 +877,8 @@ static void continueRead(int vfsRval) {
 	Request *req = (Request*) list_peek(requests);
 	assert(req->type == REQUEST_READ);
 	ReadRequest *readReq = (ReadRequest*) req->data;
+	stat_t *readStat;
+	char *buf;
 
 	switch (req->stage) {
 		case STAGE_OPEN:
@@ -925,9 +889,30 @@ static void continueRead(int vfsRval) {
 				req->stage++;
 				readReq->fd = vfsRval;
 				readReq->offset = 0;
-				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) readReq->src);
-				lseekNonblocking(readReq->fd, readReq->src, SEEK_SET);
+				strncpy(pager_buffer(sos_my_tid()), readReq->path, MAX_FILE_NAME);
+				statNonblocking();
 			}
+
+			break;
+
+		case STAGE_STAT:
+			dprintf(2, "*** %s: STAGE_STAT\n", __FUNCTION__);
+			assert(vfsRval == 0);
+
+			buf = pager_buffer(sos_my_tid());
+			readStat = (stat_t*) wordAlign(buf + strlen(buf) + 1);
+
+			printf("%d vs %d\n", readReq->rights, readStat->st_fmode);
+
+			/*
+			if ((readReq->rights & readStat->st_fmode) == 0) {
+				req->finish(FALSE);
+			} else {
+			*/
+				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) readReq->src);
+				req->stage++;
+				lseekNonblocking(readReq->fd, readReq->src, SEEK_SET);
+			//}
 
 			break;
 
@@ -952,7 +937,7 @@ static void continueRead(int vfsRval) {
 					req->finish(TRUE);
 				} else {
 					req->stage++;
-					close(readReq->fd);
+					closeNonblocking(readReq->fd);
 				}
 			} else {
 				assert(vfsRval > 0);
@@ -984,14 +969,14 @@ static void startRead(void) {
 	if (currentFd != VFS_NIL_FILE) {
 		assert(readReq->alwaysOpen);
 		dprintf(2, "%s: open at %d\n", __FUNCTION__, currentFd);
-		req->stage = STAGE_LSEEK;
+		req->stage = STAGE_OPEN + 1;
 		readReq->fd = currentFd;
 		lseekNonblocking(readReq->fd, readReq->src, SEEK_SET);
 	} else {
 		dprintf(2, "%s: not open\n", __FUNCTION__);
 		req->stage = STAGE_OPEN;
 		strncpy(pager_buffer(sos_my_tid()), readReq->path, MAX_IO_BUF);
-		openNonblocking(NULL, FM_READ | FM_WRITE);
+		openNonblocking(NULL, readReq->rights);
 	}
 }
 
@@ -1000,6 +985,8 @@ static void continueWrite(int vfsRval) {
 	Request *req = (Request*) list_peek(requests);
 	assert(req->type == REQUEST_WRITE);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
+	stat_t *writeStat;
+	char *buf;
 	size_t size;
 
 	switch (req->stage) {
@@ -1011,8 +998,30 @@ static void continueWrite(int vfsRval) {
 				req->stage++;
 				writeReq->fd = vfsRval;
 				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) writeReq->dst);
-				lseekNonblocking(writeReq->fd, writeReq->dst, SEEK_SET);
+				memcpy(pager_buffer(sos_my_tid()), writeReq->path, MAX_FILE_NAME);
+				statNonblocking();
 			}
+
+			break;
+
+		case STAGE_STAT:
+			dprintf(2, "*** %s: STAGE_STAT\n", __FUNCTION__);
+			assert(vfsRval == 0);
+
+			buf = pager_buffer(sos_my_tid());
+			writeStat = (stat_t*) wordAlign(buf + strlen(buf) + 1);
+
+			printf("%d vs %d\n", writeReq->rights, writeStat->st_fmode);
+
+			/*
+			if ((writeReq->rights & writeStat->st_fmode) == 0) {
+				req->finish(FALSE);
+			} else {
+			*/
+				dprintf(2, "*** %s: seek %p\n", __FUNCTION__, (void*) writeReq->src);
+				req->stage++;
+				lseekNonblocking(writeReq->fd, writeReq->dst, SEEK_SET);
+			//}
 
 			break;
 
@@ -1068,14 +1077,14 @@ static void startWrite(void) {
 	if (currentFd != VFS_NIL_FILE) {
 		assert(writeReq->alwaysOpen);
 		dprintf(2, "%s: open at %d\n", __FUNCTION__, currentFd);
-		req->stage = STAGE_LSEEK;
+		req->stage = STAGE_OPEN + 1;
 		writeReq->fd = currentFd;
 		lseekNonblocking(writeReq->fd, writeReq->dst, SEEK_SET);
 	} else {
 		dprintf(2, "%s: not open\n", __FUNCTION__);
 		req->stage = STAGE_OPEN;
 		strncpy(pager_buffer(sos_my_tid()), writeReq->path, MAX_IO_BUF);
-		openNonblocking(NULL, FM_READ | FM_WRITE);
+		openNonblocking(NULL, writeReq->rights);
 	}
 }
 
@@ -1089,21 +1098,6 @@ static void startMMapRead(void) {
 	(void) startMMapRead;
 	dprintf(2, "*** startMMapRead\n");
 	assert(0);
-}
-
-static ReadRequest *allocReadRequest(
-		L4_Word_t dst, L4_Word_t src, int size, char *path) {
-	ReadRequest *readReq = (ReadRequest*) malloc(sizeof(ReadRequest));
-
-	readReq->dst = dst;
-	readReq->src = src;
-	readReq->size = size;
-	readReq->offset = 0;
-	readReq->path = path;
-	readReq->fd = VFS_NIL_FILE;
-	readReq->alwaysOpen = FALSE;
-
-	return readReq;
 }
 
 static void startSwapin2(void) {
@@ -1259,7 +1253,7 @@ static void startRequest2(void) {
 			break;
 
 		case REQUEST_ELFLOAD:
-			assert(!"REQUEST_ELFLOAD");
+			startElfload();
 			break;
 
 		case REQUEST_READ:
@@ -1314,19 +1308,6 @@ static void pagerFlush(void) {
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
 	}
-}
-
-static MMap *allocMMap(pid_t pid,
-		L4_Word_t memAddr, L4_Word_t dskAddr, size_t size, char *path) {
-	MMap *new = (MMap*) malloc(sizeof(MMap));
-
-	new->pid = pid;
-	new->memAddr = memAddr;
-	new->dskAddr = dskAddr;
-	new->size = size;
-	strncpy(new->path, path, MAX_FILE_NAME);
-
-	return new;
 }
 
 static L4_Word_t memoryMap(pid_t pid, L4_Word_t addr, size_t size,
@@ -1401,9 +1382,9 @@ static void virtualPagerHandler(void) {
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
-	Process *p = NULL;;
-	//ElfloadRequest *er = NULL;
-	//pid_t pid = NIL_PID;
+	Process *p;
+	ElfloadRequest *elfReq;
+	pid_t pid = NIL_PID;
 	L4_Word_t tmp;
 
 	for (;;) {
@@ -1496,26 +1477,17 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				assert(0);
-				/*
 				pid = reserve_pid();
+
 				if (pid != NIL_PID) {
-					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p));
+					elfReq = allocElfload(
+							pager_buffer(tid), process_get_pid(p), pid);
+					queueRequest2(allocRequest(REQUEST_ELFLOAD, elfReq));
+				} else {
+					dprintf(0, "Out of processes\n");
+					syscall_reply(tid, -1);
 				}
 
-				if (er == NULL || pid == NIL_PID) {
-					dprintf(0, "Out of processes!\n");
-					syscall_reply(tid, -1);
-					if (er != NULL) {
-						free(er);
-					}
-				} else {
-					er->child = pid;
-					queueRequest(REQUEST_ELFLOAD, er);
-				}
-				er = NULL;
-				pid = NIL_PID;
-				*/
 				break;
 
 			case SOS_DEBUG_FLUSH:
