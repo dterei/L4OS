@@ -354,7 +354,8 @@ static Pair *deleteAllocList(void) {
 				process_get_pid(p), (void*) found->snd, 
 				(void*) (*entry & ADDRESS_MASK));
 
-		if (((*entry & REF_MASK) == 0) && (found->snd < 0x70000000)) {
+		//if (((*entry & REF_MASK) == 0) && (found->snd < 0x70000000)) {
+		if ((*entry & REF_MASK) == 0) {
 			// Not been referenced, this is the frame to swap
 			break;
 		} else {
@@ -408,7 +409,8 @@ void pager_init(void) {
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
 
 	// Start the real pager process
-	Process *p = process_run_rootthread("virtual_pager", virtualPagerHandler, YES_TIMESTAMP);
+	Process *p = process_run_rootthread("virtual_pager", virtualPagerHandler,
+			YES_TIMESTAMP);
 	process_set_ipcfilt(p, PS_IPC_NONBLOCKING);
 
 	// Wait until it has actually started
@@ -429,7 +431,9 @@ static int heapGrow(uintptr_t *base, unsigned int nb) {
 
 	// Top of heap is the (new) start of the free region, this is
 	// what morecore/malloc expect.
+	dprintf(2, "*** %s: base was %p, now ", __FUNCTION__, (void*) *base);
 	*base = region_get_base(heap) + region_get_size(heap);
+	dprintf(2, "%p\n", (void*) *base);
 
 	// Move the heap region so SOS knows about it.
 	region_set_size(heap, nb + region_get_size(heap));
@@ -612,11 +616,14 @@ static rtype_t pagefaultHandle(Pagefault *fault) {
 	if ((*entry & TEMP_MASK) != 0) {
 		dprintf(2, "*** %s: %p was only temporary\n", __FUNCTION__, *entry);
 		memcpy((void*) frame, (void*) (*entry & ADDRESS_MASK), PAGESIZE);
+		unmapPage(process_get_sid(p), *entry & ADDRESS_MASK);
 		frame_free(*entry & ADDRESS_MASK);
-	}
 
-	// Cannot possibly have any other flags, except TODO when writable mmap
-	*entry = frame | REF_MASK;
+		*entry = frame | REF_MASK;
+		prepareDataOut(p, fault->addr & PAGEALIGN);
+	} else {
+		*entry = frame | REF_MASK;
+	}
 
 	dprintf(3, "*** %s: mapping vaddr=%p pid=%d frame=%p rights=%d\n",
 			__FUNCTION__, (void*) (fault->addr & PAGEALIGN), process_get_pid(p),
@@ -857,6 +864,8 @@ static void finishSwapout2(int success) {
 	Request *req = (Request*) list_peek(requests);
 	assert(req->type == REQUEST_WRITE);
 	WriteRequest *writeReq = (WriteRequest*) req->data;
+
+	pagerFrameFree(process_lookup(writeReq->pid), writeReq->src);
 
 	free(writeReq);
 	dequeueRequest2();
@@ -1162,7 +1171,6 @@ static void startSwapout2(void) {
 
 	entry = pagetableLookup(process_get_pagetable(p), swapout->snd);
 	frame = *entry & ADDRESS_MASK;
-	pagerFrameFree(p, frame);
 
 	// Fix caches
 	assert((swapout->snd & ~PAGEALIGN) == 0);
@@ -1186,6 +1194,7 @@ static void startSwapout2(void) {
 
 	// Make the request
 	writeReq = allocWriteRequest(diskAddr, frame, PAGESIZE, SWAPFILE_FN);
+	writeReq->pid = process_get_pid(p);
 	writeReq->alwaysOpen = TRUE;
 	req = allocRequest(REQUEST_WRITE, writeReq);
 
