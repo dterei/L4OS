@@ -3,7 +3,7 @@
 
 #include <sos/sos.h>
 
-#define VFS_NIL_FILE (-1)
+#define VFS_NIL_FILE ((fildes_t) (-1))
 
 /* Simple VFS-style vnode */
 typedef struct VNode_t *VNode;
@@ -52,20 +52,20 @@ struct VNode_t {
 };
 
 /* For the PCB */
-typedef struct VFile_t VFile;
-
-struct VFile_t {
+typedef struct {
 	VNode vnode;
 	fmode_t fmode;
 	L4_Word_t fp;
-};
+} VFile;
+
 
 /* System call implementations */
 /* See sos.h for more detail */
 void vfs_init(void);
 
+/* Initialise an array of fildes, must be size PROCESS_MAX_FDS */
 /* Initialise an array of vfiles, must be size PROCESS_MAX_FILES */
-void vfiles_init(VFile *files);
+void vfiles_init(fildes_t *fds, VFile *files);
 
 /* Open a file, in some cases this just involves increasing a refcount while in others
  * a filesystem must be invoked to handle the call.
@@ -99,5 +99,8 @@ void vfs_stat(pid_t pid, const char *path, stat_t *buf);
 
 /* Remove a file */
 void vfs_remove(pid_t pid, const char *path);
+
+/* Test is a file is open (internal SOS function) */
+int vfs_isopen(VFile *file);
 
 #endif // sos/vfs.h

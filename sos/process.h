@@ -98,7 +98,10 @@ int process_write_status(process_t *dest, int n);
 process_t *process_get_info(Process *p);
 
 // Get the list of files used by a process
-VFile *process_get_files(Process *p);
+VFile *process_get_ofiles(Process *p);
+
+// Get the list of open inodes used by a process
+fildes_t *process_get_fds(Process *p);
 
 // Wait for any process to exit before waking
 void process_wait_any(Process *waiter);

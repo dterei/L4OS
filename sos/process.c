@@ -27,6 +27,9 @@ struct Process_t {
 	void         *sp;
 	void         *ip;
 	timestamp_t   startedAt;
+	// 1st level, fds, allows for redirection of files and dup2
+	fildes_t      fds[PROCESS_MAX_FDS];
+	// 2nd level, open files
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
 };
@@ -72,7 +75,7 @@ static Process *processAlloc(void) {
 	p->regions = list_empty();
 	p->sp = NULL;
 	p->ip = NULL;
-	vfiles_init(p->files);
+	vfiles_init(p->fds, p->files);
 	p->waitingOn = WAIT_NOBODY;
 
 	process_set_state(p, PS_STATE_START);
@@ -331,14 +334,14 @@ void process_wake_all(pid_t pid) {
 }
 
 void process_close_files(Process *p) {
-	VFile *pfiles = process_get_files(p);
+	VFile *pfiles = process_get_ofiles(p);
 
 	if (pfiles == NULL) {
 		dprintf(0, "!!! process_close_files: %d has NULL open file table\n",
 				process_get_pid(p));
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
-			if (pfiles[fd].vnode != NULL) {
+			if (vfs_isopen(&(p->files[fd]))) {
 				vfs_flush(process_get_pid(p), fd);
 				vfs_close(process_get_pid(p), fd);
 			}
@@ -404,9 +407,14 @@ process_t *process_get_info(Process *p) {
 	return &p->info;
 }
 
-VFile *process_get_files(Process *p) {
+VFile *process_get_ofiles(Process *p) {
 	if (p == NULL) return NULL;
 	return p->files;
+}
+
+fildes_t *process_get_fds(Process *p) {
+	if (p == NULL) return NULL;
+	return p->fds;
 }
 
 void process_wait_any(Process *waiter) {

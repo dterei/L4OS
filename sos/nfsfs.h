@@ -22,7 +22,7 @@ void nfsfs_close(pid_t pid, VNode self, fildes_t file, fmode_t mode,
 		void (*close_done)(pid_t pid, VNode self, fildes_t file,
 			fmode_t mode, int status));
 
-/* Close a specified file previously opened with nfsfs_open */
+/* Read the specified number of bytes from the file specified into the buffer buf */
 void nfsfs_read(pid_t pid, VNode self, fildes_t file, L4_Word_t pos,
 		char *buf, size_t nbyte, void (*read_done)(pid_t pid,
 			VNode self, fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status));

@@ -26,7 +26,10 @@
 #define ONE_MEG (1 * 1024 * 1024)
 #define PAGEALIGN (~((PAGESIZE) - 1))
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
+
 #define PROCESS_MAX_FILES 16
+#define PROCESS_STDFDS_RESERVE 3
+#define PROCESS_MAX_FDS (PROCESS_MAX_FILES + PROCESS_STDFDS_RESERVE)
 
 // swapfile filename
 #define SWAPFILE_FN ".swap"

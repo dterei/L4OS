@@ -10,6 +10,8 @@
 
 #define verbose 1
 
+#define PS_GET_TID(x) (process_get_tid(process_lookup(x)))
+
 /* The VFS Layer uses callbacks of its own.
  * They are used so that once the FS layer has finished it operations, it can notify
  * the VFS layer (incluiding if the FS layer was successful or not) so that the VFS
@@ -51,26 +53,60 @@ vfs_init(void) {
 
 /* Initialise an array of VFiles */
 void
-vfiles_init(VFile *files) {
+vfiles_init(fildes_t *fds, VFile *files) {
 	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
 		files[i].vnode = NULL;
 		files[i].fmode = 0;
 		files[i].fp = 0;
 	}
+
+	for (int i = 0; i < PROCESS_MAX_FDS; i++) {
+		fds[i] = VFS_NIL_FILE;
+	}
 }
 
-/* Get the next file descriptor number for an address space */
-static
-fildes_t
-findNextFd(Process *p) {
-	VFile *files = process_get_files(p);
+/* Test is a file is open (internal SOS function) */
+int vfs_isopen(VFile *file) {
+	if (file->vnode != NULL) return 1;
+	return 0;
+}
 
-	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
-		if (files[i].vnode == NULL) return i;
+/* Get the next file descriptor number for an address space
+ * Returns two values, the first is the slot in the file descriptor table (fds)
+ * and the second is the slot in the open file tabe. Values returned in passed
+ * by reference paramaters fds1 and fds2.
+ *
+ * Return value is 1 for success and 0 for failure.
+ */
+static
+int
+findNextFd(Process *p, fildes_t *fds1, fildes_t *fds2) {
+	fildes_t *fds = process_get_fds(p);
+	VFile *files = process_get_ofiles(p);
+
+	*fds1 = VFS_NIL_FILE;
+	*fds2 = VFS_NIL_FILE;
+
+	for (int i = 0; i < PROCESS_MAX_FDS; i++) {
+		if (fds[i] == VFS_NIL_FILE) {
+			*fds1 = i;
+			break;
+		}
 	}
 
-	// Too many open files.
-	return VFS_NIL_FILE;
+	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
+		if (files[i].vnode == NULL) {
+			*fds2 = i;
+			break;
+		}
+	}
+
+	if (*fds1 == VFS_NIL_FILE || *fds2 == VFS_NIL_FILE) {
+		// Too many open files.
+		return 0;
+	} else {
+		return 1;
+	}
 }
 
 /* Add vnode to global list */
@@ -239,11 +275,42 @@ decrease_refs(VNode vnode, fmode_t mode) {
 	if (vnode->readers < 0 || vnode->writers < 0) {
 		dprintf(0, "!!! VNode refs corrupt! (%s) (r %u) (w %u)\n", vnode->path,
 				vnode->readers, vnode->writers);
+		return SOS_VFS_CORVNODE;
 	}
 
 	dprintf(2, "Dec VNode: (%s) (r %u/%u) (w %u/%u)\n", vnode->path, vnode->readers,
 			vnode->Max_Readers, vnode->writers, vnode->Max_Writers);
 	return SOS_VFS_OK;
+}
+
+static
+VFile *
+get_vfile(pid_t pid, fildes_t file) {
+	// get file
+	Process *p = process_lookup(pid);
+	VFile *vf = process_get_ofiles(p);
+	fildes_t *fds = process_get_fds(p);
+	if (p == NULL || vf == NULL || fds == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p) (fds %p)\n",
+				p, vf, fds);
+		return NULL;
+	}
+
+	// check values
+	if (file < 0 || file >= PROCESS_MAX_FDS || fds[file] < 0 || fds[file] >= PROCESS_MAX_FILES) {
+		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		return NULL;
+	}
+
+	// get vnode
+	vf = &vf[fds[file]];
+	if (vf->vnode == NULL) {
+		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
+		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		return NULL;
+	}
+
+	return vf;
 }
 
 /* Open a file, in some cases this just involves increasing a refcount while in others
@@ -259,14 +326,15 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 
 	// get file
 	Process *p = process_lookup(pid);
-	VFile *files = process_get_files(p);
+	VFile *files = process_get_ofiles(p);
 	if (p == NULL || files == NULL) {
 		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p)\n", p, files);
 		return;
 	}
 
 	// check can open more files
-	if (findNextFd(p) < 0) {
+	fildes_t dummy;
+	if (!findNextFd(p, &dummy, &dummy)) {
 		dprintf(2, "*** vfs_open: thread %d can't open more files!\n", pid);
 		syscall_reply(process_get_tid(p), SOS_VFS_NOMORE);
 		return;
@@ -276,6 +344,12 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 	if (strlen(path) >= MAX_FILE_NAME) {
 		dprintf(2, "*** vfs_open: path invalid! thread %d\n", pid);
 		syscall_reply(process_get_tid(p), SOS_VFS_PATHINV);
+		return;
+	}
+
+	// check permissions ok
+	if (!(mode & FM_READ) && !(mode & FM_WRITE)) {
+		syscall_reply(process_get_tid(p), SOS_VFS_BADMODE);
 		return;
 	}
 
@@ -336,9 +410,11 @@ vfs_open_done(pid_t pid, VNode self, fmode_t mode, int status) {
 
 	// get file
 	Process *p = process_lookup(pid);
-	VFile *files = process_get_files(p);
-	if (p == NULL || files == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p)\n", p, files);
+	VFile *vf = process_get_ofiles(p);
+	fildes_t *fds = process_get_fds(p);
+	if (p == NULL || vf == NULL || fds == NULL) {
+		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p) (fds %p)\n",
+				p, vf, fds);
 		vfs_open_err(self);
 		return;
 	}
@@ -362,8 +438,8 @@ vfs_open_done(pid_t pid, VNode self, fmode_t mode, int status) {
 	}
 
 	// get new fd
-	fildes_t fd = findNextFd(p);
-	if (fd < 0) {
+	fildes_t fd1, fd2;
+	if (!findNextFd(p, &fd1, &fd2)) {
 		dprintf(0, "!!! vfs_open_done: thread %d can't open more files!\n", pid);
 		decrease_refs(self, mode);
 		vfs_open_err(self);
@@ -372,11 +448,14 @@ vfs_open_done(pid_t pid, VNode self, fmode_t mode, int status) {
 	}
 
 	// store file in per process table
-	files[fd].vnode = self;
-	files[fd].fmode = mode;
-	files[fd].fp = 0;
+	vf[fd2].vnode = self;
+	vf[fd2].fmode = mode;
+	vf[fd2].fp = 0;
 
-	syscall_reply(process_get_tid(p), fd);
+	// store pointer to file in redirect table
+	fds[fd1] = fd2;
+
+	syscall_reply(process_get_tid(p), fd1);
 }
 
 /* Close a file */
@@ -385,35 +464,28 @@ vfs_close(pid_t pid, fildes_t file) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 	
 	// get file
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
+
+	decrease_refs(vf->vnode, vf->fmode);
+
+	int mode = vf->fmode;
+
+	// close the fds table entry
 	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
-
-	// get vnode
-	VNode vnode = vf[file].vnode;
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_close: invalid file handler: %d, %d\n", pid, file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
-
-	decrease_refs(vnode, vf[file].fmode);
-
-	int mode = vf[file].fmode;
+	process_get_fds(p)[file] = VFS_NIL_FILE;
 
 	// close file table entry
-	vf[file].vnode = NULL;
-	vf[file].fmode = 0;
-	vf[file].fp = 0;
+	VNode vnode = vf->vnode;
+	vf->vnode = NULL;
+	vf->fmode = 0;
+	vf->fp = 0;
 
 	// close vnode if no longer referenced
 	if (vnode->readers <= 0 && vnode->writers <= 0) {
 		vnode->close(pid, vnode, file, mode, vfs_close_done);
 	} else {
-		syscall_reply(process_get_tid(p), SOS_VFS_OK);
+		syscall_reply(PS_GET_TID(pid), SOS_VFS_OK);
 	}
 }
 
@@ -428,7 +500,7 @@ vfs_close_done(pid_t pid, VNode self, fildes_t file, fmode_t mode, int status) {
 		remove_vnode(self);
 		free_vnode(self);
 	}
-	syscall_reply(process_get_tid(process_lookup(pid)), status);
+	syscall_reply(PS_GET_TID(pid), status);
 }
 
 /* Read from a file */
@@ -437,26 +509,14 @@ vfs_read(pid_t pid, fildes_t file, char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_read: %d %d %p %d\n", pid, file, buf, nbyte);
 
 	// get file
-	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
-
-	// get vnode
-	VNode vnode = vf[file].vnode;
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 
 	// check permissions
-	if (!(vf[file].fmode & FM_READ)) {
+	if (!(vf->fmode & FM_READ)) {
 		dprintf(1, "*** vfs_read: invalid read permissions for file: %d, %d\n",
-				file, vf[file].fmode);
-		syscall_reply(process_get_tid(p), SOS_VFS_PERM);
+				file, vf->fmode);
+		syscall_reply(PS_GET_TID(pid), SOS_VFS_PERM);
 		return;
 	}
 	
@@ -466,7 +526,7 @@ vfs_read(pid_t pid, fildes_t file, char *buf, size_t nbyte) {
 		nbyte = IO_MAX_BUFFER;
 	}
 
-	vnode->read(pid, vnode, file, vf[file].fp, buf, nbyte, vfs_read_done);
+	vf->vnode->read(pid, vf->vnode, file, vf->fp, buf, nbyte, vfs_read_done);
 }
 
 /* Handle the file pointer in the file handler, status is set already by the fs layer
@@ -479,26 +539,21 @@ static
 void
 vfs_read_done(pid_t pid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
 		size_t nbyte, int status) {
-	dprintf(1, "*** vfs_read_done: %d %d %p %d %d\n", pid, file, buf,
-			nbyte, status);
+	dprintf(1, "*** vfs_read_done: %d %d %p %d %d\n", pid, file, buf, nbyte, status);
 
-	// get structs
-	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
+	// get file
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 	
 	// check no error
 	if (status < 0) {
-		syscall_reply(process_get_tid(p), status);
+		syscall_reply(PS_GET_TID(pid), status);
 		return;
 	}
 
 	// update file
-	vf[file].fp += nbyte;
-	syscall_reply(process_get_tid(p), status);
+	vf->fp += nbyte;
+	syscall_reply(PS_GET_TID(pid), status);
 }
 
 /* Write to a file */
@@ -506,34 +561,15 @@ void
 vfs_write(pid_t pid, fildes_t file, const char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_write: %d, %d %p %d\n", pid, file, buf, nbyte);
 
-	Process *p = process_lookup(pid);
-
-	if (file > PROCESS_MAX_FILES) {
-		dprintf(0, "!!! vfs_write: file handle (%d) is illegal\n", file); 
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
-
 	// get file
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
-
-	// get vnode
-	VNode vnode = vf[file].vnode;
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_write: invalid file handler: %d\n", file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 
 	// check permissions
-	if (!(vf[file].fmode & FM_WRITE)) {
+	if (!(vf->fmode & FM_WRITE)) {
 		dprintf(1, "*** vfs_write: invalid write permissions for file: %d, %s, %d\n",
-				file, vnode->path, vf[file].fmode);
-		syscall_reply(process_get_tid(p), SOS_VFS_PERM);
+				file, vf->vnode->path, vf->fmode);
+		syscall_reply(PS_GET_TID(pid), SOS_VFS_PERM);
 		return;
 	}
 
@@ -543,7 +579,7 @@ vfs_write(pid_t pid, fildes_t file, const char *buf, size_t nbyte) {
 		nbyte = IO_MAX_BUFFER;
 	}
 
-	vnode->write(pid, vnode, file, vf[file].fp, buf, nbyte, vfs_write_done);
+	vf->vnode->write(pid, vf->vnode, file, vf->fp, buf, nbyte, vfs_write_done);
 }
 
 /* Handle the file pointer in the file handler, status is set already by the fs layer
@@ -560,20 +596,16 @@ vfs_write_done(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
 			buf, nbyte, status);
 
 	if (status < 0) {
-		syscall_reply(process_get_tid(process_lookup(pid)), status);
+		syscall_reply(PS_GET_TID(pid), status);
 		return;
 	}
 	
 	// get file
-	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 	
-	vf[file].fp += nbyte;
-	syscall_reply_v(process_get_tid(p), 2, status, SOS_WRITE);
+	vf->fp += nbyte;
+	syscall_reply_v(PS_GET_TID(pid), 2, status, SOS_WRITE);
 }
 
 /* Flush a stream */
@@ -582,25 +614,11 @@ vfs_flush(pid_t pid, fildes_t file) {
 	dprintf(1, "*** vfs_flush: %d, %d\n", pid, file);
 
 	// get file
-	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
-
-	// get vnode to make sure file exists
-	VNode vnode = vf[file].vnode;
-
-	// make sure ok
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_seek: invalid file handler: %d, %d\n", pid, file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 
 	// flush
-	vnode->flush(pid, vnode, file);
+	vf->vnode->flush(pid, vf->vnode, file);
 }
 
 /* Seek to a position in a file */
@@ -609,38 +627,24 @@ vfs_lseek(pid_t pid, fildes_t file, fpos_t pos, int whence) {
 	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", pid, file, pos, whence);
 
 	// get file
-	Process *p = process_lookup(pid);
-	VFile *vf = process_get_files(p);
-	if (p == NULL || vf == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (vf %p)\n", p, vf);
-		return;
-	}
+	VFile *vf = get_vfile(pid, file);
+	if (vf == NULL) return;
 
-	// get vnode to make sure file exists
-	VNode vnode = vf[file].vnode;
-
-	// make sure ok
-	if (vnode == NULL) {
-		dprintf(1, "*** vfs_seek: invalid file handler: %d\n", file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
-		return;
-	}
-
-	dprintf(3, "vfs_seek: old fp %d\n", vf[file].fp);
+	dprintf(3, "vfs_seek: old fp %d\n", vf->fp);
 
 	if (whence == SEEK_SET) {
-		vf[file].fp = (L4_Word_t) pos;
+		vf->fp = (L4_Word_t) pos;
 	} else if (whence == SEEK_CUR) {
-		vf[file].fp += pos;
+		vf->fp += pos;
 	} else if (whence == SEEK_END) {
-		vf[file].fp = vnode->vstat.st_size - pos;
+		vf->fp = vf->vnode->vstat.st_size - pos;
 	} else {
 		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
 	}
 
-	dprintf(3, "vfs_seek: new fp %d\n", vf[file].fp);
+	dprintf(3, "vfs_seek: new fp %d\n", vf->fp);
 
-	syscall_reply(process_get_tid(p), SOS_VFS_OK);
+	syscall_reply(PS_GET_TID(pid), SOS_VFS_OK);
 }
 
 /* Get a directory listing */
@@ -650,7 +654,7 @@ vfs_getdirent(pid_t pid, int pos, char *name, size_t nbyte) {
 
 	// check
 	if (pos < 0 || nbyte <= 0 || name == NULL) {
-		syscall_reply(process_get_tid(process_lookup(pid)), SOS_VFS_ERROR);
+		syscall_reply(PS_GET_TID(pid), SOS_VFS_ERROR);
 		return;
 	}
 	
@@ -665,11 +669,11 @@ vfs_getdirent(pid_t pid, int pos, char *name, size_t nbyte) {
 				if (nlen < nbyte) {
 					memcpy(name, vnode->path, nlen);
 					name[nlen] = '\0';
-					syscall_reply(process_get_tid(process_lookup(pid)), nlen);
+					syscall_reply(PS_GET_TID(pid), nlen);
 				} else {
 					dprintf(0, "!!! vfs_getdirent: Filename too big for given buffer! (%d) (%d)\n",
 							nlen, nbyte);
-					syscall_reply(process_get_tid(process_lookup(pid)), SOS_VFS_NOMEM);
+					syscall_reply(PS_GET_TID(pid), SOS_VFS_NOMEM);
 				}
 				return;
 			}
@@ -704,14 +708,6 @@ void
 vfs_remove(pid_t pid, const char *path) {
 	dprintf(1, "*** vfs_remove: %d %s ***\n", pid, path);
 	
-	// get file
-	Process *p = process_lookup(pid);
-	VFile *files = process_get_files(p);
-	if (p == NULL || files == NULL) {
-		dprintf(0, "!!! Process doesn't seem to exist anymore! (p %p) (files %p)\n", p, files);
-		return;
-	}
-
 	// Check open vnodes
 	VNode vnode = find_vnode(path);
 	if (vnode != NULL) {
@@ -721,7 +717,7 @@ vfs_remove(pid_t pid, const char *path) {
 		if (!(vnode->vstat.st_fmode & FM_WRITE)) {
 			dprintf(1, "vnfs_remove: no write permission for file, can't remove (%d)\n",
 					vnode->vstat.st_fmode);
-			syscall_reply(process_get_tid(p), SOS_VFS_PERM);
+			syscall_reply(PS_GET_TID(pid), SOS_VFS_PERM);
 			return;
 		}
 
