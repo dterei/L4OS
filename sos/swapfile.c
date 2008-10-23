@@ -66,7 +66,7 @@ void swapfile_open(Swapfile *sf, int rights) {
 	dprintf(1, "*** swapfile_open path=%s rights=%d\n", sf->data.path, rights);
 	assert(sf->data.fd == VFS_NIL_FILE);
 
-	strncpy(pager_buffer(pager_get_tid()), sf->data.path, MAX_IO_BUF);
+	strncpy(pager_buffer(pager_get_tid()), sf->data.path, MAX_FILE_NAME);
 	open_lockNonblocking(NULL, rights | FM_NOTRUNC, SWAP_READERS, SWAP_WRITERS);
 }
 
