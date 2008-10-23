@@ -36,15 +36,13 @@ created with frame_alloc) as actual static data structures.
 - Check there are no side effects in assertions (so that we can disable them
 easily when we hand in).
 
-<<<<<<< HEAD:todo.txt
 - Replace assertions with killing/deleting the offending process.  Since, the
 failed assertions will probably be due to the process doing something stupid.
 
 - Page fault should invalidate cache?  But the cache is turned off...
 
 - Get rid of callbacks altogether in the structs?  Just use stack?
-=======
+
 - Forkbomb runs fine when just creating 1 process but forking out 2 each run causes a
 segmentation fork after a little while (around 30 processes).
->>>>>>> 4980de11128ff7333c642be3e5dd7a532b368d6e:todo.txt
 
