@@ -340,11 +340,11 @@ static int flood(int argc, char **argv) {
 	int size = (4096 - 32);
 	L4_Word_t *buf = (L4_Word_t*) malloc(size);
 
-	printf("---> memory for %s allocated at %p (%lu)\n",
-			argv[1], buf, (L4_Word_t) buf);
+	printf("---> memory allocated at %p (%lu)\n",
+			buf, (L4_Word_t) buf);
 
-	printf("---> memory for %s physically at %p\n",
-			argv[1], (void*) memloc((L4_Word_t) buf));
+	printf("---> memory physically at %p\n",
+			(void*) memloc((L4_Word_t) buf));
 
 	printf("---> stack (%p) is at %p\n",
 			&buf, (void*) memloc((L4_Word_t) &buf));

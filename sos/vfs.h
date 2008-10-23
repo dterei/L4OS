@@ -100,4 +100,7 @@ void vfs_stat(pid_t pid, const char *path, stat_t *buf);
 /* Remove a file */
 void vfs_remove(pid_t pid, const char *path);
 
+/* Get the file descriptor of an open file, or VFS_NIL_FILE if it isn't open */
+fildes_t vfs_getfd(pid_t pid, const char *path);
+
 #endif // sos/vfs.h

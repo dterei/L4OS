@@ -32,3 +32,5 @@ failed assertions will probably be due to the process doing something stupid.
 
 - Page fault should invalidate cache?  But the cache is turned off...
 
+- Get rid of callbacks altogether in the structs?  Just use stack?
+

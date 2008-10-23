@@ -331,7 +331,7 @@ int physuse(void) {
 }
 
 L4_Word_t memloc(L4_Word_t addr) {
-	return ipc_send_simple_0(vpager(), SOS_MEMLOC, YES_REPLY);
+	return ipc_send_simple_1(vpager(), SOS_MEMLOC, YES_REPLY, addr);
 }
 
 L4_ThreadId_t vpager(void) {
