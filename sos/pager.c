@@ -29,7 +29,7 @@
 #define ADDRESS_MASK PAGEALIGN
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 4
+#define FRAME_ALLOC_LIMIT 42
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -44,6 +44,7 @@ typedef struct MMap_t {
 	L4_Word_t memAddr;
 	L4_Word_t dskAddr;
 	size_t size;
+	int rights;
 	char path[MAX_FILE_NAME];
 } MMap;
 
@@ -56,6 +57,7 @@ typedef enum {
 	REQUEST_SWAPOUT,
 	REQUEST_SWAPIN,
 	REQUEST_MMAP_READ,
+	REQUEST_ELFLOAD,
 	REQUEST_READ,
 	REQUEST_WRITE,
 } rtype_t;
@@ -225,7 +227,7 @@ static void pagerFrameFree(Process *p, L4_Word_t frame) {
 
 static int framesFree(void *contents, void *data) {
 	Pair *curr = (Pair*) contents; // (pid, word)
-	Process *p = (Process*) data;  // (pid, word)
+	Process *p = (Process*) data;
 
 	if ((pid_t) curr->fst == process_get_pid(p)) {
 		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
@@ -234,6 +236,12 @@ static int framesFree(void *contents, void *data) {
 	} else {
 		return 0;
 	}
+}
+
+static int mmappedFree(void *contents, void *data) {
+	MMap *curr = (MMap*) contents;
+	Process *p = (Process*) data;
+	return (curr->pid == process_get_pid(p));
 }
 
 static L4_Word_t *allocFrames(int n) {
@@ -443,19 +451,20 @@ static ElfloadRequest *allocElfload(char *path, pid_t caller, pid_t child) {
 	return er;
 }
 
-static MMap *allocMMap(pid_t pid,
-		L4_Word_t memAddr, L4_Word_t dskAddr, size_t size, char *path) {
-	MMap *new = (MMap*) malloc(sizeof(MMap));
+static MMap *allocMMap(pid_t pid, L4_Word_t memAddr, L4_Word_t dskAddr,
+		size_t size, int rights, char *path) {
+	MMap *mmap = (MMap*) malloc(sizeof(MMap));
 
-	new->pid = pid;
-	new->memAddr = memAddr;
-	new->dskAddr = dskAddr;
-	new->size = size;
-	strncpy(new->path, path, MAX_FILE_NAME);
+	mmap->pid = pid;
+	mmap->memAddr = memAddr;
+	mmap->dskAddr = dskAddr;
+	mmap->size = size;
+	mmap->rights = rights;
+	strncpy(mmap->path, path, MAX_FILE_NAME);
 
 	printf("dont forget to free MMap too\n");
 
-	return new;
+	return mmap;
 }
 
 static void pagefaultFinish(Pagefault *fault) {
@@ -522,6 +531,7 @@ static int processDelete(L4_Word_t pid) {
 	args = PAIR(process_get_pid(p), ADDRESS_ALL);
 	list_delete(alloced, framesFree, p);
 	list_delete(swapped, pagerSwapslotFree, &args);
+	list_delete(mmapped, mmappedFree, &args);
 	pagetableFree(p);
 	list_iterate(process_get_regions(p), regionsFree, NULL);
 
@@ -608,7 +618,8 @@ static rtype_t pagefaultHandle(Pagefault *fault) {
 			__FUNCTION__, (void*) (fault->addr & PAGEALIGN), process_get_pid(p),
 			(void*) frame, region_get_rights(r));
 
-	mapPage(process_get_sid(p), fault->addr & PAGEALIGN, frame, region_get_rights(r));
+	mapPage(process_get_sid(p), fault->addr & PAGEALIGN, frame,
+			region_get_rights(r));
 
 	return REQUEST_NONE;
 }
@@ -657,14 +668,18 @@ static void pager2(Pagefault *fault) {
 	}
 }
 
-static void setRegionMMap(Process *p, Region *r, L4_Word_t addr) {
-	assert((addr & ~PAGEALIGN) == 0);
+static void setRegionMMap(Process *p, Region *r, L4_Word_t diskAddr,
+		size_t diskSize, char *path) {
+	assert((diskAddr & ~PAGEALIGN) == 0);
 	L4_Word_t *entry;
 	L4_Word_t base = region_get_base(r);
 
-	for (int size = 0; size < region_get_size(r); size += PAGESIZE) {
+	for (size_t size = 0; size < region_get_size(r); size += PAGESIZE) {
 		entry = pagetableLookup(process_get_pagetable(p), base + size);
-		*entry = (addr + size) | MMAP_MASK;
+		*entry = (diskAddr + size) | MMAP_MASK;
+		list_push(mmapped, allocMMap(process_get_pid(p), base + size,
+					diskAddr + size, min(PAGESIZE, diskSize - size),
+					region_get_rights(r), path));
 	}
 }
 
@@ -704,6 +719,8 @@ static void finishElfload(int success) {
 		syscall_reply(parent, -1);
 	} else {
 		p = process_init(PS_TYPE_PROCESS);
+		process_set_name(p, elfReq->path);
+		process_get_info(p)->pid = elfReq->child;
 
 		for (int i = 0; i < elf32_getNumProgramHeaders(header); i++) {
 			Region *r = region_alloc(
@@ -713,14 +730,10 @@ static void finishElfload(int success) {
 					elf32_getProgramHeaderFlags(header, i), 0);
 			diskAddr = elf32_getProgramHeaderOffset(header, i) & PAGEALIGN;
 			process_add_region(p, r);
-			setRegionMMap(p, r, diskAddr);
-			list_push(mmapped, allocMMap(
-					process_get_pid(p), region_get_base(r), diskAddr,
-					elf32_getProgramHeaderFileSize(header, i), elfReq->path));
+			setRegionMMap(p, r, diskAddr,
+					elf32_getProgramHeaderFileSize(header, i), elfReq->path);
 		}
 
-		process_set_name(p, elfReq->path);
-		process_get_info(p)->pid = elfReq->child;
 		process_prepare(p);
 		process_set_ip(p, (void*) elf32_getEntryPoint(header));
 		if (verbose > 1) process_dump(p);
@@ -1088,16 +1101,91 @@ static void startWrite(void) {
 	}
 }
 
-static void finishMMapRead(Request *req, int success) {
-	(void) finishMMapRead;
-	dprintf(2, "*** finishMMapRead\n");
-	assert(0);
+static int findMMap(void *contents, void *data) {
+	MMap *mmap = (MMap*) contents;
+	Pair *pair = (Pair*) data; // (pid, word)
+
+	printf("mmap: pid=%d, memAddr=%p, dskAddr=%p, size=%d, path=%s\n",
+			mmap->pid, (void*) mmap->memAddr, (void*) mmap->dskAddr,
+			mmap->size, mmap->path);
+
+	if ((mmap->pid == pair->fst) && (pair->snd >= mmap->memAddr) &&
+			(pair->snd < (mmap->memAddr + mmap->size))) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+static void finishMMapRead(int success) {
+	assert(success);
+	dprintf(1, "*** %s\n", __FUNCTION__);
+
+	Request *req = (Request*) list_peek(requests);
+	assert(req->type == REQUEST_READ);
+	ReadRequest *readReq = (ReadRequest*) req->data;
+
+	free(readReq);
+	dequeueRequest2();
 }
 
 static void startMMapRead(void) {
-	(void) startMMapRead;
 	dprintf(2, "*** startMMapRead\n");
-	assert(0);
+
+	Process *p;
+	Request *faultReq, *req;
+	Pagefault *fault;
+	ReadRequest *readReq;
+	Pair args;
+	L4_Word_t *entry;
+	L4_Word_t frame;
+	MMap *mmap;
+
+	// The data for the mmap comes from the head of the queue
+	faultReq = (Request*) list_peek(requests);
+	assert(faultReq->type == REQUEST_PAGEFAULT);
+	fault = (Pagefault*) faultReq->data;
+
+	p = process_lookup(fault->pid);
+
+	// Find the actual mmap
+	args = PAIR(process_get_pid(p), fault->addr);
+	mmap = (MMap*) list_find(mmapped, findMMap, &args);
+	assert(mmap != NULL);
+
+	// Reserve a temporary frame to read in to
+	frame = frame_alloc(FA_PAGERALLOC);
+	dprintf(2, "*** %s: temporary frame is %p\n", __FUNCTION__, (void*) frame);
+	memset((void*) frame, 0x00, PAGESIZE);
+
+	// Set up the read request
+	entry = pagetableLookup(process_get_pagetable(p), fault->addr);
+
+	dprintf(2, "*** %s: reading from %p in to %p\n", __FUNCTION__,
+			(void*) (*entry & ADDRESS_MASK), (void*) frame);
+
+	readReq = allocReadRequest(frame, *entry & ADDRESS_MASK,
+			mmap->size, mmap->path);
+	readReq->rights = mmap->rights;
+	readReq->alwaysOpen = (strcmp(mmap->path, SWAPFILE_FN) == 0); // hack
+	req = allocRequest(REQUEST_READ, readReq);
+	req->finish = finishMMapRead;
+
+	// Free the swapslot
+	if (strcmp(mmap->path, SWAPFILE_FN) == 0) {
+		args = PAIR(process_get_pid(p), *entry & ADDRESS_MASK);
+		list_delete(swapped, pagerSwapslotFree, &args);
+	}
+
+	// Update page table with temporary frame etc
+	dprintf(2, "*** %s: entry was %p, now ", __FUNCTION__, *entry);
+	*entry &= ~(ADDRESS_MASK | MMAP_MASK);
+	*entry |= frame | TEMP_MASK;
+	dprintf(2, "%p\n", *entry);
+
+	// Push the swapin to the head of the queue
+	list_shift(requests, req);
+	startRequest2();
 }
 
 static void startSwapin2(void) {
@@ -1222,6 +1310,11 @@ static void startPagefault(void) {
 			startSwapin2();
 			break;
 
+		case REQUEST_MMAP_READ:
+			// Need to read something from disk
+			startMMapRead();
+			break;
+
 		default:
 			assert(!"default");
 	}
@@ -1273,28 +1366,11 @@ static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
 
 	switch (((Request*) list_peek(requests))->type) {
-		case REQUEST_SWAPOUT:
-			dprintf(3, "*** demandPager: swapout continuation\n");
-			assert(0);
-			break;
-
-		case REQUEST_SWAPIN:
-			dprintf(3, "*** demandPager: swapin continuation\n");
-			assert(0);
-			break;
-
-		case REQUEST_ELFLOAD:
-			dprintf(3, "*** vfsHandler: elfload continuation\n");
-			assert(0);
-			break;
-
 		case REQUEST_READ:
-			dprintf(3, "*** vfsHandler: read continuation\n");
 			continueRead(vfsRval);
 			break;
 
 		case REQUEST_WRITE:
-			dprintf(3, "*** vfsHandler: write continuation\n");
 			continueWrite(vfsRval);
 			break;
 
@@ -1308,57 +1384,6 @@ static void pagerFlush(void) {
 		sos_print_error(L4_ErrorCode());
 		printf("!!! pager_flush: failed to unmap complete address space\n");
 	}
-}
-
-static L4_Word_t memoryMap(pid_t pid, L4_Word_t addr, size_t size,
-		fmode_t rights, char *path, off_t offset) {
-	Process *p;
-	L4_Word_t loc;
-	L4_Word_t *entry;
-	off_t curOffset;
-
-	// Some sanity checks
-	p = process_lookup(pid);
-
-	if ((offset & ~PAGEALIGN) != 0) {
-		return 0;
-	}
-
-	if (rights & FM_WRITE) {
-		dprintf(0, "!!! memoryMap: writing not supported\n");
-		return 0;
-	}
-
-	// Find out where to put the region
-	if (addr == 0) {
-		loc = process_append_region(p, size, rights);
-	} else {
-		if ((addr & ~PAGEALIGN) != 0) {
-			return 0;
-		} else {
-			process_add_region(p,
-					region_alloc(REGION_OTHER, addr, rights, size, 0));
-			loc = addr;
-		}
-	}
-
-	// Insert in to the tracked mmaps and page table
-	for (curOffset = 0; curOffset < size; curOffset += PAGESIZE) {
-		MMap *new = allocMMap(pid, addr + curOffset, offset + curOffset,
-				min(size - curOffset, PAGESIZE), path);
-		entry = pagetableLookup(process_get_pagetable(p), new->memAddr);
-
-		if ((*entry & ADDRESS_MASK) != 0) {
-			dprintf(0, "!!! memoryMap: %p for %d already appears as %p\n",
-					(void*) new->memAddr, pid, (void*) *entry);
-			free(new);
-		} else {
-			list_push(mmapped, new);
-			*entry = new->dskAddr | MMAP_MASK;
-		}
-	}
-
-	return loc;
 }
 
 static Pagefault *allocPagefault(pid_t pid, L4_Word_t addr, int rights,
@@ -1493,15 +1518,6 @@ static void virtualPagerHandler(void) {
 			case SOS_DEBUG_FLUSH:
 				pagerFlush();
 				syscall_reply_v(tid, 0);
-				break;
-
-			case SOS_MMAP:
-				syscall_reply(tid, (L4_Word_t) memoryMap(process_get_pid(p),
-						(L4_Word_t) L4_MsgWord(&msg, 0),
-						(size_t) L4_MsgWord(&msg, 1),
-						(fmode_t) L4_MsgWord(&msg, 2),
-						pager_buffer(tid),
-						(off_t) L4_MsgWord(&msg, 3)));
 				break;
 
 			case L4_EXCEPTION:

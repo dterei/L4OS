@@ -32,3 +32,5 @@ none left then kill the process using the most memory.
 
 - Fix the stat stuff in continueRead and continueWrite, why isn't it working?
 
+- Clear mmapped things on process delete
+
