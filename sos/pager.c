@@ -462,12 +462,14 @@ static int findPaRegion(void *contents, void *data) {
 
 /*
 static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
-	ElfloadRequest *er = (ElfloadRequest*) malloc(sizeof(ElfloadRequest));
+	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
 
-	er->stage = 0;
-	er->path = path;
-	er->fd = VFS_NIL_FILE;
-	er->parent = caller;
+	if (er != NULL) {
+		er->stage = 0;
+		er->path = path;
+		er->fd = VFS_NIL_FILE;
+		er->parent = caller;
+	}
 
 	return er;
 }
@@ -656,7 +658,7 @@ static void pager2(Pagefault *fault) {
 /*
 static void finishElfload(int rval) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
 
 	free(er);
@@ -688,7 +690,7 @@ static char *wordAlign(char *s) {
 
 /*
 static void continueElfload(int vfsRval) {
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	struct Elf32_Header *header;
 	char *buf;
 	stat_t *elfStat;
@@ -751,6 +753,7 @@ static void continueElfload(int vfsRval) {
 				}
 
 				process_set_name(p, er->path);
+				process_get_info(p)->pid = er->child;
 				process_prepare(p);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
@@ -778,7 +781,7 @@ static void startElfload(void) {
 	assert(requestsPeekType() == REQUEST_ELFLOAD);
 
 	// Open the file and let the continuation take over
-	ElfloadRequest *er = (ElfloadRequest*) requestsPeek();
+	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_IO_BUF);
 	openNonblocking(NULL, FM_READ | FM_WRITE);
 }
@@ -1389,7 +1392,9 @@ static void virtualPagerHandler(void) {
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
 	L4_ThreadId_t tid = L4_nilthread;
-	Process *p;
+	Process *p = NULL;;
+	//ElfloadRequest *er = NULL;
+	//pid_t pid = NIL_PID;
 	L4_Word_t tmp;
 
 	for (;;) {
@@ -1482,11 +1487,26 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_PROCESS_CREATE:
-				/*
-				queueRequest(REQUEST_ELFLOAD,
-						allocElfloadRequest(pager_buffer(tid), process_get_pid(p)));
-						*/
 				assert(0);
+				/*
+				pid = reserve_pid();
+				if (pid != NIL_PID) {
+					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p));
+				}
+
+				if (er == NULL || pid == NIL_PID) {
+					dprintf(0, "Out of processes!\n");
+					syscall_reply(tid, -1);
+					if (er != NULL) {
+						free(er);
+					}
+				} else {
+					er->child = pid;
+					queueRequest(REQUEST_ELFLOAD, er);
+				}
+				er = NULL;
+				pid = NIL_PID;
+				*/
 				break;
 
 			case SOS_DEBUG_FLUSH:
@@ -1519,6 +1539,8 @@ static void virtualPagerHandler(void) {
 		dprintf(3, "*** virtualPagerHandler: finished %s from %d\n",
 				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
 	}
+
+	dprintf(0, "!!! virtualPagerHandler: loop failed!\n");
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {
