@@ -1,9 +1,3 @@
-- Physical frames are being gradually consumed whenever processes are run.  Very
-odd.  Need to fix this, since it means eventually we will run out of memory...
-Just to do with new processes, (e.g internal sosh commands, even things such as
-cat'ing large files are fine). Always two frames it appears. Must be some resource
-not being freed properly.
-
 - The "DONT PANIC" assertion is getting fired.  I'm to to rewrite some of the
 ELF/swapping stuff anyway (to use mmap) so not worth fixing this yet.  Pretty
 rare anyway.
