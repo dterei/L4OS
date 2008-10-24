@@ -651,7 +651,7 @@ static void pager(PagerRequest *pr) {
 		pr->callback(pr);
 		if (!list_null(requests)) {
 			list_iterate(requests, printRequests, NULL);
-			startRequest();
+			//startRequest(); // XXX XXX XXX XXX BUG
 		}
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
