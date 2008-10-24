@@ -49,8 +49,9 @@ static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 	dprintf(3, "*** sosPagerHandler: addr=%p tid=%ld sender=%ld\n",
 			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
 
-	if (addr == 0) {
-		printf("SOS Segmentation fault (tid=%ld)\n", L4_ThreadNo(tid));
+	if ((addr & PAGEALIGN) == 0) {
+		printf("SOS Segmentation fault (addr=%p, tid=%ld)\n",
+			(void*) addr, L4_ThreadNo(tid));
 	}
 
 	addr &= PAGEALIGN;
@@ -187,7 +188,7 @@ main(void) {
 
 	// Spawn the setup thread which completes the rest of the initialisation,
 	// leaving this thread free to act as a pager and interrupt handler.
-	process_run_rootthread("sos_init", init_thread, YES_TIMESTAMP);
+	process_run_rootthread("sos_init", init_thread, YES_TIMESTAMP, 0);
 
 	dprintf(2, "*** main: about to start syscall loop\n");
 	syscall_loop();

@@ -54,6 +54,10 @@ Process *process_lookup(pid_t key) {
 	return sosProcs[key];
 }
 
+static int processExists(int pid) {
+	return !((sosProcs[pid] == NULL) || (sosProcs[pid] == PS_PLACEHOLDER));
+}
+
 static Process *processAlloc(void) {
 	Process *p = (Process*) malloc(sizeof(Process));
 
@@ -194,7 +198,8 @@ static pid_t getNextPid(void) {
 	pid_t oldPid = nextPid;
 	int firstIteration = 1;
 
-	while (sosProcs[nextPid] != NULL) {
+	//while (sosProcs[nextPid] != NULL) {
+	while (processExists(nextPid)) {
 		// Detect loop, no more pids!
 		if (!firstIteration && oldPid == nextPid) {
 			dprintf(0, "!!! getNextPid: none left\n");
@@ -211,7 +216,8 @@ static pid_t getNextPid(void) {
 		firstIteration = 0;
 	}
 
-	if (sosProcs[nextPid] != NULL) {
+	//if (sosProcs[nextPid] != NULL) {
+	if (processExists(nextPid)) {
 		return NIL_PID;
 	} else {
 		return nextPid;
@@ -248,21 +254,7 @@ L4_Word_t process_append_region(Process *p, size_t size, int rights) {
 	return base;
 }
 
-/* Uses a default stack size of 1 page, have to perform below steps manually if a larger
- * stack is needed.
- */
-Process *process_run_rootthread(const char *name, void *ip, int timestamp) {
-	Process *p = process_init(PS_TYPE_ROOTTHREAD);
-	process_prepare(p);
-	process_set_name(p, name);
-	process_set_ip(p, ip);
-	process_set_sp(p, (void *)
-			(frame_alloc(FA_STACK) + PAGESIZE - sizeof(L4_Word_t)));
-	process_run(p, timestamp);
-	return p;
-}
-
-L4_ThreadId_t process_run(Process *p, int timestamp) {
+static L4_ThreadId_t processRunPriority(Process *p, int timestamp, int prio) {
 	L4_ThreadId_t tid;
 	if (verbose > 2) process_dump(p);
 
@@ -271,7 +263,7 @@ L4_ThreadId_t process_run(Process *p, int timestamp) {
 	}
 
 	if (p->info.ps_type == PS_TYPE_ROOTTHREAD) {
-		tid = sos_thread_new(process_get_tid(p), p->ip, p->sp);
+		tid = sos_thread_new_priority(process_get_tid(p), prio, p->ip, p->sp);
 	} else if (pager_is_active()) {
 		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
 	} else {
@@ -285,6 +277,24 @@ L4_ThreadId_t process_run(Process *p, int timestamp) {
 	process_set_state(p, PS_STATE_ALIVE);
 
 	return tid;
+}
+
+/* Uses a default stack size of 1 page, have to perform below steps manually if a larger
+ * stack is needed.
+ */
+Process *process_run_rootthread(const char *name, void *ip, int ts, int prio) {
+	Process *p = process_init(PS_TYPE_ROOTTHREAD);
+	process_prepare(p);
+	process_set_name(p, name);
+	process_set_ip(p, ip);
+	process_set_sp(p, (void *)
+			(frame_alloc(FA_STACK) + PAGESIZE - sizeof(L4_Word_t)));
+	processRunPriority(p, ts, prio);
+	return p;
+}
+
+L4_ThreadId_t process_run(Process *p, int timestamp) {
+	return processRunPriority(p, timestamp, 0);
 }
 
 pid_t process_get_pid(Process *p) {
@@ -314,7 +324,8 @@ List *process_get_regions(Process *p) {
 
 static void wakeAll(pid_t wakeFor, pid_t wakeFrom) {
 	for (pid_t i = tidOffset; i < MAX_ADDRSPACES; i++) {
-		if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
+		//if ((sosProcs[i] != NULL) && (sosProcs[i]->waitingOn == wakeFor)) {
+		if (processExists(i) && (sosProcs[i]->waitingOn == wakeFor)) {
 			sosProcs[i]->waitingOn = WAIT_NOBODY;
 			process_set_state(sosProcs[i], PS_STATE_ALIVE);
 			syscall_reply(process_get_tid(sosProcs[i]), wakeFrom);
@@ -384,7 +395,8 @@ int process_write_status(process_t *dest, int n) {
 	// Everything else has size dynamically updated, so just
 	// write them all out
 	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		if (sosProcs[i] != NULL && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
+		//if (sosProcs[i] != NULL && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
+		if (processExists(i) && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
 			dest++;

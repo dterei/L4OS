@@ -148,7 +148,7 @@ nfsfs_init(void) {
 	NfsRequests = list_empty();
 	
 	/* Run the nfs time out thread */
-	process_run_rootthread("nfs_timeout", nfsfs_timeout_thread, YES_TIMESTAMP);
+	process_run_rootthread("nfs_timeout", nfsfs_timeout_thread, YES_TIMESTAMP, 0);
 	
 	return 0;
 }
