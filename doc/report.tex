@@ -26,25 +26,25 @@
 
 \tableofcontents{}
 
-%%%%%%%
-% ETC %
-%%%%%%%
+%%%%%%%%
+% TODO %
+%%%%%%%%
 
 \newpage{}
-\section{Etc}
+\section{TODO}
 
 \begin{itemize}
-\item 0: serial sending
-\item 1: frame table
-\item 2: page table
 \item 3: system call interface
 \item 4: NFS
 \item 5: demand paging
-\item 6: timer driver
+\item 6: timer driver?
 \item 7: process management
 \item 8: ELF loading
-\item 9: documentation
 \end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%
+% MEMORY MANAGEMENT %
+%%%%%%%%%%%%%%%%%%%%%
 
 \section{Memory management}
 
@@ -56,11 +56,11 @@ The page table is a lazy, two level page table.
 #define PAGEWORDS (PAGESIZE / sizeof(L4_Word_t))
 
 typedef struct  {
-	L4_Word_t pages[PAGEWORDS];
+    L4_Word_t pages[PAGEWORDS];
 } Pagetable2;
 
 typedef struct {
-	Pagetable2 *pages2[PAGEWORDS];
+    Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
 \end{verbatim}
 
@@ -76,13 +76,13 @@ Regions are managed with a linked list of \texttt{Region} structs.
 
 \begin{verbatim}
 struct Region_t {
-	region_type type;
-	uintptr_t base;
-	unsigned int size;
-	unsigned int filesize;
-	int rights;
-	int mapDirectly;
-	Swapfile *elffile;
+    region_type type;
+    uintptr_t base;
+    unsigned int size;
+    unsigned int filesize;
+    int rights;
+    int mapDirectly;
+    Swapfile *elffile;
 };
 \end{verbatim}
 
@@ -91,7 +91,7 @@ struct Region_t {
 \item \texttt{base}, \texttt{size}, and \texttt{rights} are the self explanitory.
 \item \texttt{filesize} is the size of the region as it appears on file, important for ELF loading.
 \item \texttt{mapDirectly} is solely important for programs loaded from bootinfo, which require their text and data sections to be 1:1 mapped to physical memory.
-\item \texttt{elffile} is the ELF file the region is located on, represented as a swap file (see Section \ref{sub:demandpaging}).
+\item \texttt{elffile} is the ELF file the region is located on, represented as a swap file (see Section \ref{sub:demand_paging}).
 \end{itemize}
 
 \subsection{Page fault mechanism}
@@ -101,10 +101,10 @@ The page fault mechanism is as follows:
 \item The faulting region is located.  If no region is found, or if the type of access which causes the fault (read/write/exec) is illegal, the faulting process is killed (see Section \ref{sub:process_delete}).
 \item If the faulting address is on disk, the page fault is added to the ``blocking'' queue to be dealt with asynchronously.\item If the faulting address needs to be 1:1 mapped, the mapping is immediately made.
 \item Otherwise, a frame attempts to be allocated for the fault.  If there are no free frames, the fault is again delayed for later.
-\item Assuming nothing is delayed, the reference bit is set (for the second chance algorithm, Section \ref{sub:secondchange}) and the mapping made.
+\item Assuming nothing is delayed, the reference bit is set (for the second chance algorithm, Section \ref{sub:second_change}) and the mapping made.
 \end{enumerate}
 
-Specific discussion of the asynchronous paging mechanism, see Section \ref{sub:demandpaging}.
+Specific discussion of the asynchronous paging mechanism, see Section \ref{sub:demand_paging}.
 
 \subsection{Kernel memory}
 
@@ -112,15 +112,38 @@ The kernel is designed in such a way that it assumes it can always allocate fram
 
 This policy has several advantages.  The kernel can run out of physical memory, not virtual, and it requires no complicated IO in order to safely do so.  The kernel can easily allocate temporary frames, useful when creating processes and for ``pinning'' frames to ensure fairness when swapping out.  This also makes testing the memory management easy, by setting the alloc limit very low.
 
-\subsection{Demand paging} \label{sub:demandpaging}
+\subsection{Pager thread}
+
+It is worth noting that there are no kernel threads, with the exception of those used for network, initialisation, and \emph{paging}.
+
+The decision to put the pager in its own thread was made for the following reasons:
+\begin{itemize}
+\item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer''.  See Section \ref{sub:system_call_interface}} orthogonal, so operations in the pager can happen simultaneously with the rootserver, (theoretically) without race conditions.
+\item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Overall, this is used to implement the asynchronous IO used in the pager.
+\item It is necessary for the pager to be able to access all of physical memory, most notably for copyin/copyout (see Section \ref{sub:copyin_copyout}).  Without careful management (or a brute force approach), this would cause root task pagefaults.  Instead, this allows the root task to act as the pager for the pager and manage memory accordingly.
+\end{itemize}
+
+\subsection{Demand paging} \label{sub:demand_paging}
 
 \subsection{Pager thread}
 
-\section{System calls}
+%%%%%%%%%%%%%%%%%%%%%%%%%
+% SYSTEM CALL INTERFACE %
+%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Copyin/copyout}
+\section{System call interface}
+
+\subsection{Copyin/Copyout}
+
+%%%%%%%
+% VFS %
+%%%%%%%
 
 \section{VFS}
+
+%%%%%%%%%%%%%%%%%%%%%%
+% PROCESS MANAGEMENT %
+%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Process management}
 
