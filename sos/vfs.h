@@ -3,8 +3,6 @@
 
 #include <sos/sos.h>
 
-#define VFS_NIL_FILE ((fildes_t) (-1))
-
 /* Simple VFS-style vnode */
 typedef struct VNode_t *VNode;
 
@@ -58,6 +56,8 @@ typedef struct {
 	L4_Word_t fp;
 } VFile;
 
+#define STDOUT_FN "console"
+#define STDIN_FN "console"
 
 /* System call implementations */
 /* See sos.h for more detail */
@@ -99,6 +99,9 @@ void vfs_stat(pid_t pid, const char *path, stat_t *buf);
 
 /* Remove a file */
 void vfs_remove(pid_t pid, const char *path);
+
+/* Duplicate the given file descriptor to the one specified */
+void vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup);
 
 /* Test is a file is open (internal SOS function) */
 int vfs_isopen(VFile *file);

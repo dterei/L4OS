@@ -39,6 +39,11 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 		return;
 	}
 
+	// don't ipc threads that don't want it
+	if (process_get_ipcfilt(p) == PS_IPC_NONE) {
+		return;
+	}
+
 	CACHE_FLUSH_ALL();
 
 	// ignore if process is a zombie, IPC is probably due to rootserver
@@ -101,8 +106,35 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 					(unsigned int) L4_MsgWord(msg, 2));
 			break;
 
+		/* SOS ADDRESSPACE PRIVATE SYSCALL */
+		/* Private root threads only syscall allowing open to be emulated as coming from a specified
+		 * process.
+		 */
+		case PSOS_OPEN: 
+			// check valid caller
+			if (process_get_info(process_lookup(L4_ThreadNo(tid)))->ps_type != PS_TYPE_ROOTTHREAD) {
+				syscall_reply(tid, -1);
+			} else {
+				vfs_open(L4_MsgWord(msg, 3),
+						pager_buffer(process_get_tid(process_lookup(L4_MsgWord(msg, 3)))),
+						(fmode_t) L4_MsgWord(msg, 0),
+						(unsigned int) L4_MsgWord(msg, 1),
+						(unsigned int) L4_MsgWord(msg, 2));
+			}
+			break;
+
 		case SOS_CLOSE:
 			vfs_close(L4_ThreadNo(tid), (fildes_t) L4_MsgWord(msg, 0));
+			break;
+
+		/* SOS ADDRESSPACE PRIVATE SYSCALL */
+		case PSOS_CLOSE: 
+			// check valid caller
+			if (process_get_info(process_lookup(L4_ThreadNo(tid)))->ps_type != PS_TYPE_ROOTTHREAD) {
+				syscall_reply(tid, -1);
+			} else {
+				vfs_close(L4_MsgWord(msg, 1), (fildes_t) L4_MsgWord(msg, 0));
+			}
 			break;
 
 		case SOS_READ:
@@ -122,6 +154,16 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 		case SOS_FLUSH:
 			vfs_flush(L4_ThreadNo(tid),
 					(fildes_t) L4_MsgWord(msg, 0));
+			break;
+
+		/* SOS ADDRESSPACE PRIVATE SYSCALL */
+		case PSOS_FLUSH: 
+			// check valid caller
+			if (process_get_info(process_lookup(L4_ThreadNo(tid)))->ps_type != PS_TYPE_ROOTTHREAD) {
+				syscall_reply(tid, -1);
+			} else {
+				vfs_flush(L4_MsgWord(msg, 1), (fildes_t) L4_MsgWord(msg, 0));
+			}
 			break;
 
 		case SOS_LSEEK:
@@ -146,6 +188,22 @@ syscall_handle(L4_MsgTag_t tag, L4_ThreadId_t tid, L4_Msg_t *msg)
 
 		case SOS_REMOVE:
 			vfs_remove(L4_ThreadNo(tid), pager_buffer(tid));
+			break;
+
+		case SOS_DUP:
+			vfs_dup(L4_ThreadNo(tid), (fildes_t) L4_MsgWord(msg, 0),
+					(fildes_t) L4_MsgWord(msg, 1));
+			break;
+
+		/* SOS ADDRESSPACE PRIVATE SYSCALL */
+		case PSOS_DUP: 
+			// check valid caller
+			if (process_get_info(process_lookup(L4_ThreadNo(tid)))->ps_type != PS_TYPE_ROOTTHREAD) {
+				syscall_reply(tid, -1);
+			} else {
+				vfs_dup(L4_MsgWord(msg, 2), (fildes_t) L4_MsgWord(msg, 0),
+						(fildes_t) L4_MsgWord(msg, 1));
+			}
 			break;
 
 		case SOS_TIME_STAMP:
