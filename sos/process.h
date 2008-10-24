@@ -49,6 +49,10 @@ void process_set_ip(Process *p, void *ip);
 // Prepare a process to be run
 void process_prepare(Process *p);
 
+// Prepare a process to be run, sets the new processes stdfds to the fds specified
+// of the parent process
+void process_prepare2(Process *p, Process *parent, fildes_t fdout, fildes_t fderr, fildes_t fdin);
+
 // Start a new root thread (Stack size of a page).
 Process *process_run_rootthread(const char *name, void *ip, int timestamp);
 
@@ -69,6 +73,12 @@ L4_ThreadId_t process_get_tid(Process *p);
 
 // Get the spaceid of a process
 L4_SpaceId_t process_get_sid(Process *p);
+
+// Get the stdin redirectin setting of a process
+fildes_t process_get_stdin(Process *p);
+
+// Set the stdin redirectin setting of a process
+fildes_t process_set_stdin(Process *p, fildes_t in);
 
 // Get the page table of a process
 Pagetable *process_get_pagetable(Process *p);

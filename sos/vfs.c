@@ -353,6 +353,25 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 		return;
 	}
 
+	// check for stdin redirection
+	if (strncmp(path, STDIN_FN, MAX_FILE_NAME) == 0) {
+		fildes_t in = process_get_stdin(p);
+		if (in != VFS_NIL_FILE) {
+			process_ipcfilt_t oldfilt = process_get_ipcfilt(p);
+			process_set_ipcfilt(p, PS_IPC_NONE);
+			VFile *vf = get_vfile(pid, in);
+			process_set_ipcfilt(p, oldfilt);
+
+			if (vf != NULL) {
+				syscall_reply(process_get_tid(p), in);
+				return;
+			} else {
+				// broken so remove and open normal stdin
+				process_set_stdin(p, VFS_NIL_FILE);
+			}
+		}
+	}
+
 	// Check open vnodes (special files are stored here)
 	vnode = find_vnode(path);
 
@@ -727,6 +746,48 @@ vfs_remove(pid_t pid, const char *path) {
 	// not open so assume nfs
 	else {
 		nfsfs_remove(pid, NULL, path);
+	}
+}
+
+/* Duplicate the given file descriptor to the one specified */
+void
+vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
+	// get file
+	if (get_vfile(pid, forig) == NULL) return;
+
+	Process *p = process_lookup(pid);
+
+	if (fdup < 0 || (fdup >= PROCESS_MAX_FDS && fdup != VFS_NIL_FILE)) {
+		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		return;
+	}
+
+	fildes_t *fds = process_get_fds(p);
+
+	if (fdup == VFS_NIL_FILE) {
+		for (int i = 0; i < PROCESS_MAX_FDS; i++) {
+			if (fds[i] == VFS_NIL_FILE) {
+				fds[i] = fds[forig];
+				fdup = i;
+				break;
+			}
+		}
+	} else {
+		VFile *dvf = get_vfile(pid, fdup);
+		if (dvf != NULL) {
+			// change filter to none so we can close the file first
+			process_ipcfilt_t oldfilt = process_get_ipcfilt(p);
+			process_set_ipcfilt(p, PS_IPC_NONE);
+			vfs_close(pid, fdup);
+			process_set_ipcfilt(p, oldfilt);
+		}
+		fds[fdup] = fds[forig];
+	}
+
+	if (fdup == VFS_NIL_FILE) {
+		syscall_reply(process_get_tid(p), SOS_VFS_NOMORE);
+	} else {
+		syscall_reply(process_get_tid(p), fdup);
 	}
 }
 

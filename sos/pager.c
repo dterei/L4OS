@@ -99,6 +99,9 @@ typedef struct {
 	fildes_t fd; // file descriptor (when opened)
 	pid_t parent; // pid of the process that made the request
 	pid_t child; // pid of the process created
+	fildes_t fdout;
+	fildes_t fderr;
+	fildes_t fdin;
 } ElfloadRequest;
 
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
@@ -447,7 +450,8 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 	return newPr;
 }
 
-static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
+static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller,
+		fildes_t fdout, fildes_t fderr, fildes_t fdin) {
 	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
 
 	if (er != NULL) {
@@ -455,6 +459,9 @@ static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller) {
 		strncpy(er->path, path, MAX_FILE_NAME);
 		er->fd = VFS_NIL_FILE;
 		er->parent = caller;
+		er->fdout = fdout;
+		er->fderr = fderr;
+		er->fdin = fdin;
 	}
 
 	return er;
@@ -1306,7 +1313,8 @@ static void virtualPagerHandler(void) {
 			case SOS_PROCESS_CREATE:
 				pid = reserve_pid();
 				if (pid != NIL_PID) {
-					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p));
+					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p),
+							L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1), L4_MsgWord(&msg, 2));
 				}
 
 				if (er == NULL || pid == NIL_PID) {

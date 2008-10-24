@@ -29,6 +29,7 @@ typedef enum {
         SOS_GETDIRENT,
         SOS_STAT,
         SOS_REMOVE,
+		  SOS_DUP,
         SOS_PROCESS_CREATE,
         SOS_PROCESS_DELETE,
         SOS_MY_ID,
@@ -43,6 +44,7 @@ typedef enum {
         SOS_MEMLOC,
         SOS_MMAP,
         SOS_SHARE_VM,
+		  SOS_NULL, // Ensure this stays at the end, its a place holder for max SOS syscall
         L4_PAGEFAULT = ((L4_Word_t) -2),
         L4_INTERRUPT = ((L4_Word_t) -1),
         L4_EXCEPTION = ((L4_Word_t) -5)
@@ -62,6 +64,8 @@ typedef uint8_t fmode_t;
 #define O_RDWR   (FM_READ|FM_WRITE)
 
 #define FM_UNLIMITED_RW ((unsigned int) (-1))
+
+#define VFS_NIL_FILE ((fildes_t) (-1))
 
 /* stat file types */
 typedef enum {
@@ -91,6 +95,7 @@ typedef int fildes_t;
 
 /* The FD to which printf() will ultimately write() */
 extern fildes_t stdout_fd;
+extern fildes_t stderr_fd;
 extern fildes_t stdin_fd;
 
 /* Max size of a filename */
@@ -116,6 +121,7 @@ typedef enum {
 	PS_IPC_NONBLOCKING, // Only accept non blocking IPC
 	PS_IPC_ALL, // Accept all IPC
 	PS_IPC_BLOCKING, // Only accept blocking IPC
+	PS_IPC_NONE, // Don't IPC thread at all
 } process_ipcfilt_t;
 
 /* Process info struct */
@@ -276,11 +282,35 @@ void statNonblocking(void);
  */
 int fremove(const char *path);
 
+/* Duplicate an open file handler to given a second file handler which points
+ * to the same open file. The two file handlers point to the same open file
+ * and so share the same offset pointer and open mode.
+ */
+
+/* This method returns the first free file descriptor slot found as the duplicate */
+int dup(fildes_t file);
+
+/* This method duplicate file to a file descriptor newfile. If newfile is already in
+ * use then it is closed.
+ */
+int dup2(fildes_t file, fildes_t newfile);
+
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
  * file).
  */
 pid_t process_create(const char *path);
+
+/* Create a new process running the executable image "path".
+ *
+ * Sets the new processes stdout, stderr and stdin to the file descriptors
+ * specified. Using a value of VFS_NIL_FILE for any of them causes the system
+ * default to be used.
+ * 
+ * Returns ID of new process, -1 if error (non-executable image, nonexisting
+ * file).
+ */
+pid_t process_create2(const char *path, fildes_t fdout, fildes_t fderr, fildes_t fdin);
 
 /* Delete process (and close all its file descriptors).
  * Returns 0 if successful, -1 otherwise (invalid process).

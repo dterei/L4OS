@@ -10,6 +10,7 @@
 #include <sos/ipc.h>
 
 fildes_t stdout_fd = 0;
+fildes_t stderr_fd = 1;
 fildes_t stdin_fd = (-1); // never used, grr
 
 char *syscall_show(syscall_t syscall) {
@@ -243,6 +244,23 @@ void statNonblocking(void) {
 	ipc_send_simple_0(L4_rootserver, SOS_STAT, NO_REPLY);
 }
 
+/* Duplicate an open file handler to given a second file handler which points
+ * to the same open file. The two file handlers point to the same open file
+ * and so share the same offset pointer and open mode.
+ */
+
+/* This method returns the first free file descriptor slot found as the duplicate */
+int dup(fildes_t file) {
+	return dup2(file, VFS_NIL_FILE);
+}
+
+/* This method duplicate file to a file descriptor newfile. If newfile is already in
+ * use then it is closed.
+ */
+int dup2(fildes_t file, fildes_t newfile) {
+	return ipc_send_simple_2(L4_rootserver, SOS_DUP, YES_REPLY, file, newfile);
+}
+
 /* Removees the specified file "path".
  * Returns - if successful, -1 otherwise (invalid name).
  */
@@ -259,9 +277,21 @@ int fremove(const char *path) {
  * file).
  */
 pid_t process_create(const char *path) {
+	return process_create2(path, VFS_NIL_FILE, VFS_NIL_FILE, VFS_NIL_FILE);
+}
+
+/* Create a new process running the executable image "path".
+ *
+ * Sets the new processes stdout, stderr and stdin to the file descriptors
+ * specified.
+ * 
+ * Returns ID of new process, -1 if error (non-executable image, nonexisting
+ * file).
+ */
+pid_t process_create2(const char *path, fildes_t fdout, fildes_t fderr, fildes_t fdin) {
 	copyin((void*) path, strlen(path) + 1, 0);
 
-	return (pid_t) ipc_send_simple_0(vpager(), SOS_PROCESS_CREATE, YES_REPLY);
+	return (pid_t) ipc_send_simple_3(vpager(), SOS_PROCESS_CREATE, YES_REPLY, fdout, fderr, fdin);
 }
 
 /* 
