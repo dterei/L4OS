@@ -250,14 +250,14 @@ void statNonblocking(void) {
  */
 
 /* This method returns the first free file descriptor slot found as the duplicate */
-int dup(fildes_t file) {
+fildes_t dup(fildes_t file) {
 	return dup2(file, VFS_NIL_FILE);
 }
 
 /* This method duplicate file to a file descriptor newfile. If newfile is already in
  * use then it is closed.
  */
-int dup2(fildes_t file, fildes_t newfile) {
+fildes_t dup2(fildes_t file, fildes_t newfile) {
 	return ipc_send_simple_2(L4_rootserver, SOS_DUP, YES_REPLY, file, newfile);
 }
 

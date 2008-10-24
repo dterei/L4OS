@@ -752,12 +752,14 @@ vfs_remove(pid_t pid, const char *path) {
 /* Duplicate the given file descriptor to the one specified */
 void
 vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
+	dprintf(1, "*** vfs_dup: %d, %d, %d\n", pid, forig, fdup);
+
 	// get file
 	if (get_vfile(pid, forig) == NULL) return;
 
 	Process *p = process_lookup(pid);
 
-	if (fdup < 0 || (fdup >= PROCESS_MAX_FDS && fdup != VFS_NIL_FILE)) {
+	if ((fdup < 0 || fdup >= PROCESS_MAX_FDS) && fdup != VFS_NIL_FILE) {
 		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
 		return;
 	}
