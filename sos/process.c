@@ -247,7 +247,7 @@ static void openStdFd(Process *p, Process *parent, fildes_t fd, char *stdfile) {
 		}
 
 		if (file != NULL) {
-			strncpy(pager_buffer(process_get_tid(p)), file, MAX_IO_BUF);
+			strncpy(pager_buffer(process_get_tid(p)), file, COPY_BUFSIZ);
 			ipc_send_simple_4(L4_rootserver, PSOS_OPEN, NO_REPLY, FM_WRITE,
 					FM_UNLIMITED_RW, FM_UNLIMITED_RW, process_get_pid(p));
 		}
@@ -381,8 +381,10 @@ void process_close_files(Process *p) {
 	} else {
 		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
 			if (vfs_isopen(&(p->files[fd]))) {
-				vfs_flush(process_get_pid(p), fd);
-				vfs_close(process_get_pid(p), fd);
+				ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, NO_REPLY, fd,
+						process_get_pid(p));
+				ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, NO_REPLY, fd,
+						process_get_pid(p));
 			}
 		}
 	}

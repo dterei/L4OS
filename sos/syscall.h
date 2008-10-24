@@ -16,6 +16,8 @@ typedef enum {
 	// Open syscall that can be used by the pager to emulate an SOS_OPEN call from a specified process
 	PSOS_OPEN = SOS_NULL + 1,
 	PSOS_DUP,
+	PSOS_FLUSH,
+	PSOS_CLOSE,
 } psyscall_t;
 
 void syscall_reply(L4_ThreadId_t tid, L4_Word_t rval);
