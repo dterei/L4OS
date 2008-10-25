@@ -94,7 +94,7 @@ utimer_init(void)
 	}
 
 	// Start the idler
-	utimer_p = process_run_rootthread("utimer", utimer, NO_TIMESTAMP);	
+	utimer_p = process_run_rootthread("utimer", utimer, NO_TIMESTAMP, 0);
 	utimer_tid = process_get_tid(utimer_p);
 }
 

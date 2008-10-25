@@ -54,7 +54,7 @@ void process_prepare(Process *p);
 void process_prepare2(Process *p, Process *parent, fildes_t fdout, fildes_t fderr, fildes_t fdin);
 
 // Start a new root thread (Stack size of a page).
-Process *process_run_rootthread(const char *name, void *ip, int timestamp);
+Process *process_run_rootthread(const char *name, void *ip, int ts, int prio);
 
 // Run a process
 L4_ThreadId_t process_run(Process *p, int timestamp);

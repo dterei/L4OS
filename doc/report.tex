@@ -1,18 +1,17 @@
 \documentclass[12pt,english]{article}
-\usepackage[T1]{fontenc}
-\usepackage[latin9]{inputenc}
 \usepackage{geometry}
-\geometry{verbose,a4paper,tmargin=2cm,bmargin=2cm,lmargin=2cm,rmargin=2cm}
+\geometry{a4paper,tmargin=2cm,bmargin=2cm,lmargin=2cm,rmargin=2cm}
 \setcounter{secnumdepth}{3}
 \setcounter{tocdepth}{3}
 \setlength{\parskip}{\bigskipamount}
 \setlength{\parindent}{0pt}
-\usepackage{amssymb}
 \usepackage{setspace}
-\usepackage{verbatim}
 \onehalfspacing
 \usepackage{babel}
 \usepackage{graphicx}
+\usepackage{verbatim}
+\usepackage{listings}
+\usepackage{amsmath}
 
 \begin{document}
 
@@ -99,9 +98,10 @@ struct Region_t {
 The page fault mechanism is as follows:
 \begin{enumerate}
 \item The faulting region is located.  If no region is found, or if the type of access which causes the fault (read/write/exec) is illegal, the faulting process is killed (see Section \ref{sub:process_delete}).
-\item If the faulting address is on disk, the page fault is added to the ``blocking'' queue to be dealt with asynchronously.\item If the faulting address needs to be 1:1 mapped, the mapping is immediately made.
+\item If the faulting address is on disk, the page fault is added to the ``blocking'' queue to be dealt with asynchronously.  Note that in this case the faulting process is not woken up.
+\item If the faulting address needs to be 1:1 mapped, the mapping is immediately made.
 \item Otherwise, a frame attempts to be allocated for the fault.  If there are no free frames, the fault is again delayed for later.
-\item Assuming nothing is delayed, the reference bit is set (for the second chance algorithm, Section \ref{sub:second_change}) and the mapping made.
+\item Assuming nothing is delayed, the reference bit is set, the mapping made, and the faulting process woken.
 \end{enumerate}
 
 Specific discussion of the asynchronous paging mechanism, see Section \ref{sub:demand_paging}.
@@ -123,9 +123,43 @@ The decision to put the pager in its own thread was made for the following reaso
 \item It is necessary for the pager to be able to access all of physical memory, most notably for copyin/copyout (see Section \ref{sub:copyin_copyout}).  Without careful management (or a brute force approach), this would cause root task pagefaults.  Instead, this allows the root task to act as the pager for the pager and manage memory accordingly.
 \end{itemize}
 
+Several other types of system calls are also handled by the pager, including all process management system calls.  This is necessary as process management is closely linked to memory management, and race conditions arise otherwise.  The division of system call work is discussed further in Section \ref{sub:system_call_interface}.
+
 \subsection{Demand paging} \label{sub:demand_paging}
 
-\subsection{Pager thread}
+The process of demand paging is slightly complicated, and encompasses nearly all asynchronous requests in the pager, including the lazy ELF loading.  For now however, just \emph{swapping in} and \emph{swapping out} will be covered, with ELF loading described in Section \ref{sub:elf_loading}.
+
+\subsubsection{Delayed page faults}
+
+As described in the page fault algorithm, there are two cases when a page fault is delayed: if the page is on disk, or if there are no free frames.  These are simply delayed as a ``pager request'' and added to a queue of asynchronous (blocking) requests to be dealt with sequentially.
+
+This asynchronous queue is managed as follows:
+\begin{enumerate}
+\item Upon adding a request to the queue, if it is currently empty the request at the head is immediately started.
+\item When started, the original page fault request is attempted again.  In the meantime, a frame might have been freed (for example, if a process died) or the frame might have already been swapped in (for example, if we had implemented shared memory).
+\item Assuming the page fault must again block, a sequence of callbacks is immediately started.  A decision is made: if the request simply required a free frame, a \emph{swap out} request is made.  Otherwise, a \emph{swap in} request is made.  These are each described separately below.
+\item In either case, upon finishin the page request is dequeued.  If the asynchronous request queue is not empty then the next one started.
+\end{enumerate}
+
+The sequential nature of the blocking requests is so that all replies from the root server are unambiguous, and indeed happen sequentially such that continuation state is simply a counter.  There is no blocking, as while waiting for a reply from the root server all other requests to the pager.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
+
+\subsubsection{Swapping out}
+
+Swapping a page out involves the following steps:
+\begin{itemize}
+\item A page is chosen to swap out using the second chance algorithm.  The algorithm is well known so not worth explaining here, but as as reminder the reference bit is kept in the lower 12 bits of every page table entry.  When this bit is unset, the page is also unmapped so that a fault will occur when (or if) later referenced.
+\item A \emph{swap out request} is pushed to the heap of the request queue, then the request started.
+\item A slot in the swap file is allocated in a process similar to frame allocation.
+\item The swap out request will open (non blocking) the relevant swap file given in the region list (although currently always ``.swap'').  This sets of a chain of continuations which open, lseek, write, then close the file in sequential order.
+\item On finishing: the frame is freed, swap out request dequeued, and the next request run.  This will either be a page fault (which is now guaranteed to find a frame) or a swap in request (likewise, but discussed below).
+\end{itemize}
+
+\subsubsection{Swapping in}
+
+Swapping in a page is slightly more complicated than swapping in a page:
+\begin{itemize}
+\item The region list is searched for the faulting 
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 % SYSTEM CALL INTERFACE %
@@ -232,3 +266,4 @@ typedef struct {
 \section{Process management}
 
 \end{document}
+
