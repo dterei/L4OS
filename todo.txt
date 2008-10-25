@@ -7,12 +7,5 @@ the process using the most frames and try again.
 - Replace assertions with killing/deleting the offending process.  Since, the
 failed assertions will probably be due to the process doing something stupid.
 
-- Forkbomb runs fine when just creating 1 process but forking out 2 each run causes a
-segmentation fork after a little while (around 30 processes).
-
-- Likewise, there are exceptions on forkbomb.
-
-- Fix bug with the exception that gets fired in pager.  This is kind of
-necessary as this is the cause of deadlocks is due to the next request not
-being started, but it needs to be thought about.
+- Fix whatever is causing forkbomb/ptbomb to lock up.  Maybe already have.
 
