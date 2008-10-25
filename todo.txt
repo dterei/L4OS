@@ -9,3 +9,18 @@ failed assertions will probably be due to the process doing something stupid.
 
 - Fix whatever is causing forkbomb/ptbomb to lock up.  Maybe already have.
 
+- Bug which was occuring with I/O redirection where the vpager would try to IP
+SOS and SOS would be trying to IPC vpager and they would block. This might be
+causing the forkbomb problems as well. Solved for I/O redirection for moment
+by changing vfs open and close IPC from vpager to be send_nonblocking. Does
+mean though that they may not send and we don't handle this at all which we
+should. Probably need to involve some thirdparty thread which buffers them
+and sends when it can. Other option might be that SOS tries to reply and if
+it can't then it stores the reply, accepts the next request but doesn't process
+it yet, sends the reply, then returns back to normal processing the request.
+Need some way of sleeping the offending thread which is trying to send a request
+to SOS who is trying to reply to it.
+
+Other option is to have no two way dangers IPC between SOS and VPager, would
+need to change all IPC in VPager to be blocking/syncronous IPC.
+
