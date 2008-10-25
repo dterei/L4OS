@@ -1,0 +1,19 @@
+from os import listdir as ls
+
+Import("*")
+
+addressing = env.WeaverAddressing(direct=True)
+weaver = env.WeaverIguanaProgram(addressing = addressing)
+
+libs = Split("c sos l4")
+
+sources = []
+
+for file in ls('.'):
+    if file.endswith('.c'):
+        sources.append(file)
+
+target = env.KengeProgram('ed', source=sources, weaver=weaver, LIBS=libs)
+Return("target")
+
+# vim: set filetype=python:

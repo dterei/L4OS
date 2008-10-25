@@ -1,0 +1,226 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.7	//
+Arg_parser	carg_parser.h	/^} Arg_parser;$/;"	t	typeref:struct:__anon4
+EMOD	main_loop.c	/^enum Status { ERR = -2, EMOD = -3, FATAL = -4 };$/;"	e	enum:Status	file:
+ERR	main_loop.c	/^enum Status { ERR = -2, EMOD = -3, FATAL = -4 };$/;"	e	enum:Status	file:
+FATAL	main_loop.c	/^enum Status { ERR = -2, EMOD = -3, FATAL = -4 };$/;"	e	enum:Status	file:
+GLB	ed.h	/^	GLB = 0x01,			\/* global command *\/$/;"	e	enum:Gflags
+GLS	ed.h	/^	GLS = 0x02,			\/* list after command *\/$/;"	e	enum:Gflags
+GNP	ed.h	/^	GNP = 0x04,			\/* enumerate after command *\/$/;"	e	enum:Gflags
+GPR	ed.h	/^	GPR = 0x08,			\/* print after command *\/$/;"	e	enum:Gflags
+GSG	ed.h	/^	GSG = 0x10			\/* global substitute *\/$/;"	e	enum:Gflags
+Gflags	ed.h	/^enum Gflags {$/;"	g
+Program_name	main.c	/^static const char *const Program_name = "GNU Ed";$/;"	v	file:
+Status	main_loop.c	/^enum Status { ERR = -2, EMOD = -3, FATAL = -4 };$/;"	g	file:
+UADD	ed.h	/^	enum { UADD = 0, UDEL = 1, UMOV = 2, VMOV = 3 } type;$/;"	e	enum:__anon5::__anon6
+UDEL	ed.h	/^	enum { UADD = 0, UDEL = 1, UMOV = 2, VMOV = 3 } type;$/;"	e	enum:__anon5::__anon6
+UMOV	ed.h	/^	enum { UADD = 0, UDEL = 1, UMOV = 2, VMOV = 3 } type;$/;"	e	enum:__anon5::__anon6
+VMOV	ed.h	/^	enum { UADD = 0, UDEL = 1, UMOV = 2, VMOV = 3 } type;$/;"	e	enum:__anon5::__anon6
+_current_addr	buf.c	/^static int _current_addr;	\/* current address in editor buffer *\/$/;"	v	file:
+_isbinary	buf.c	/^static char _isbinary;		\/* if set, buffer contains ASCII NULs *\/$/;"	v	file:
+_last_addr	buf.c	/^static int _last_addr;		\/* last address in editor buffer *\/$/;"	v	file:
+_modified	buf.c	/^static char _modified;		\/* if set, buffer modified since last write *\/$/;"	v	file:
+_newline_added	buf.c	/^static char _newline_added;	\/* if set, newline appended to input file *\/$/;"	v	file:
+_restricted	main.c	/^static char _restricted = 0;	\/* invoked as "red" *\/$/;"	v	file:
+_scripted	main.c	/^static char _scripted = 0;	\/* if set, suppress diagnostics *\/$/;"	v	file:
+_traditional	main.c	/^static char _traditional = 0;	\/* if set, be backwards compatible *\/$/;"	v	file:
+_window_columns	signal.c	/^static int _window_columns = 72;$/;"	v	file:
+_window_lines	signal.c	/^static int _window_lines = 22;	\/* scroll length: ws_row - 2 *\/$/;"	v	file:
+active_last	glbl.c	/^static int active_last = 0;	\/* index of last active line in active_list *\/$/;"	v	file:
+active_list	glbl.c	/^static const line_t **active_list = 0;	\/* list of lines active in a global command *\/$/;"	v	file:
+active_ndx	glbl.c	/^static int active_ndx = 0;	\/* active_list index ( modulo active_last ) *\/$/;"	v	file:
+active_ptr	glbl.c	/^static int active_ptr = 0;	\/* active_list index ( non-decreasing ) *\/$/;"	v	file:
+active_size	glbl.c	/^static int active_size = 0;	\/* size (in bytes) of active_list *\/$/;"	v	file:
+add_error	carg_parser.c	/^char add_error(Arg_parser * ap, const char *msg)$/;"	f
+add_line_node	buf.c	/^void add_line_node(line_t * lp, const int addr)$/;"	f
+ap_Has_arg	carg_parser.h	/^typedef enum { ap_no, ap_yes, ap_maybe } ap_Has_arg;$/;"	t	typeref:enum:__anon1
+ap_Option	carg_parser.h	/^} ap_Option;$/;"	t	typeref:struct:__anon2
+ap_Record	carg_parser.h	/^} ap_Record;$/;"	t	typeref:struct:__anon3
+ap_argument	carg_parser.c	/^const char *ap_argument(const Arg_parser * ap, const int i)$/;"	f
+ap_arguments	carg_parser.c	/^int ap_arguments(const Arg_parser * ap)$/;"	f
+ap_code	carg_parser.c	/^int ap_code(const Arg_parser * ap, const int i)$/;"	f
+ap_error	carg_parser.c	/^const char *ap_error(const Arg_parser * ap)$/;"	f
+ap_free	carg_parser.c	/^void ap_free(Arg_parser * ap)$/;"	f
+ap_init	carg_parser.c	/^ap_init(Arg_parser * ap, const int argc, const char *const argv[],$/;"	f
+ap_maybe	carg_parser.h	/^typedef enum { ap_no, ap_yes, ap_maybe } ap_Has_arg;$/;"	e	enum:__anon1
+ap_no	carg_parser.h	/^typedef enum { ap_no, ap_yes, ap_maybe } ap_Has_arg;$/;"	e	enum:__anon1
+ap_resize_buffer	carg_parser.c	/^char ap_resize_buffer(void *buf, const int min_size)$/;"	f
+ap_yes	carg_parser.h	/^typedef enum { ap_no, ap_yes, ap_maybe } ap_Has_arg;$/;"	e	enum:__anon1
+append_lines	buf.c	/^char append_lines(const char *ibufp2, const int addr, const char isglobal)$/;"	f
+apply_subst_template	re.c	/^apply_subst_template(const char *boln, const regmatch_t * rm, int off,$/;"	f
+argument	carg_parser.h	/^	char *argument;$/;"	m	struct:__anon3
+buffer_head	buf.c	/^static line_t buffer_head;	\/* editor buffer ( linked list of line_t ) *\/$/;"	v	file:
+build_active_list	re.c	/^build_active_list(const char **ibufpp, const int first_addr,$/;"	f
+check_addr_range	main_loop.c	/^char check_addr_range(const int n, const int m, const int addr_cnt)$/;"	f
+clear_active_list	glbl.c	/^void clear_active_list(void)$/;"	f
+clear_undo_stack	buf.c	/^void clear_undo_stack(void)$/;"	f
+clear_yank_buffer	buf.c	/^void clear_yank_buffer(void)$/;"	f
+close_sbuf	buf.c	/^char close_sbuf(void)$/;"	f
+code	carg_parser.h	/^	int code;			\/\/ Short option letter or code ( code != 0 )$/;"	m	struct:__anon2
+code	carg_parser.h	/^	int code;$/;"	m	struct:__anon3
+command_s	main_loop.c	/^char command_s(int *gflagsp, const int addr_cnt, const char isglobal)$/;"	f
+copy_lines	buf.c	/^char copy_lines(const int first_addr, const int second_addr, const int addr)$/;"	f
+current_addr	buf.c	/^int current_addr(void)$/;"	f
+data	carg_parser.h	/^	ap_Record *data;$/;"	m	struct:__anon4
+data_size	carg_parser.h	/^	int data_size;$/;"	m	struct:__anon4
+dec_addr	buf.c	/^int dec_addr(int addr)$/;"	f
+def_filename	main_loop.c	/^static char def_filename[1024] = "";	\/* default filename *\/$/;"	v	file:
+delete_lines	buf.c	/^char delete_lines(const int from, const int to, const char isglobal)$/;"	f
+disable_interrupts	signal.c	/^void disable_interrupts(void)$/;"	f
+disable_undo	buf.c	/^void disable_undo(void)$/;"	f
+display_lines	io.c	/^char display_lines(int from, const int to, const int gflags)$/;"	f
+dup_line_node	buf.c	/^line_t *dup_line_node(line_t * lp)$/;"	f
+enable_interrupts	signal.c	/^void enable_interrupts(void)$/;"	f
+errmsg	main_loop.c	/^static char errmsg[80] = "";	\/* error message buffer *\/$/;"	v	file:
+error	carg_parser.h	/^	char *error;$/;"	m	struct:__anon4
+error_size	carg_parser.h	/^	int error_size;$/;"	m	struct:__anon4
+exec_command	main_loop.c	/^int exec_command(const char isglobal)$/;"	f
+exec_global	main_loop.c	/^char exec_global(const char *ibufp2, int gflags, const char interact)$/;"	f
+extract_addr_range	main_loop.c	/^int extract_addr_range(void)$/;"	f
+extract_pattern	re.c	/^char *extract_pattern(const char **ibufpp, const int delimiter)$/;"	f
+extract_subst_tail	re.c	/^extract_subst_tail(const char **ibufpp, int *gflagsp, int *snump,$/;"	f
+extract_subst_template	re.c	/^char *extract_subst_template(const char **ibufpp, const char isglobal)$/;"	f
+first_addr	main_loop.c	/^static int first_addr, second_addr;$/;"	v	file:
+free_data	carg_parser.c	/^void free_data(Arg_parser * ap)$/;"	f
+get_command_suffix	main_loop.c	/^char get_command_suffix(int *gflagsp)$/;"	f
+get_compiled_pattern	re.c	/^regex_t *get_compiled_pattern(const char **ibufpp)$/;"	f
+get_extended_line	io.c	/^const char *get_extended_line(const char *ibufp2, int *lenp, const char nonl)$/;"	f
+get_filename	main_loop.c	/^const char *get_filename(void)$/;"	f
+get_line_node_addr	buf.c	/^int get_line_node_addr(const line_t * lp)$/;"	f
+get_marked_node_addr	main_loop.c	/^int get_marked_node_addr(int c)$/;"	f
+get_matching_node_addr	re.c	/^int get_matching_node_addr(const char **ibufpp, const char forward)$/;"	f
+get_sbuf_line	buf.c	/^char *get_sbuf_line(const line_t * lp)$/;"	f
+get_shell_command	main_loop.c	/^int get_shell_command(void)$/;"	f
+get_third_addr	main_loop.c	/^char get_third_addr(int *addr)$/;"	f
+get_tty_line	io.c	/^const char *get_tty_line(int *lenp)$/;"	f
+global_pat	re.c	/^static regex_t *global_pat = 0;$/;"	v	file:
+has_arg	carg_parser.h	/^	ap_Has_arg has_arg;$/;"	m	struct:__anon2
+head	ed.h	/^	line_t *head;		\/* head of list *\/$/;"	m	struct:__anon5
+ibufp	main_loop.c	/^static const char *ibufp;	\/* pointer to ed command-line buffer *\/$/;"	v	file:
+inc_addr	buf.c	/^int inc_addr(int addr)$/;"	f
+inc_current_addr	buf.c	/^int inc_current_addr(void)$/;"	f
+init_buffers	buf.c	/^char init_buffers(void)$/;"	f
+insert_node	buf.c	/^void insert_node(line_t * node, line_t * prev)$/;"	f
+invalid_address	main_loop.c	/^void invalid_address(void)$/;"	f
+invocation_name	main.c	/^static const char *invocation_name = 0;$/;"	v	file:
+is_regular_file	main.c	/^char is_regular_file(int fd)$/;"	f
+is_valid_filename	main.c	/^char is_valid_filename(const char *name)$/;"	f
+isbinary	buf.c	/^char isbinary(void)$/;"	f
+jmp_state	signal.c	/^jmp_buf jmp_state;$/;"	v
+join_lines	buf.c	/^char join_lines(const int from, const int to, const char isglobal)$/;"	f
+last_addr	buf.c	/^int last_addr(void)$/;"	f
+len	ed.h	/^	int len;			\/* length of line *\/$/;"	m	struct:line
+line	ed.h	/^typedef struct line {		\/* Line node *\/$/;"	s
+line_t	ed.h	/^} line_t;$/;"	t	typeref:struct:line
+link_nodes	buf.c	/^void link_nodes(line_t * prev, line_t * next)$/;"	f
+main	main.c	/^int main(const int argc, const char *argv[])$/;"	f
+main_loop	main_loop.c	/^int main_loop(const char loose)$/;"	f
+mark	main_loop.c	/^static const line_t *mark[26];	\/* line markers *\/$/;"	v	file:
+mark_line_node	main_loop.c	/^char mark_line_node(const line_t * lp, int c)$/;"	f
+markno	main_loop.c	/^static int markno;		\/* line marker count *\/$/;"	v	file:
+max	ed.h	44;"	d
+min	ed.h	47;"	d
+modified	buf.c	/^char modified(void)$/;"	f
+move_lines	buf.c	/^move_lines(const int first_addr, const int second_addr, const int addr,$/;"	f
+mutex	signal.c	/^static int mutex = 0;		\/* If set, signals stay pending *\/$/;"	v	file:
+name	carg_parser.h	/^	const char *name;		\/\/ Long option name (maybe null)$/;"	m	struct:__anon2
+new_compiled_pattern	re.c	/^char new_compiled_pattern(const char **ibufpp)$/;"	f
+newline_added	buf.c	/^char newline_added(void)$/;"	f
+newline_to_nul	re.c	/^void newline_to_nul(char *s, int len)$/;"	f
+next_active_node	glbl.c	/^const line_t *next_active_node(void)$/;"	f
+next_addr	main_loop.c	/^int next_addr(int *addr_cnt)$/;"	f
+nul_to_newline	re.c	/^void nul_to_newline(char *s, int len)$/;"	f
+open_sbuf	buf.c	/^char open_sbuf(void)$/;"	f
+parse_char_class	re.c	/^const char *parse_char_class(const char *s)$/;"	f
+parse_int	signal.c	/^char parse_int(int *i, const char *str, const char **tail)$/;"	f
+parse_long_option	carg_parser.c	/^parse_long_option(Arg_parser * ap,$/;"	f
+parse_short_option	carg_parser.c	/^parse_short_option(Arg_parser * ap,$/;"	f
+path_max	buf.c	/^int path_max(const char *filename)$/;"	f
+patlock	re.c	/^static char patlock = 0;	\/* if set, pattern not freed by get_compiled_pattern *\/$/;"	v	file:
+pop_undo_stack	buf.c	/^char pop_undo_stack(const char isglobal)$/;"	f
+pos	ed.h	/^	long pos;			\/* position of text in scratch buffer *\/$/;"	m	struct:line
+prev_pattern	re.c	/^char prev_pattern(void)$/;"	f
+program_name	main.c	/^static const char *const program_name = "ed";$/;"	v	file:
+program_year	main.c	/^static const char *const program_year = "2008";$/;"	v	file:
+prompt_on	main_loop.c	/^static char prompt_on = 0;	\/* if set, show command-line prompt *\/$/;"	v	file:
+prompt_str	main_loop.c	/^static char prompt_str[80] = "*";	\/* command-line prompt *\/$/;"	v	file:
+push_back_record	carg_parser.c	/^char push_back_record(Arg_parser * ap, const int code, const char *argument)$/;"	f
+push_undo_stack	buf.c	/^undo_t *push_undo_stack(const int type, const int from, const int to)$/;"	f
+put_lines	buf.c	/^char put_lines(const int addr)$/;"	f
+put_sbuf_line	buf.c	/^const char *put_sbuf_line(const char *cs, const int addr)$/;"	f
+put_tty_line	io.c	/^char put_tty_line(const char *s, int len, const int gflags)$/;"	f
+q_back	ed.h	/^	struct line *q_back;$/;"	m	struct:line	typeref:struct:line::line
+q_forw	ed.h	/^	struct line *q_forw;$/;"	m	struct:line	typeref:struct:line::line
+rbuf	re.c	/^static char *rbuf;		\/* substitute_matching_text buffer *\/$/;"	v	file:
+rbufsz	re.c	/^static int rbufsz;		\/* substitute_matching_text buffer size *\/$/;"	v	file:
+read_file	io.c	/^int read_file(const char *filename, const int addr)$/;"	f
+read_stream	io.c	/^long read_stream(FILE * fp, const int addr)$/;"	f
+read_stream_line	io.c	/^int read_stream_line(FILE * fp, char *newline_added_now)$/;"	f
+resize_buffer	signal.c	/^char resize_buffer(void *buf, int *size, int min_size)$/;"	f
+restricted	main.c	/^char restricted(void)$/;"	f
+rhbuf	re.c	/^static char *rhbuf;		\/* rhs substitution buffer *\/$/;"	v	file:
+rhbufi	re.c	/^static int rhbufi;		\/* rhs substitution buffer index *\/$/;"	v	file:
+rhbufsz	re.c	/^static int rhbufsz;		\/* rhs substitution buffer size *\/$/;"	v	file:
+sbuf	io.c	/^static char *sbuf;		\/* file i\/o buffer *\/$/;"	v	file:
+sbufsz	io.c	/^static int sbufsz;		\/* file i\/o buffer size *\/$/;"	v	file:
+scripted	main.c	/^char scripted(void)$/;"	f
+search_and_replace	re.c	/^search_and_replace(const int first_addr, const int second_addr,$/;"	f
+search_line_node	buf.c	/^line_t *search_line_node(const int addr)$/;"	f
+second_addr	main_loop.c	/^static int first_addr, second_addr;$/;"	v	file:
+seek_write	buf.c	/^static int seek_write;		\/* seek before writing *\/$/;"	v	file:
+set_active_node	glbl.c	/^char set_active_node(const line_t * lp)$/;"	f
+set_binary	buf.c	/^void set_binary(void)$/;"	f
+set_current_addr	buf.c	/^void set_current_addr(const int addr)$/;"	f
+set_def_filename	main_loop.c	/^void set_def_filename(const char *s)$/;"	f
+set_error_msg	main_loop.c	/^void set_error_msg(const char *msg)$/;"	f
+set_modified	buf.c	/^void set_modified(const char m)$/;"	f
+set_newline_added	buf.c	/^void set_newline_added(void)$/;"	f
+set_prompt	main_loop.c	/^void set_prompt(const char *s)$/;"	f
+set_signal	signal.c	/^int set_signal(int signum, void (*handler) (int))$/;"	f
+set_signals	signal.c	/^void set_signals(void)$/;"	f
+set_verbose	main_loop.c	/^void set_verbose(void)$/;"	f
+set_window_lines	signal.c	/^void set_window_lines(const int lines)$/;"	f
+sfp	buf.c	/^static fildes_t sfp;$/;"	v	file:
+sfpos	buf.c	/^static long sfpos;		\/* scratch file position *\/$/;"	v	file:
+shcmd	main_loop.c	/^static char *shcmd;		\/* shell command buffer *\/$/;"	v	file:
+shcmdi	main_loop.c	/^static int shcmdi;		\/* shell command buffer index *\/$/;"	v	file:
+shcmdsz	main_loop.c	/^static int shcmdsz;		\/* shell command buffer size *\/$/;"	v	file:
+show_error	main.c	/^void show_error(const char *msg, const int errcode, const char help)$/;"	f
+show_help	main.c	/^void show_help(void)$/;"	f
+show_strerror	main.c	/^void show_strerror(const char *filename, int errcode)$/;"	f
+show_version	main.c	/^void show_version(void)$/;"	f
+sighup_handler	signal.c	/^void sighup_handler(int signum)$/;"	f
+sighup_pending	signal.c	/^static char sighup_pending = 0;$/;"	v	file:
+sigint_handler	signal.c	/^void sigint_handler(int signum)$/;"	f
+sigint_pending	signal.c	/^static char sigint_pending = 0;$/;"	v	file:
+sigwinch_handler	signal.c	/^void sigwinch_handler(int signum)$/;"	f
+skip_blanks	signal.c	/^const char *skip_blanks(const char *s)$/;"	f
+strip_escapes	signal.c	/^const char *strip_escapes(const char *s)$/;"	f
+substitute_matching_text	re.c	/^substitute_matching_text(const line_t * lp, const int gflags, const int snum)$/;"	f
+tail	ed.h	/^	line_t *tail;		\/* tail of list *\/$/;"	m	struct:__anon5
+traditional	main.c	/^char traditional(void)$/;"	f
+trailing_escape	io.c	/^char trailing_escape(const char *s, const char *t)$/;"	f
+translit_text	re.c	/^static void translit_text(char *s, int len, char from, char to)$/;"	f	file:
+type	ed.h	/^	enum { UADD = 0, UDEL = 1, UMOV = 2, VMOV = 3 } type;$/;"	m	struct:__anon5	typeref:enum:__anon5::__anon6
+u_addr_last	buf.c	/^static int u_addr_last = -1;	\/* if >= 0, undo enabled *\/$/;"	v	file:
+u_current_addr	buf.c	/^static int u_current_addr = -1;	\/* if >= 0, undo enabled *\/$/;"	v	file:
+u_ptr	buf.c	/^static int u_ptr = 0;		\/* undo stack pointer *\/$/;"	v	file:
+undo_t	ed.h	/^} undo_t;$/;"	t	typeref:struct:__anon5
+unexpected_address	main_loop.c	/^char unexpected_address(const int addr_cnt)$/;"	f
+unexpected_command_suffix	main_loop.c	/^char unexpected_command_suffix(const unsigned char ch)$/;"	f
+unmark_line_node	main_loop.c	/^void unmark_line_node(const line_t * lp)$/;"	f
+unset_active_nodes	glbl.c	/^void unset_active_nodes(const line_t * np, const line_t * mp)$/;"	f
+usize	buf.c	/^static int usize = 0;		\/* ustack size (in bytes) *\/$/;"	v	file:
+ustack	buf.c	/^static undo_t *ustack = 0;	\/* undo stack *\/$/;"	v	file:
+verbose	main_loop.c	/^static char verbose = 0;	\/* if set, print all error messages *\/$/;"	v	file:
+window_columns	signal.c	/^int window_columns(void)$/;"	f
+window_lines	signal.c	/^int window_lines(void)$/;"	f
+write_file	io.c	/^write_file(const char *filename, const char *mode, const int from, const int to)$/;"	f
+write_stream	io.c	/^long write_stream(FILE * fp, int from, const int to)$/;"	f
+write_stream_line	io.c	/^char write_stream_line(FILE * fp, const char *s, int len)$/;"	f
+yank_buffer_head	buf.c	/^static line_t yank_buffer_head;$/;"	v	file:
+yank_lines	buf.c	/^char yank_lines(const int from, const int to)$/;"	f
