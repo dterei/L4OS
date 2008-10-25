@@ -173,22 +173,22 @@ Swapping in a page is slightly more complicated than swapping in a page:
 % VFS %
 %%%%%%%
 
-\section{VFS}
+\section{File system}
 
 
-\subsection{VFS Structure}
+\subsection{Virtual file system structure}
 
-The virtual file system (hereafter VFS) uses a standard UNIX three layer structure to provide the features that our OS personality requires. Those layers are as follows bllow.
+The virtual file system (hereafter VFS) uses a standard UNIX three layer structure to provide the features that our OS personality requires. Those layers are as follows below.
 
 \begin{itemize}
-\item \texttt{VNodes} are at the core of the VFS (see bellow for a discussion of their layout) providing a standardised interface to all the file systems supported by our OS. An individual VNode represents one file (whether that be an actual file or a device) and provides functions to manipulate the file. Vnodes are created to abstract a file as needed and stored on a single linked list of all open vnodes in the system. VNodes are global and not tied to any particular process.
+\item \texttt{VNodes} are at the core of the VFS providing a standardised interface to all the file systems supported by our OS. An individual VNode represents one file (whether that be an actual file or a device) and provides functions to manipulate the file. Vnodes are created to abstract a file as needed and stored on a single linked list of all open vnodes in the system. VNodes are global and not tied to any particular process.
 \item \texttt{VFiles} are the second layer of the VFS, they are tied to a partciular process and used to represent the state of an open file, such as the permissions it was opened with and the current offset into the file. VFiles are tied to a VNode and it is through them that one VNode can be opened numerous times. VFiles are stored in a fixed size array inside of the PCB.
 \item \texttt{File Descriptors} are used as a key and identifier for a particular VFile, used in syscalls to work with the VFS. Like VFiles they are unique to a particular process and are stored in a fixed size array inside of the PCB. File descriptors are necessary but allow for the extensions to our OS detailed at the end of this section.
-\end{itemisze}
+\end{itemize}
 
 Our OS differs from standard UNIX VFS in that it only supports a flat directory structure, directories are not support in any form. There is also no support for dealing with file systems such as mount operations, instead the currently supported file systems have been hard coded into the VFS.
 
-\subsection{VNode Structure}
+\subsection{\texttt{VNode} structure}
 
 \begin{verbatim}
 struct VNode_t {
@@ -232,32 +232,32 @@ struct VNode_t {
 \begin{itemize}
 \item \texttt{path} stores the path (file name) of the file this VNode represents.
 \item \texttt{vstat} stores statistics about the vnode such as on disk permissions, size and last accessed timestamps.
-\item \texttt{Max_Readers} specifies an upper limit on the number of times this particular VNode can be opened in read mode. Specified by the filesystem itself or through the system call. This enables an extension feature of locking files (detailed in the VFS Extensions section).
-\item \texttt{Max_Writers) is the same as Max_Readers but for write mode opens.
+\item \texttt{Max\_Readers} specifies an upper limit on the number of times this particular VNode can be opened in read mode. Specified by the filesystem itself or through the system call. This enables an extension feature of locking files (detailed in the VFS Extensions section).
+\item \texttt{Max\_Writers} is the same as Max\_Readers but for write mode opens.
 \item \texttt{readers} stores a reference count of the number of VFiles currently linked to this VNode with read permissions.
-\item \texttt(writers} is the same as readers but for write permissions.
+\item \texttt{writers} is the same as readers but for write permissions.
 \item \texttt{extra} allows for individual file systems to attach their own specific data to a VNode.
 \item \texttt{previous} VNodes are stored one a double linked list.
 \item \texttt{next} see previous.
-\item \texttt{*open} function pointer to file system specific function to open the VNode. Currently not used.
-\item \texttt{*close} function pointer to file system specific function to close the VNode.
-\item \texttt{*read} function pointer to file system specific function to read data from the VNode.
-\item \texttt{*write} function pointer to file system specific function to write data to the VNode.
-\item \texttt{*flush} function pointer to file system specific function to flush out any cache for the vnode to the back device.
-\item \texttt{*getdirent} function pointer to file system specific function to list the contents of the VNode. Since directories aren't supported, this is currently not used.
-\item \texttt{*stat} function pointer to file system specific function to get the stat information about this VNode.
-\item \texttt{*remove} function pointer to file system specific function to remove (delete/unlink) this VNode from its file system.
+\item \texttt{open} function pointer to file system specific function to open the VNode. Currently not used.
+\item \texttt{close} function pointer to file system specific function to close the VNode.
+\item \texttt{read} function pointer to file system specific function to read data from the VNode.
+\item \texttt{write} function pointer to file system specific function to write data to the VNode.
+\item \texttt{flush} function pointer to file system specific function to flush out any cache for the vnode to the back device.
+\item \texttt{getdirent} function pointer to file system specific function to list the contents of the VNode. Since directories aren't supported, this is currently not used.
+\item \texttt{stat} function pointer to file system specific function to get the stat information about this VNode.
+\item \texttt{remove} function pointer to file system specific function to remove (delete/unlink) this VNode from its file system.
 \end{itemize}
 
-\Subsection{VFile Structure}
+\subsection{\texttt{VFile} structure}
 
-\begin{verbatimjk
-/* For the PCB */
+\begin{verbatim}
 typedef struct {
 	VNode vnode;
 	fmode_t fmode;
 	L4_Word_t fp;
 } VFile;
+\end{verbatim}
 
 %%%%%%%%%%%%%%%%%%%%%%
 % PROCESS MANAGEMENT %
