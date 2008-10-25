@@ -105,6 +105,9 @@ void vfs_remove(pid_t pid, const char *path);
 void vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup);
 
 /* Test is a file is open (internal SOS function) */
-int vfs_isopen(VFile *file);
+int vfs_isopen(pid_t pid, fildes_t fd);
+
+/* Grab a vfile from a fd (internal SOS function) */
+VFile *get_vfile(pid_t pid, fildes_t file, int ipc);
 
 #endif // sos/vfs.h

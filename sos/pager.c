@@ -103,9 +103,9 @@ typedef struct {
 	fildes_t fd; // file descriptor (when opened)
 	pid_t parent; // pid of the process that made the request
 	pid_t child; // pid of the process created
-	fildes_t fdout;
-	fildes_t fderr;
-	fildes_t fdin;
+	char *fdout; // Redirection files
+	char *fderr;
+	char *fdin;
 } ElfloadRequest;
 
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
@@ -455,6 +455,28 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 	return newPr;
 }
 
+static char* setFdStrn(pid_t parent, fildes_t fd) {
+	if (fd == VFS_NIL_FILE || fd < 0 || fd >= PROCESS_MAX_FDS) {
+		return NULL;
+	}
+
+	Process *p = process_lookup(parent);
+	if (p == NULL) {
+		return NULL;
+	}
+
+	VFile *vf = get_vfile(parent, fd, 0);
+	if (vf == NULL || vf->vnode == NULL) {
+		return NULL;
+	}
+
+	char *new = (char *) malloc(sizeof(char) * MAX_FILE_NAME);
+	strncpy(new, vf->vnode->path, MAX_FILE_NAME);
+
+	dprintf(2, "setFdStrn: %s\n", new);
+	return new;
+}
+
 static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller,
 		fildes_t fdout, fildes_t fderr, fildes_t fdin) {
 	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
@@ -464,9 +486,11 @@ static ElfloadRequest *allocElfloadRequest(char *path, pid_t caller,
 		strncpy(er->path, path, MAX_FILE_NAME);
 		er->fd = VFS_NIL_FILE;
 		er->parent = caller;
-		er->fdout = fdout;
-		er->fderr = fderr;
-		er->fdin = fdin;
+
+		dprintf(2, "allocElfloadRequest: %d, %d, %d\n", fdout, fderr, fdin);
+		er->fdout = setFdStrn(caller, fdout);
+		er->fderr = setFdStrn(caller, fderr);
+		er->fdin = setFdStrn(caller, fdin);
 	}
 
 	return er;
@@ -673,6 +697,9 @@ static void finishElfload(int rval) {
 	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	L4_ThreadId_t replyTo = process_get_tid(process_lookup(er->parent));
 
+	free(er->fdout);
+	free(er->fderr);
+	free(er->fdin);
 	free(er);
 	syscall_reply(replyTo, rval);
 	dequeueRequest();
@@ -761,7 +788,7 @@ static void continueElfload(int vfsRval) {
 
 				process_set_name(p, er->path);
 				process_get_info(p)->pid = er->child;
-				process_prepare(p);
+				process_prepare2(p, er->fdout, er->fderr, er->fdin);
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
 				process_run(p, YES_TIMESTAMP);
@@ -1344,9 +1371,6 @@ static void virtualPagerHandler(void) {
 				if (er == NULL || pid == NIL_PID) {
 					dprintf(0, "Out of processes!\n");
 					syscall_reply(tid, -1);
-					if (er != NULL) {
-						free(er);
-					}
 				} else {
 					er->child = pid;
 					queueRequest(REQUEST_ELFLOAD, er);

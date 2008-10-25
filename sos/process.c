@@ -33,7 +33,7 @@ struct Process_t {
 	// 2nd level, open files
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
-	fildes_t      fdin; // If set, used for input redirection
+	int           fdin; // If set, use stdin redirection
 };
 
 // Array of all PCBs
@@ -127,8 +127,10 @@ void process_set_state(Process *p, process_state_t state) {
 	p->info.state = state;
 }
 
-void process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt) {
+process_ipcfilt_t process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt) {
+	process_ipcfilt_t old = p->info.ipc_accept;
 	p->info.ipc_accept = ipc_filt;
+	return old;
 }
 
 process_state_t process_get_state(Process *p) {
@@ -237,29 +239,23 @@ pid_t reserve_pid(void) {
 }
 
 void process_prepare(Process *p) {
-	process_prepare2(p, NULL, VFS_NIL_FILE, VFS_NIL_FILE, VFS_NIL_FILE);
+	process_prepare2(p, NULL, NULL, NULL);
 }
 
-static void openStdFd(Process *p, Process *parent, fildes_t fd, char *stdfile) {
-		char *file = NULL;
-		if (parent == NULL || fd == VFS_NIL_FILE) {
-			// use system default
-			file = stdfile;
-		}
-		else if (parent != NULL) {
-			// use file specified in call
-			fildes_t *fds = process_get_fds(p);
-			file = process_get_ofiles(p)[fds[fd]].vnode->path;
-		}
+static void openStdFd(Process *p, char* file, char *stdfile, fmode_t mode) {
+	dprintf(1, "openStdFd: %p, %p, %p\n", p, file, stdfile);
+	if (file == NULL) {
+		// use system default
+		file = stdfile;
+	}
 
-		if (file != NULL) {
-			strncpy(pager_buffer(process_get_tid(p)), file, COPY_BUFSIZ);
-			ipc_send_simple_4(L4_rootserver, PSOS_OPEN, NO_REPLY, FM_WRITE,
-					FM_UNLIMITED_RW, FM_UNLIMITED_RW, process_get_pid(p));
-		}
+	dprintf(2, "openStdFd: %s\n", file);
+	strncpy(pager_buffer(process_get_tid(p)), file, COPY_BUFSIZ);
+	ipc_send_simple_4(L4_rootserver, PSOS_OPEN, NO_REPLY, mode,
+			FM_UNLIMITED_RW, FM_UNLIMITED_RW, process_get_pid(p));
 }
 
-void process_prepare2(Process *p, Process *parent, fildes_t fdout, fildes_t fderr, fildes_t fdin) {
+void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 	// Register with the collection of PCBs
 	if (p->info.pid == NIL_PID) {
 		p->info.pid = getNextPid();
@@ -270,24 +266,24 @@ void process_prepare2(Process *p, Process *parent, fildes_t fdout, fildes_t fder
 		addBuiltinRegions(p);
 
 		// Open stdout, stderr
-		openStdFd(p, parent, fdout, STDOUT_FN);
-		openStdFd(p, parent, fderr, STDOUT_FN);
+		openStdFd(p, fdout, STDOUT_FN, FM_WRITE);
+		openStdFd(p, fderr, STDOUT_FN, FM_WRITE);
 
 		// Set stdin redirection if applicable
-		if (parent != NULL && fdin != VFS_NIL_FILE) {
-			p->fdin = fdin;
-			openStdFd(p, parent, fdin, NULL);
+		if (fdin != NULL) {
+			p->fdin = 1;
+			openStdFd(p, fdin, NULL, FM_READ);
 		}
 	}
 }
 
 // Get the stdin redirectin setting of a process
-fildes_t process_get_stdin(Process *p) {
+int process_get_stdin(Process *p) {
 	return p->fdin;
 }
 
 // Set the stdin redirectin setting of a process
-fildes_t process_set_stdin(Process *p, fildes_t in) {
+int process_set_stdin(Process *p, int in) {
 	return p->fdin = in;
 }
 
@@ -384,19 +380,12 @@ void process_wake_all(pid_t pid) {
 }
 
 void process_close_files(Process *p) {
-	VFile *pfiles = process_get_ofiles(p);
-
-	if (pfiles == NULL) {
-		dprintf(0, "!!! process_close_files: %d has NULL open file table\n",
-				process_get_pid(p));
-	} else {
-		for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
-			if (vfs_isopen(&(p->files[fd]))) {
-				ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, NO_REPLY, fd,
-						process_get_pid(p));
-				ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, NO_REPLY, fd,
-						process_get_pid(p));
-			}
+	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
+		if (vfs_isopen(process_get_pid(p), fd)) {
+			ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, SOS_IPC_SENDNONBLOCKING, fd,
+					process_get_pid(p));
+			ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, SOS_IPC_SENDNONBLOCKING, fd,
+					process_get_pid(p));
 		}
 	}
 }

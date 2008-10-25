@@ -67,9 +67,12 @@ vfiles_init(fildes_t *fds, VFile *files) {
 }
 
 /* Test is a file is open (internal SOS function) */
-int vfs_isopen(VFile *file) {
-	if (file->vnode != NULL) return 1;
-	return 0;
+int vfs_isopen(pid_t pid, fildes_t fd) {
+	if (get_vfile(pid, fd, 0) != NULL) {
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 /* Get the next file descriptor number for an address space
@@ -284,9 +287,10 @@ decrease_refs(VNode vnode, fmode_t mode) {
 	return SOS_VFS_OK;
 }
 
-static
 VFile *
-get_vfile(pid_t pid, fildes_t file) {
+get_vfile(pid_t pid, fildes_t file, int ipc) {
+	dprintf(1, "get_vfile: %d, %d, %d\n", pid, file, ipc);
+
 	// get file
 	Process *p = process_lookup(pid);
 	VFile *vf = process_get_ofiles(p);
@@ -299,15 +303,20 @@ get_vfile(pid_t pid, fildes_t file) {
 
 	// check values
 	if (file < 0 || file >= PROCESS_MAX_FDS || fds[file] < 0 || fds[file] >= PROCESS_MAX_FILES) {
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		dprintf(0, "!!! File outside of rang!\n");
+		if (ipc) {
+			syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		}
 		return NULL;
 	}
 
 	// get vnode
 	vf = &vf[fds[file]];
 	if (vf->vnode == NULL) {
-		dprintf(1, "*** vfs_read: invalid file handler: %d\n", file);
-		syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		dprintf(0, "*** vfs_read: invalid file handler: %d\n", file);
+		if (ipc) {
+			syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
+		}
 		return NULL;
 	}
 
@@ -360,7 +369,7 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 		if (in != VFS_NIL_FILE) {
 			process_ipcfilt_t oldfilt = process_get_ipcfilt(p);
 			process_set_ipcfilt(p, PS_IPC_NONE);
-			VFile *vf = get_vfile(pid, in);
+			VFile *vf = get_vfile(pid, in, 1);
 			process_set_ipcfilt(p, oldfilt);
 
 			if (vf != NULL) {
@@ -441,7 +450,7 @@ vfs_open_done(pid_t pid, VNode self, fmode_t mode, int status) {
 
 	// open failed
 	if (status != SOS_VFS_OK || self == NULL) {
-		dprintf(2, "*** vfs_open_done: can't open file: error code %d\n", status);
+		dprintf(0, "*** vfs_open_done: can't open file: error code %d\n", status);
 		vfs_open_err(self);
 		syscall_reply(process_get_tid(p), status);
 		return;
@@ -485,7 +494,7 @@ vfs_close(pid_t pid, fildes_t file) {
 	dprintf(1, "*** vfs_close: %d\n", file);
 	
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 0);
 	if (vf == NULL) return;
 
 	// close the fds table entry
@@ -533,7 +542,7 @@ vfs_read(pid_t pid, fildes_t file, char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_read: %d %d %p %d\n", pid, file, buf, nbyte);
 
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 1);
 	if (vf == NULL) return;
 
 	// check permissions
@@ -566,7 +575,7 @@ vfs_read_done(pid_t pid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
 	dprintf(1, "*** vfs_read_done: %d %d %p %d %d\n", pid, file, buf, nbyte, status);
 
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 1);
 	if (vf == NULL) return;
 	
 	// check no error
@@ -586,7 +595,7 @@ vfs_write(pid_t pid, fildes_t file, const char *buf, size_t nbyte) {
 	dprintf(1, "*** vfs_write: %d, %d %p %d\n", pid, file, buf, nbyte);
 
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 1);
 	if (vf == NULL) return;
 
 	// check permissions
@@ -625,7 +634,7 @@ vfs_write_done(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
 	}
 	
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 1);
 	if (vf == NULL) return;
 	
 	vf->fp += nbyte;
@@ -638,9 +647,10 @@ vfs_flush(pid_t pid, fildes_t file) {
 	dprintf(1, "*** vfs_flush: %d, %d\n", pid, file);
 
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 0);
 	if (vf == NULL) return;
 
+	dprintf(1, "flush vnode\n");
 	// flush
 	vf->vnode->flush(pid, vf->vnode, file);
 }
@@ -651,7 +661,7 @@ vfs_lseek(pid_t pid, fildes_t file, fpos_t pos, int whence) {
 	dprintf(1, "*** vfs_seek: %d, %d %p %d\n", pid, file, pos, whence);
 
 	// get file
-	VFile *vf = get_vfile(pid, file);
+	VFile *vf = get_vfile(pid, file, 1);
 	if (vf == NULL) return;
 
 	dprintf(3, "vfs_seek: old fp %d\n", vf->fp);
@@ -663,7 +673,7 @@ vfs_lseek(pid_t pid, fildes_t file, fpos_t pos, int whence) {
 	} else if (whence == SEEK_END) {
 		vf->fp = vf->vnode->vstat.st_size - pos;
 	} else {
-		dprintf(0, "!!! vfs_lseek: invalid value for whence\n");
+		dprintf(1, "!!! vfs_lseek: invalid value for whence\n");
 	}
 
 	dprintf(3, "vfs_seek: new fp %d\n", vf->fp);
@@ -760,7 +770,7 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 	dprintf(1, "*** vfs_dup: %d, %d, %d\n", pid, forig, fdup);
 
 	// get file
-	VFile *vf = get_vfile(pid, forig);
+	VFile *vf = get_vfile(pid, forig, 1);
 	if (vf == NULL) {
 		return;
 	}
@@ -783,11 +793,10 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 			}
 		}
 	} else {
-		VFile *dvf = get_vfile(pid, fdup);
+		VFile *dvf = get_vfile(pid, fdup, 0);
 		if (dvf != NULL) {
 			// change filter to none so we can close the file first
-			process_ipcfilt_t oldfilt = process_get_ipcfilt(p);
-			process_set_ipcfilt(p, PS_IPC_NONE);
+			process_ipcfilt_t oldfilt = process_set_ipcfilt(p, PS_IPC_NONE);
 			vfs_close(pid, fdup);
 			process_set_ipcfilt(p, oldfilt);
 		}

@@ -54,6 +54,10 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 			tag = L4_Send(tid);
 			break;
 
+		case SOS_IPC_SENDNONBLOCKING:
+			tag = L4_Send_Nonblocking(tid);
+			break;
+
 		case SOS_IPC_REPLY:
 			tag = L4_Reply(tid);
 			break;

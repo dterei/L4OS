@@ -37,8 +37,8 @@ void process_set_name(Process *p, const char *name);
 // Set the state of the process
 void process_set_state(Process *p, process_state_t state);
 
-// Set the ipc types the process accepts
-void process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt);
+// Set the ipc types the process accepts (return the old one)
+process_ipcfilt_t process_set_ipcfilt(Process *p, process_ipcfilt_t ipc_filt);
 
 // Set an initial stack pointer for the process
 void process_set_sp(Process *p, void *sp);
@@ -51,7 +51,7 @@ void process_prepare(Process *p);
 
 // Prepare a process to be run, sets the new processes stdfds to the fds specified
 // of the parent process
-void process_prepare2(Process *p, Process *parent, fildes_t fdout, fildes_t fderr, fildes_t fdin);
+void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin);
 
 // Start a new root thread (Stack size of a page).
 Process *process_run_rootthread(const char *name, void *ip, int ts, int prio);
@@ -75,10 +75,10 @@ L4_ThreadId_t process_get_tid(Process *p);
 L4_SpaceId_t process_get_sid(Process *p);
 
 // Get the stdin redirectin setting of a process
-fildes_t process_get_stdin(Process *p);
+int process_get_stdin(Process *p);
 
 // Set the stdin redirectin setting of a process
-fildes_t process_set_stdin(Process *p, fildes_t in);
+int process_set_stdin(Process *p, int in);
 
 // Get the page table of a process
 Pagetable *process_get_pagetable(Process *p);

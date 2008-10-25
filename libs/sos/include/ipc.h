@@ -16,6 +16,7 @@
 #define SOS_IPC_CALL 2
 #define SOS_IPC_SEND 3
 #define SOS_IPC_REPLY 4
+#define SOS_IPC_SENDNONBLOCKING 5
 
 /* Base send function, can take multiple words to send and accepts an
  * array of return values to fill from the reply ipc msg.

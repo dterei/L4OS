@@ -26,6 +26,8 @@ syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
 void
 syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 {
+	dprintf(2, "Sending syscall to %d\n", L4_ThreadNo(tid));
+
 	// make sure process/thread still exists
 	Process *p = process_lookup(L4_ThreadNo(tid));
 	if (p == NULL) {
@@ -50,9 +52,16 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	// closing its various resources (e.g open files).
 	if (process_get_state(p) == PS_STATE_ZOMBIE ||
 			process_get_state(p) == PS_STATE_START) {
-		dprintf(1, "*** Ignoring syscall_reply request as IPC target is in a");
-		dprintf(1, " zombie or start state (p %d) (s %d)\n", process_get_pid(p),
+		dprintf(2, "*** Ignoring syscall_reply request as IPC target is in a");
+		dprintf(2, " zombie or start state (p %d) (s %d)\n", process_get_pid(p),
 			process_get_state(p));
+		va_list va;
+		va_start(va, count);
+		for (int i = 0; i < count; i++) {
+			L4_Word_t w = va_arg(va, L4_Word_t);
+			dprintf(3, "reply (%d): %d\n", i, w);
+		}
+		va_end(va);
 		return;
 	}
 
