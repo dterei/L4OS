@@ -25,8 +25,11 @@
 #define ELF_MASK  (1 << 2)
 #define ADDRESS_MASK PAGEALIGN
 
-// Ensure the kernel always has frames
-#define KERNEL_FRAME_BUFFER 128
+// The threshhold of free frames until the kernel starts to swap user pages
+#define FRAME_SWAP_THRESHHOLD 128
+
+// The threshhold of free frames until the kernel starts killing processes
+#define FRAME_DOOMSDAY_THRESHHOLD 8
 static int totalPages;
 
 // Limiting the number of user frames
