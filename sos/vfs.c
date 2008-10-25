@@ -58,6 +58,7 @@ vfiles_init(fildes_t *fds, VFile *files) {
 		files[i].vnode = NULL;
 		files[i].fmode = 0;
 		files[i].fp = 0;
+		files[i].ref = 1;
 	}
 
 	for (int i = 0; i < PROCESS_MAX_FDS; i++) {
@@ -470,6 +471,7 @@ vfs_open_done(pid_t pid, VNode self, fmode_t mode, int status) {
 	vf[fd2].vnode = self;
 	vf[fd2].fmode = mode;
 	vf[fd2].fp = 0;
+	vf[fd2].ref = 1;
 
 	// store pointer to file in redirect table
 	fds[fd1] = fd2;
@@ -486,19 +488,22 @@ vfs_close(pid_t pid, fildes_t file) {
 	VFile *vf = get_vfile(pid, file);
 	if (vf == NULL) return;
 
-	decrease_refs(vf->vnode, vf->fmode);
-
-	int mode = vf->fmode;
-
 	// close the fds table entry
 	Process *p = process_lookup(pid);
 	process_get_fds(p)[file] = VFS_NIL_FILE;
 
-	// close file table entry
+	int mode = vf->fmode;
 	VNode vnode = vf->vnode;
-	vf->vnode = NULL;
-	vf->fmode = 0;
-	vf->fp = 0;
+
+	// close file table entry
+	vf->ref--;
+	if (vf->ref == 0) {
+		vf->vnode = NULL;
+		vf->fmode = 0;
+		vf->fp = 0;
+
+		decrease_refs(vnode, mode);
+	}
 
 	// close vnode if no longer referenced
 	if (vnode->readers <= 0 && vnode->writers <= 0) {
@@ -755,7 +760,10 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 	dprintf(1, "*** vfs_dup: %d, %d, %d\n", pid, forig, fdup);
 
 	// get file
-	if (get_vfile(pid, forig) == NULL) return;
+	VFile *vf = get_vfile(pid, forig);
+	if (vf == NULL) {
+		return;
+	}
 
 	Process *p = process_lookup(pid);
 
@@ -789,6 +797,7 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 	if (fdup == VFS_NIL_FILE) {
 		syscall_reply(process_get_tid(p), SOS_VFS_NOMORE);
 	} else {
+		vf->ref++;	
 		syscall_reply(process_get_tid(p), fdup);
 	}
 }

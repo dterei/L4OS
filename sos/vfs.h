@@ -54,6 +54,7 @@ typedef struct {
 	VNode vnode;
 	fmode_t fmode;
 	L4_Word_t fp;
+	unsigned int ref; // reference (due to dup/dup2)
 } VFile;
 
 #define STDOUT_FN "console"

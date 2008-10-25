@@ -31,6 +31,10 @@ int main(int argc, char *argv[]) {
 	write(fd2, line6, strlen(line6));
 	close(fd);
 
+	char *line7 = "line3: written using new fd (just closed of fd)\n";
+	write(fd2, line7, strlen(line7));
+	close(fd2);
+
 	return 0;
 }
 

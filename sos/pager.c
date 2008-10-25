@@ -17,7 +17,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 3
+#define verbose 1
 
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
