@@ -122,7 +122,8 @@ elf_env.Package("libs/sos")
 elfapps = []
 
 for dir in ls('bin'):
-    elfapps.append(elf_env.Package('bin/%s' % (dir)))
+    if not dir.startswith('.'):
+        elfapps.append(elf_env.Package('bin/%s' % (dir)))
 
 # Once you get to the later milestones you will be writing lots of little test
 # tools that need to get loaded and run in your context.  Do that by calling

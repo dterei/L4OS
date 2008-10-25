@@ -48,6 +48,7 @@ typedef enum {
 } rtype_t;
 
 static List *requests; // [(rtype_t, rdata)]
+static int requestActive;
 
 static void queueRequest(rtype_t rtype, void *request);
 static void dequeueRequest(void);
@@ -642,9 +643,15 @@ static int pagerAction(PagerRequest *pr) {
 static void pager(PagerRequest *pr) {
 	if (pagerAction(pr)) {
 		pr->callback(pr);
+
 		if (!list_null(requests)) {
 			list_iterate(requests, printRequests, NULL);
-			//startRequest(); // XXX XXX XXX XXX BUG
+			assert(requestActive);
+			// XXX this is hopefully the bug that is making the forkbomb
+			// crash.  Assuming it is, removing this conditional and
+			// uncommenting the following one should fix the problem.
+		//if (!list_null(request) && !requestActive) {
+		//	startRequest();
 		}
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
@@ -777,6 +784,9 @@ static void startElfload(void) {
 static void dequeueRequest(void) {
 	dprintf(1, "*** dequeueRequest\n");
 
+	assert(requestActive);
+	requestActive = 0;
+
 	pair_free(list_unshift(requests));
 
 	if (list_null(requests)) {
@@ -793,11 +803,13 @@ static void queueRequest(rtype_t rtype, void *request) {
 
 	if (list_null(requests)) {
 		dprintf(2, "*** queueRequest: list null, running request\n");
+		assert(!requestActive);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 		startRequest();
 	} else {
 		dprintf(2, "*** queueRequest: queueing request\n");
 		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		assert(requestActive);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
 }
@@ -1133,6 +1145,9 @@ static void startRequest(void) {
 	dprintf(1, "*** startRequest\n");
 	assert(!list_null(requests));
 
+	assert(!requestActive);
+	requestActive = 1;
+
 	switch (requestsPeekType()) {
 		case REQUEST_SWAPOUT:
 		case REQUEST_SWAPIN:
@@ -1145,6 +1160,7 @@ static void startRequest(void) {
 
 		default:
 			dprintf(0, "!!! startRequest: unrecognised request\n");
+			requestActive = 0;
 	}
 }
 

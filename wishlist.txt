@@ -7,7 +7,10 @@
 - Pipes.
 
 - Editor (user program, nothing to do with SOS unless it involves writing a few
-more system calls).  Like red.
+more system calls).  Like red.  Need to implement a few more things, like tmpfile,
+which requiries that the temporary file be deleted after the processs dies.
+This wouldn't be that hard actually, just write a thing in libsos that opens a
+file, and in SOS 
 
 - Thread management.  As a note, this is what we need to have the init_thread
 kill itself without a hack.
