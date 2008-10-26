@@ -147,23 +147,28 @@ This asynchronous queue is managed as follows:
 
 The sequential nature of the blocking requests is so that all replies from the root server are unambiguous\footnote{Also, thread safe}, and indeed happen sequentially such that continuation state is simply a counter.  Additionally, while waiting for a reply from the root server, all other non blocking requests to the pager can be immediately dealt.  Several calls to the pager do not necessarily need to block, the most common being copyin or copyout, and this allows them to be immediately serviced.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
 
+\subsubsection{Swapping in}
+
+Swapping in a page involves the following steps:
+\begin{itemize}
+\item The region list is searched, as each region has its own ``swap file''.  This is a slightly overzealous way to generalise both demand paging and ELF loading as swapping in (in the vein of mmap only weaker), but it works.
+\item The page table entry is found for the faulting address.  This contains two releveant pieces of information: the high 24 bits will have been set to the offset of the page in the swap file (\texttt{PAGESIZE} granularity), and the \texttt{SWAP\_MASK} and possible \texttt{ELF\_MASK} bits will have been set.  The difference is discussed in Section \ref{sub:elf_loading}.
+\item A temporary frame is allocated to be read in to from the file.  This means a frame will always be available, being out of memory is not an issue.
+\item The relevant swap file is opened, to being a chain of continuations.  These will subsequently lseek, read for several blocks\footnote{The size of the blocks are limited by NFS, and in fact 4 iterations are needed to read an entire page}, then close the swap file.
+\item When finished, a callback is made - necessary to deal with the differences between completing different types of requests.  For normal swapping in, this callback will free the slot previously taken up on the file.  ELF loading has its own requirements.
+\item Finally, if there are spare frames available a permanent one is allocated, the contents from the temporary frame copied in, and the temporary frame freed.  Otherwise a swapout request must be immediately made.
+\end{itemize}
 \subsubsection{Swapping out}
 
 Swapping a page out involves the following steps:
 \begin{itemize}
 \item A page is chosen to swap out using the second chance algorithm.  The algorithm is well known so not worth explaining here, but as as reminder the reference bit is kept in the lower 12 bits of every page table entry.  When this bit is unset, the page is also unmapped so that a fault will occur when (or if) later referenced.
-\item A \emph{swap out request} is pushed to the head of the request queue, then the request started.  To put the request at the end of the queue would be incorrect, as it is the page faults which are queued.  A swap out request is just part of dealing with the page fault.
-\item A slot in the swap file is allocated in a process similar to frame allocation.  Swapped pages must be kept track of in order to free all slots when a process finishes.
-\item The swap out request will open the relevant swap file given in the region list (although currently always ``.swap'').  This begins a chain of continuations which open, lseek, write, then close the file in sequential order.  Writing will actually involve several tries as the NFS buffer is not large enough for an entire page.  Currently, 
+\item A slot in the swap file is allocated in a process similar to frame allocation.  This location (as previously mentioned) is stored in the high 24 bits of the page table entry.  Additionally, the \texttt{SWAP\_MASK} bit is set.
+\item A swap out request is pushed 
+\item The swap out request will open the relevant swap file given in the region list for that entry.  This will actually always be ``.swap'', the .  This begins a chain of continuations which open, lseek, write, then close the file in sequential order.  Writing will actually involve several tries as the NFS buffer is not large enough for an entire page.
 \item On finishing: the frame is freed, swap out request dequeued, and the next request run.  This will either be a page fault (which is now guaranteed to find a frame) or a swap in request (likewise, but discussed below).
 \end{itemize}
 
-\subsubsection{Swapping in}
-
-Swapping in a page is slightly more complicated than swapping in a page:
-\begin{itemize}
-\item The region list is searched for the faulting 
-\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 % SYSTEM CALL INTERFACE %

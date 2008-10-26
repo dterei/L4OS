@@ -7,8 +7,6 @@ the process using the most frames and try again.
 - Replace assertions with killing/deleting the offending process.  Since, the
 failed assertions will probably be due to the process doing something stupid.
 
-- Fix whatever is causing forkbomb/ptbomb to lock up.  Maybe already have.
-
 - Bug which was occuring with I/O redirection where the vpager would try to IP
 SOS and SOS would be trying to IPC vpager and they would block. This might be
 causing the forkbomb problems as well. Solved for I/O redirection for moment
@@ -23,4 +21,8 @@ to SOS who is trying to reply to it.
 
 Other option is to have no two way dangers IPC between SOS and VPager, would
 need to change all IPC in VPager to be blocking/syncronous IPC.
+
+- Fix whatever is making the forkbombs die after 10 processes being created.
+
+
 
