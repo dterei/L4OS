@@ -17,7 +17,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 3
+#define verbose 1
 
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
@@ -53,8 +53,6 @@ static void startSwapin(void);
 static void startSwapout(void);
 
 // Demand paging
-#define SWAP_BUFSIZ 1024
-
 typedef enum {
 	SWAPIN_OPEN,
 	SWAPIN_LSEEK,
@@ -107,8 +105,8 @@ static void virtualPagerHandler(void);
 #define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
 #define HI_SHIFT(word) ((word) << 16)
 
-static L4_Word_t *copyInOutData;
-static char *copyInOutBuffer;
+static L4_Word_t copyInOutData[MAX_THREADS];
+static char copyInOutBuffer[MAX_THREADS * COPY_BUFSIZ];
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
 static void copyOut(L4_ThreadId_t tid, void *dst, size_t size, int append);
 
@@ -204,21 +202,6 @@ static int framesFree(void *contents, void *data) {
 
 static int isPageAligned(void *ptr) {
 	return (((L4_Word_t) ptr) & (PAGESIZE - 1)) == 0;
-}
-
-static L4_Word_t *allocFrames(int n) {
-	assert(n > 0);
-	L4_Word_t frame, nextFrame;
-
-	frame = frame_alloc(FA_ALLOCFRAMES);
-	n--;
-
-	for (int i = 1; i < n; i++) {
-		nextFrame = frame_alloc(FA_ALLOCFRAMES);
-		assert((frame + i * PAGESIZE) == nextFrame);
-	}
-
-	return (L4_Word_t*) frame;
 }
 
 static int mapPage(L4_SpaceId_t sid, L4_Word_t virt, L4_Word_t phys,
@@ -355,19 +338,10 @@ static void *requestsUnshift(void) {
 
 void pager_init(void) {
 	// Set up lists
-	totalPages = FRAME_ALLOC_LIMIT;
-	//totalPages = frames_free();
-	allocLimit = totalPages;
+	allocLimit = FRAME_ALLOC_LIMIT;
 	alloced = list_empty();
 	swapped = list_empty();
 	requests = list_empty();
-
-	// Grab a bunch of frames to use for copyin/copyout
-	assert((PAGESIZE % COPY_BUFSIZ) == 0);
-	int numFrames = ((MAX_THREADS * COPY_BUFSIZ) / PAGESIZE);
-
-	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
-	copyInOutBuffer = (char*) allocFrames(numFrames);
 
 	// The default swapfile (.swap)
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
@@ -405,7 +379,7 @@ static int heapGrow(uintptr_t *base, unsigned int nb) {
 }
 
 static int memoryUsage(void) {
-	return totalPages - allocLimit;
+	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
 static int findRegion(void *contents, void *data) {
@@ -639,14 +613,8 @@ static void pager(PagerRequest *pr) {
 	if (pagerAction(pr)) {
 		pr->callback(pr);
 
-		if (!list_null(requests)) {
-			list_iterate(requests, printRequests, NULL);
-			assert(requestActive);
-			// XXX this is hopefully the bug that is making the forkbomb
-			// crash.  Assuming it is, removing this conditional and
-			// uncommenting the following one should fix the problem.
-		//if (!list_null(request) && !requestActive) {
-		//	startRequest();
+		if (!list_null(requests) && !requestActive) {
+			startRequest();
 		}
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
@@ -697,7 +665,7 @@ static void continueElfload(int vfsRval) {
 			} else {
 				er->fd = vfsRval;
 				copyInOutData[L4_ThreadNo(sos_my_tid())] = 0;
-				strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
+				strncpy(pager_buffer(sos_my_tid()), er->path, MAX_FILE_NAME);
 				statNonblocking();
 			}
 
@@ -714,7 +682,7 @@ static void continueElfload(int vfsRval) {
 				dprintf(1, "*** continueElfload: not executable\n");
 				finishElfload(-1);
 			} else {
-				readNonblocking(er->fd, COPY_BUFSIZ);
+				readNonblocking(er->fd, IO_MAX_BUFFER);
 				er->stage++;
 			}
 
@@ -772,7 +740,7 @@ static void startElfload(void) {
 
 	// Open the file and let the continuation take over
 	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
+	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_FILE_NAME);
 	openNonblocking(NULL, FM_READ);
 }
 
@@ -962,7 +930,7 @@ static void continueSwapin(int vfsRval) {
 
 		case SWAPIN_LSEEK:
 			readNonblocking(swapfile_get_fd(pr->sf),
-					min(SWAP_BUFSIZ, pr->size - pr->offset));
+					min(IO_MAX_BUFFER, pr->size - pr->offset));
 			pr->stage++;
 			break;
 
@@ -980,7 +948,7 @@ static void continueSwapin(int vfsRval) {
 				pr->stage++;
 			} else {
 				readNonblocking(swapfile_get_fd(pr->sf),
-						min(SWAP_BUFSIZ, pr->size - pr->offset));
+						min(IO_MAX_BUFFER, pr->size - pr->offset));
 			}
 
 			break;
@@ -1015,7 +983,7 @@ static void continueSwapout(int vfsRval) {
 				swapfile_close(pr->sf);
 				pr->stage++;
 			} else {
-				int size = min(SWAP_BUFSIZ, pr->size);
+				int size = min(IO_MAX_BUFFER, pr->size);
 				memcpy(pager_buffer(sos_my_tid()),
 						(void*) (pr->addr + pr->offset), size);
 				writeNonblocking(swapfile_get_fd(pr->sf), size);
@@ -1181,6 +1149,7 @@ static void startPagerRequest(void) {
 
 		if (allocLimit > 0) {
 			// In the meantime a frame has become free
+			requestActive = 0;
 			pager((PagerRequest*) requestsUnshift());
 		} else {
 			startSwapout();
@@ -1412,7 +1381,7 @@ static void copyInContinue(PagerRequest *pr) {
 		dprintf(3, "*** copyInContinue: finished\n");
 		syscall_reply_v(tid, 0);
 	} else {
-		pr->addr = (L4_Word_t) src;
+		pr->addr = (pr->addr + PAGESIZE) & PAGEALIGN;
 		dprintf(3, "*** copyInContinue: continuing\n");
 		pager(pr);
 	}
@@ -1481,7 +1450,7 @@ static void copyOutContinue(PagerRequest *pr) {
 		dprintf(3, "*** copyOutContinue: finished\n");
 		syscall_reply_v(tid, 0);
 	} else {
-		pr->addr = (L4_Word_t) dst;
+		pr->addr = (pr->addr + PAGESIZE) & PAGEALIGN;
 		dprintf(3, "*** copyOutContinue: continuing\n");
 		pager(pr);
 	}

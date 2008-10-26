@@ -8,28 +8,26 @@
 #include <sos/globals.h>
 
 // UDP port serial library uses/sosh.
-#define SERIAL_PORT (26706)
+#define SERIAL_PORT 26706
 
-// Console buffer size
-#define CONSOLE_BUF_SIZ 128
-
-/* Random problems seem to occur if all of buffer used, some is needed for
- * nfs header.
- */
 #define PAGESIZE 4096
+#define PAGEALIGN (~((PAGESIZE) - 1))
+#define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
+#define ONE_MEG (1 * 1024 * 1024)
 
 #define ADDRESS_ALL ((L4_Word_t) (-1))
 #define ADDRESS_NONE ((L4_Word_t) (-2))
-#define MAX_ADDRSPACES 256
-#define COPY_BUFSIZ PAGESIZE
-#define MAX_THREADS 1024
-#define ONE_MEG (1 * 1024 * 1024)
-#define PAGEALIGN (~((PAGESIZE) - 1))
-#define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
-#define VIRTUAL_PAGER_PRIORITY 250
-#define PROCESS_MAX_FILES 16
 
-// swapfile filename
+#define VIRTUAL_PAGER_PRIORITY 250
+
+#define CONSOLE_BUF_SIZ 128
+#define COPY_BUFSIZ (PAGESIZE * 2)
+#define MAX_ADDRSPACES 256
+#define MAX_THREADS 256
+#define PROCESS_MAX_FILES 16
+#define PROCESS_STDFDS_RESERVE 3
+#define PROCESS_MAX_FDS (PROCESS_MAX_FILES + PROCESS_STDFDS_RESERVE)
+
 #define SWAPFILE_FN ".swap"
 
 #endif // constants.h
