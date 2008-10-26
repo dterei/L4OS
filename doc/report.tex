@@ -282,14 +282,14 @@ The copyin/copyout design has several advantages, most of which are already impl
 \begin{itemize}
 \item It is safe, in that the kernel (that is, pager) will never block while performing a copy, and never do anything illegal from the user's perspective.
 \item Given that the kernel owns the data in its own buffer, it can be modified at its discretion.  Not only is this nice and (thread) safe, it is especially useful when ``spoofing'' system calls from users that would have otherwise required a copyin or copyout.
-\item Many of the limitations mentioned below are excusable given the small number of buffers actually needed.
+\item The main limitation mentioned below is excusable given the small number of buffers actually needed.
 \end{itemize}
 
 \subsubsection{Limitations}
 
 There are, of course, several limitations:
 \begin{itemize}
-\item There is a constant 1MB of memory unavailable for general use.
+\item There is a constant 2MB of memory unavailable for general use.
 \item There is a finite size to the amount of data that can be stored by the kernel (however, it is certainly large enough for most purposes).
 \item Both copyin and copyout share the same buffer, so the order of operations is important.  Particularly, \texttt{printf} will initiate a \texttt{copyin} so any debugging attempted to be made anywhere in this process could cause unexpected results.
 \item Care needs to be taken to word align data in the buffers.
