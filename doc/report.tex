@@ -204,17 +204,44 @@ typedef enum {
         SOS_PHYSUSE,
         SOS_VPAGER,
         SOS_MEMLOC,
-        SOS_MMAP,
-        SOS_SHARE_VM,
         L4_PAGEFAULT = ((L4_Word_t) -2),
         L4_INTERRUPT = ((L4_Word_t) -1),
         L4_EXCEPTION = ((L4_Word_t) -5)
 } syscall_t;
 \end{verbatim}
 
+All of these system calls are documented in their libsos implementations.
+
 \subsection{Division of work}
 
 As already mentioned, there are two separate entities capable of handling system calls: the root server, and the pager.  The division is made such that the set of calls handled by each do not interfere with one another.
+
+\begin{center}
+\begin{tabular}{c|c}
+Root server & Pager \\ \hline
+SOS\_KERNEL\_PRINT & SOS\_DEBUG\_FLUSH \\
+SOS\_OPEN & SOS\_MOREMEM \\
+SOS\_CLOSE & SOS\_COPYIN \\
+SOS\_READ & SOS\_COPYOUT \\
+SOS\_FLUSH & SOS\_PROCESS\_CREATE \\
+SOS\_WRITE & SOS\_PROCESS\_DELETE \\
+SOS\_LSEEK & SOS\_PROCESS\_STATUS \\
+SOS\_GETDIRENT & SOS\_PROCESS\_WAIT \\
+SOS\_STAT & SOS\_MEMUSE \\
+SOS\_REMOVE & SOS\_SWAPUSE \\
+SOS\_MY\_ID & SOS\_PHYSUSE \\
+SOS\_TIME\_STAMP & SOS\_MEMLOC \\
+SOS\_USLEEP & \\
+SOS\_VPAGER & \\
+\end{tabular}
+\end{center}
+
+The other system calls are special cases:
+\begin{itemize}
+\item SOS\_REPLY is only for communication (and \emph{the} only communcation) from the root server to the pager.
+\item L4\_PAGEFAULT is received by both the root server and the pager, where the pager deals with user programs and the root server deals with kernel threads.
+\item L4\_EXCEPTION is in the same situation as L4\_PAGEFAULT.  Note that when user processes throw exceptions they are killed as normal.
+\end{itemize}
 
 \subsection{Copyin/Copyout} \label{sub:copyin_copyout}
 
@@ -452,8 +479,8 @@ typedef struct {
    char *buf;
    L4_Word_t pos;
    size_t nbyte;
-   void (*read_done)(pid_t pid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
-         size_t nbyte, int status);
+   void (*read_done)(pid_t pid, VNode self, fildes_t file,
+      L4_Word_t pos, char *buf, size_t nbyte, int status);
 } NFS_ReadRequest;
 
 typedef struct {
@@ -462,8 +489,8 @@ typedef struct {
    char *buf;
    L4_Word_t offset;
    size_t nbyte;
-   void (*write_done)(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
-         const char *buf, size_t nbyte, int status);
+   void (*write_done)(pid_t pid, VNode self, fildes_t file,
+         L4_Word_t offset, const char *buf, size_t nbyte, int status);
 } NFS_WriteRequest;
 
 typedef struct {
@@ -579,7 +606,7 @@ When an ELF load request comes to the head of the pager's request queue, a seque
 
 It would be a perfect situation if the ELF sections loaded themselves in the exact way a swap file does, however there are a few small but significant differences.
 \begin{itemize}
-\item An ELF files needs not concept of ``free slots''.
+\item An ELF files needs no concept of ``free slots''.
 \item Indeed, an ELF file should never actually be swapped out to at all, as writing over an ELF file (for example, if the data section were to be swapped out) could have strange consequences.
 \item An ELF file has a small gap in memory between the region in memory and the region on disk, and this needs to be zeroed.
 \end{itemize}
