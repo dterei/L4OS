@@ -17,7 +17,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 1
+#define verbose 3
 
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
@@ -30,7 +30,7 @@
 static int totalPages;
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 400
+#define FRAME_ALLOC_LIMIT 1024
 static int allocLimit;
 
 // Tracking allocated frames, including default swap file
@@ -377,7 +377,8 @@ void pager_init(void) {
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
 
 	// Start the real pager process
-	Process *p = process_run_rootthread("virtual_pager", virtualPagerHandler, YES_TIMESTAMP);
+	Process *p = process_run_rootthread("pager", virtualPagerHandler,
+		YES_TIMESTAMP, 254);
 	process_set_ipcfilt(p, PS_IPC_NONBLOCKING);
 
 	// Wait until it has actually started
@@ -538,6 +539,33 @@ static int processDelete(L4_Word_t pid) {
 	return 0;
 }
 
+static void printRequests(void *contents, void *data) {
+	Pair *pair = (Pair*) contents;
+	rtype_t type = (rtype_t) pair->fst;
+	PagerRequest *pr;
+	ElfloadRequest *er;
+
+	printf("rtype: %d, ", type);
+
+	switch (type) {
+		case REQUEST_SWAPOUT:
+		case REQUEST_SWAPIN:
+			pr = (PagerRequest*) pair->snd;
+			printf("stage=%d pid=%d addr=%p\n",
+					pr->stage, pr->pid, (void*) pr->addr);
+			break;
+
+		case REQUEST_ELFLOAD:
+			er = (ElfloadRequest *) pair->snd;
+			printf("stage=%d path=%s parent=%d child=%d\n",
+					er->stage, er->path, er->parent, er->child);
+			break;
+
+		default:
+			assert(!"default");
+	}
+}
+
 static int pagerAction(PagerRequest *pr) {
 	Process *p;
 	L4_Word_t frame, *entry;
@@ -614,6 +642,10 @@ static int pagerAction(PagerRequest *pr) {
 static void pager(PagerRequest *pr) {
 	if (pagerAction(pr)) {
 		pr->callback(pr);
+		if (!list_null(requests)) {
+			list_iterate(requests, printRequests, NULL);
+			startRequest();
+		}
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
 	}
@@ -740,33 +772,6 @@ static void startElfload(void) {
 	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
 	strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
 	openNonblocking(NULL, FM_READ);
-}
-
-static void printRequests(void *contents, void *data) {
-	Pair *pair = (Pair*) contents;
-	rtype_t type = (rtype_t) pair->fst;
-	PagerRequest *pr;
-	ElfloadRequest *er;
-
-	printf("rtype: %d, ", type);
-
-	switch (type) {
-		case REQUEST_SWAPOUT:
-		case REQUEST_SWAPIN:
-			pr = (PagerRequest*) pair->snd;
-			printf("stage=%d pid=%d addr=%p\n",
-					pr->stage, pr->pid, (void*) pr->addr);
-			break;
-
-		case REQUEST_ELFLOAD:
-			er = (ElfloadRequest *) pair->snd;
-			printf("stage=%d path=%s parent=%d child=%d\n",
-					er->stage, er->path, er->parent, er->child);
-			break;
-
-		default:
-			assert(!"default");
-	}
 }
 
 static void dequeueRequest(void) {

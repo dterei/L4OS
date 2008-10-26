@@ -26,6 +26,7 @@
 #define ONE_MEG (1 * 1024 * 1024)
 #define PAGEALIGN (~((PAGESIZE) - 1))
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
+#define VIRTUAL_PAGER_PRIORITY 250
 #define PROCESS_MAX_FILES 16
 
 // swapfile filename
