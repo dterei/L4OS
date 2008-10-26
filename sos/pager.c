@@ -29,12 +29,33 @@
 #define ADDRESS_MASK PAGEALIGN
 
 // Limiting the number of user frames
-#define FRAME_ALLOC_LIMIT 42
-static int allocLimit;
+#define FRAME_ALLOC_LIMIT 42 // XXX
+static int allocLimit; // XXX
+
+// The core of the Pager's asynchronous requests
+typedef struct Request {
+	// Stage in request continuations, passed to cont.
+	int stage;
+
+	// OO-style data associated with the request.
+	void *data;
+
+	// Called when this request is first run, returns the stage to start at.
+	int (*init)(void *data);
+
+	// Called each time a continuation arrives for this thread with data from
+	// the Request and the return value from the IPC.
+	// Returns the number of the next stage or FINISHED to finish.
+	int (*cont)(void *data, int stage, int rval);
+
+	// Called when request finishes.
+	void (*finish)(void *data);
+};
 
 // Tracking allocated frames, including default swap file
 static List *alloced; // [(pid, word)]
 static List *swapped; // [(pid, word)]
+static List *mmapped; // [MMap]
 
 static Swapfile *defaultSwapfile;
 
@@ -47,28 +68,6 @@ typedef struct MMap_t {
 	int rights;
 	char path[MAX_FILE_NAME];
 } MMap;
-
-static List *mmapped; // [MMap]
-
-// Asynchronous pager requests
-typedef enum {
-	REQUEST_NONE,
-	REQUEST_PAGEFAULT,
-	REQUEST_SWAPOUT,
-	REQUEST_SWAPIN,
-	REQUEST_MMAP_READ,
-	REQUEST_ELFLOAD,
-	REQUEST_READ,
-	REQUEST_WRITE,
-} rtype_t;
-
-typedef struct Request_t Request;
-struct Request_t {
-	rtype_t type; // type of request
-	void *data;   // data associated with type
-	int stage;    // stage in callbacks
-	void (*finish)(int success);
-};
 
 static List *requests; // [(rtype_t, rdata)]
 
@@ -122,7 +121,7 @@ typedef struct ElfloadRequest_t {
 } ElfloadRequest;
 
 static L4_ThreadId_t virtualPager; // automatically L4_nilthread
-static void virtualPagerHandler(void);
+static void pager_handler(void);
 
 // For copyin/copyout
 #define LO_HALF_MASK 0x0000ffff
@@ -131,8 +130,9 @@ static void virtualPagerHandler(void);
 #define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
 #define HI_SHIFT(word) ((word) << 16)
 
-static L4_Word_t *copyInOutData;
-static char *copyInOutBuffer;
+static L4_Word_t copyInOutData[MAX_THREADS];
+static char copyInOutBuffer[MAX_THREADS * MAX_IO_BUF];
+
 static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
 static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);
 
@@ -242,21 +242,6 @@ static int mmappedFree(void *contents, void *data) {
 	MMap *curr = (MMap*) contents;
 	Process *p = (Process*) data;
 	return (curr->pid == process_get_pid(p));
-}
-
-static L4_Word_t *allocFrames(int n) {
-	assert(n > 0);
-	L4_Word_t frame, nextFrame;
-
-	frame = frame_alloc(FA_ALLOCFRAMES);
-	n--;
-
-	for (int i = 1; i < n; i++) {
-		nextFrame = frame_alloc(FA_ALLOCFRAMES);
-		assert((frame + i * PAGESIZE) == nextFrame);
-	}
-
-	return (L4_Word_t*) frame;
 }
 
 static int mapPage(
@@ -385,18 +370,11 @@ void pager_init(void) {
 	mmapped = list_empty();
 	requests = list_empty();
 
-	// Grab a bunch of frames to use for copyin/copyout
-	assert((PAGESIZE % MAX_IO_BUF) == 0);
-	int numFrames = ((MAX_THREADS * MAX_IO_BUF) / PAGESIZE);
-
-	copyInOutData = (L4_Word_t*) allocFrames(sizeof(L4_Word_t));
-	copyInOutBuffer = (char*) allocFrames(numFrames);
-
 	// The default swapfile (.swap)
 	defaultSwapfile = swapfile_init(SWAPFILE_FN);
 
 	// Start the real pager process
-	Process *p = process_run_rootthread("virtual_pager", virtualPagerHandler,
+	Process *p = process_run_rootthread("pager", pager_handler,
 			YES_TIMESTAMP);
 	process_set_ipcfilt(p, PS_IPC_NONBLOCKING);
 
@@ -1363,6 +1341,56 @@ static void startRequest2(void) {
 	}
 }
 
+// Continue the current request
+static void continueRequest(int rval) {
+	Request *req = (Request*) list_peek(requests);
+	int newStage = req->cont(req->data, req->stage, rval);
+
+	if (newStage == FINISHED) {
+		req->finish(req->data);
+		dequeueRequest();
+	} else {
+		req->stage = newStage;
+	}
+}
+
+// Start the next request in the queue
+static void startRequest(void) {
+	Request *req = (Request*) list_peek(requests);
+	req->stage = req->init(req->data);
+}
+
+// Queue a request and immediately start if at the head
+static void queueRequest(void *data, 
+		int (*init)(void*), int (*cont)(void*, int), void (*finish)(void *)) {
+	Request *req = (Request*) malloc(sizeof(Request));
+	req->data = data;
+	req->init = init;
+	req->cont = cont;
+	req->finish = finish;
+
+	if (list_null(requests)) {
+		list_push(requests, req);
+		startRequest();
+	} else {
+		list_push(requests, req);
+	}
+}
+
+// Push a request to the front of the queue and immediately start
+static void pushRequest(void) {
+	;
+}
+
+// Dequeue a request and start the next one if available
+static void dequeueRequest(void) {
+	free(list_unshift(requests));
+
+	if (!list_null(requests)) {
+		startRequest();
+	}
+}
+
 static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
 
@@ -1399,7 +1427,7 @@ static Pagefault *allocPagefault(pid_t pid, L4_Word_t addr, int rights,
 	return fault;
 }
 
-static void virtualPagerHandler(void) {
+static void pager_handler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 
 	virtualPager = sos_my_tid();
@@ -1449,11 +1477,8 @@ static void virtualPagerHandler(void) {
 				break;
 
 			case SOS_REPLY:
-				if (L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
-					vfsHandler(L4_MsgWord(&msg, 0));
-				} else {
-					dprintf(0, "!!! virtualPagerHandler: got reply from user\n");
-				}
+				assert(L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace));
+				continueRequest(L4_MsgWord(&msg, 0));
 				break;
 
 			case SOS_MOREMEM:
@@ -1534,11 +1559,11 @@ static void virtualPagerHandler(void) {
 						L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
 		}
 
-		dprintf(3, "*** virtualPagerHandler: finished %s from %d\n",
+		dprintf(3, "*** pager_handler: finished %s from %d\n",
 				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
 	}
 
-	dprintf(0, "!!! virtualPagerHandler: loop failed!\n");
+	dprintf(0, "!!! pager_handler: loop failed!\n");
 }
 
 char *pager_buffer(L4_ThreadId_t tid) {

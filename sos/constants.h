@@ -22,7 +22,7 @@
 #define ADDRESS_NONE ((L4_Word_t) (-2))
 #define MAX_ADDRSPACES 256
 #define MAX_IO_BUF PAGESIZE
-#define MAX_THREADS 1024
+#define MAX_THREADS MAX_ADDRSPACES // We don't support userspace threads
 #define ONE_MEG (1 * 1024 * 1024)
 #define PAGEALIGN (~((PAGESIZE) - 1))
 #define PAGEWORDS ((PAGESIZE) / (sizeof(L4_Word_t)))
