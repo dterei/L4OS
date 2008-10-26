@@ -119,18 +119,19 @@ It is worth noting that there are no kernel threads, with the exception of those
 The decision to put the pager in its own thread was made for the following reasons:
 \begin{itemize}
 \item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer''.  See Section \ref{sub:system_call_interface}} orthogonal, so operations in the pager can happen simultaneously with the rootserver without race conditions.
-\item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Asynchronous IO in the pager (to prevent any blocking) is implemented using this method.  There must be careful control to ensure all communication between the two are \emph{serialised}, or deadlock can occur.
+\item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Asynchronous IO in the pager (to prevent any blocking) is implemented using this method.
 \item It is necessary for the pager to be able to access all of physical memory, most notably for copyin/copyout (see Section \ref{sub:copyin_copyout}).  Without careful management (or a brute force approach), this would cause root task pagefaults.  Instead, this allows the root task to act as the pager for the pager and manage memory accordingly.
 \end{itemize}
 
 There are also certain pitfalls:
-
-
-Several other types of system calls are also handled by the pager, including all process management system calls.  This is necessary as process management is closely linked to memory management, and race conditions arise otherwise.  The division of system call work is discussed further in Section \ref{sub:system_call_interface}.
+\begin{itemize}
+\item All communication between the pager and root server must be \emph{serialised}, or unexpected behavior and even deadlock can occur.
+\item The copy buffer is safe to share as there is one per thread, and threads can only be in one place at a time.  However, no other data structure is necessarily safe.  As a result, several other types of system calls (including all of process management) must be done through the pager.  The division of system call work is discussed further in Section \ref{sub:system_call_interface}.
+\end{itemize}
 
 \subsection{Demand paging} \label{sub:demand_paging}
 
-The process of demand paging is slightly complicated, and encompasses nearly all asynchronous requests in the pager, including the lazy ELF loading.  For now however, just \emph{swapping in} and \emph{swapping out} will be covered, with ELF loading described in Section \ref{sub:elf_loading}.
+The process of demand paging is slightly complicated, and encompasses nearly all asynchronous requests in the pager, including the lazy ELF loading.  Here just \emph{swapping in} and \emph{swapping out} will be covered, with ELF loading described in Section \ref{sub:elf_loading}.
 
 \subsubsection{Delayed page faults}
 
@@ -138,22 +139,22 @@ As described in the page fault algorithm, there are two cases when a page fault 
 
 This asynchronous queue is managed as follows:
 \begin{enumerate}
-\item Upon adding a request to the queue, if it is currently empty the request at the head is immediately started.
-\item When started, the original page fault request is attempted again.  In the meantime, a frame might have been freed (for example, if a process died) or the frame might have already been swapped in (for example, if we had implemented shared memory).
-\item Assuming the page fault must again block, a sequence of callbacks is immediately started.  A decision is made: if the request simply required a free frame, a \emph{swap out} request is made.  Otherwise, a \emph{swap in} request is made.  These are each described separately below.
-\item In either case, upon finishin the page request is dequeued.  If the asynchronous request queue is not empty then the next one started.
+\item Upon adding a request to the queue, if it is currently empty the request is immediately started.  Otherwise it must wait as the pager deals with blocking requests that arrived earlier.
+\item When the request is at the head of the queue it is immediately tried again.  This is because frames might have been freed while servicing other requests (for example, if a process died) or the frame might have already been swapped in (for example, if we had implemented shared memory).
+\item Assuming the page fault must again block, a sequence of callbacks is started.  A decision is made: if the request simply required a free frame, a \emph{swap out} request is made.  Otherwise, a \emph{swap in} request is made.  These are each described separately below.
+\item In either case, when finished the pager request is dequeued.  If the asynchronous request queue is not empty, the next one started and the cycle continues.
 \end{enumerate}
 
-The sequential nature of the blocking requests is so that all replies from the root server are unambiguous, and indeed happen sequentially such that continuation state is simply a counter.  There is no blocking, as while waiting for a reply from the root server all other requests to the pager.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
+The sequential nature of the blocking requests is so that all replies from the root server are unambiguous\footnote{Also, thread safe}, and indeed happen sequentially such that continuation state is simply a counter.  Additionally, while waiting for a reply from the root server, all other non blocking requests to the pager can be immediately dealt.  Several calls to the pager do not necessarily need to block, the most common being copyin or copyout, and this allows them to be immediately serviced.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
 
 \subsubsection{Swapping out}
 
 Swapping a page out involves the following steps:
 \begin{itemize}
 \item A page is chosen to swap out using the second chance algorithm.  The algorithm is well known so not worth explaining here, but as as reminder the reference bit is kept in the lower 12 bits of every page table entry.  When this bit is unset, the page is also unmapped so that a fault will occur when (or if) later referenced.
-\item A \emph{swap out request} is pushed to the heap of the request queue, then the request started.
-\item A slot in the swap file is allocated in a process similar to frame allocation.
-\item The swap out request will open (non blocking) the relevant swap file given in the region list (although currently always ``.swap'').  This sets of a chain of continuations which open, lseek, write, then close the file in sequential order.
+\item A \emph{swap out request} is pushed to the head of the request queue, then the request started.  To put the request at the end of the queue would be incorrect, as it is the page faults which are queued.  A swap out request is just part of dealing with the page fault.
+\item A slot in the swap file is allocated in a process similar to frame allocation.  Swapped pages must be kept track of in order to free all slots when a process finishes.
+\item The swap out request will open the relevant swap file given in the region list (although currently always ``.swap'').  This begins a chain of continuations which open, lseek, write, then close the file in sequential order.  Writing will actually involve several tries as the NFS buffer is not large enough for an entire page.  Currently, 
 \item On finishing: the frame is freed, swap out request dequeued, and the next request run.  This will either be a page fault (which is now guaranteed to find a frame) or a swap in request (likewise, but discussed below).
 \end{itemize}
 

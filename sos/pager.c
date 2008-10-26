@@ -61,8 +61,6 @@ static void startSwapin(void);
 static void startSwapout(void);
 
 // Demand paging
-#define SWAP_BUFSIZ 1024
-
 typedef enum {
 	SWAPIN_OPEN,
 	SWAPIN_LSEEK,
@@ -714,7 +712,7 @@ static void continueElfload(int vfsRval) {
 			} else {
 				er->fd = vfsRval;
 				copyInOutData[L4_ThreadNo(sos_my_tid())] = 0;
-				strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
+				strncpy(pager_buffer(sos_my_tid()), er->path, MAX_FILE_NAME);
 				statNonblocking();
 			}
 
@@ -731,7 +729,7 @@ static void continueElfload(int vfsRval) {
 				dprintf(1, "*** continueElfload: not executable\n");
 				finishElfload(-1);
 			} else {
-				readNonblocking(er->fd, COPY_BUFSIZ);
+				readNonblocking(er->fd, IO_MAX_BUFFER);
 				er->stage++;
 			}
 
@@ -789,7 +787,7 @@ static void startElfload(void) {
 
 	// Open the file and let the continuation take over
 	ElfloadRequest *er = (ElfloadRequest *) requestsPeek();
-	strncpy(pager_buffer(sos_my_tid()), er->path, COPY_BUFSIZ);
+	strncpy(pager_buffer(sos_my_tid()), er->path, MAX_FILE_NAME);
 	openNonblocking(NULL, FM_READ);
 }
 
@@ -979,7 +977,7 @@ static void continueSwapin(int vfsRval) {
 
 		case SWAPIN_LSEEK:
 			readNonblocking(swapfile_get_fd(pr->sf),
-					min(SWAP_BUFSIZ, pr->size - pr->offset));
+					min(IO_MAX_BUFFER, pr->size - pr->offset));
 			pr->stage++;
 			break;
 
@@ -997,7 +995,7 @@ static void continueSwapin(int vfsRval) {
 				pr->stage++;
 			} else {
 				readNonblocking(swapfile_get_fd(pr->sf),
-						min(SWAP_BUFSIZ, pr->size - pr->offset));
+						min(IO_MAX_BUFFER, pr->size - pr->offset));
 			}
 
 			break;
@@ -1032,7 +1030,7 @@ static void continueSwapout(int vfsRval) {
 				swapfile_close(pr->sf);
 				pr->stage++;
 			} else {
-				int size = min(SWAP_BUFSIZ, pr->size);
+				int size = min(IO_MAX_BUFFER, pr->size);
 				memcpy(pager_buffer(sos_my_tid()),
 						(void*) (pr->addr + pr->offset), size);
 				writeNonblocking(swapfile_get_fd(pr->sf), size);
