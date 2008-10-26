@@ -35,6 +35,8 @@ NODISTLIST = packages
 
 all: $(TARGET) reset
 
+noreset: $(TARGET)
+
 .IGNORE: on off up down reset
 on off up down reset:
 	$(SLUG_CMD) $(patsubst on,up,$(patsubst off,down,$@))

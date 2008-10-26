@@ -251,7 +251,7 @@ static void openStdFd(Process *p, char* file, char *stdfile, fmode_t mode) {
 
 	dprintf(2, "openStdFd: %s\n", file);
 	strncpy(pager_buffer(process_get_tid(p)), file, COPY_BUFSIZ);
-	ipc_send_simple_4(L4_rootserver, PSOS_OPEN, SOS_IPC_SENDNONBLOCKING, mode,
+	ipc_send_simple_4(L4_rootserver, PSOS_OPEN, SOS_IPC_SEND, mode,
 			FM_UNLIMITED_RW, FM_UNLIMITED_RW, process_get_pid(p));
 }
 

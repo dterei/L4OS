@@ -678,14 +678,10 @@ static void pager(PagerRequest *pr) {
 	if (pagerAction(pr)) {
 		pr->callback(pr);
 
-		if (!list_null(requests)) {
-			list_iterate(requests, printRequests, NULL);
-			assert(requestActive);
-			// XXX this is hopefully the bug that is making the forkbomb
-			// crash.  Assuming it is, removing this conditional and
-			// uncommenting the following one should fix the problem.
-		//if (!list_null(request) && !requestActive) {
-		//	startRequest();
+		// This very rarely happens unless frames are being freed very quickly -
+		// for example, in a fork bomb
+		if (!list_null(requests) && !requestActive) {
+			startRequest();
 		}
 	} else {
 		dprintf(3, "*** pager: pagerAction stalled\n");
@@ -830,7 +826,7 @@ static void dequeueRequest(void) {
 		dprintf(1, "*** dequeueRequest: no more items\n");
 	} else {
 		dprintf(1, "*** dequeueRequest: running next\n");
-		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		if (verbose > 1) list_iterate(requests, printRequests, NULL);
 		startRequest();
 	}
 }
@@ -845,7 +841,7 @@ static void queueRequest(rtype_t rtype, void *request) {
 		startRequest();
 	} else {
 		dprintf(2, "*** queueRequest: queueing request\n");
-		if (verbose > 2) list_iterate(requests, printRequests, NULL);
+		if (verbose > 1) list_iterate(requests, printRequests, NULL);
 		assert(requestActive);
 		list_push(requests, pair_alloc(rtype, (L4_Word_t) request));
 	}
@@ -1223,6 +1219,7 @@ static void startPagerRequest(void) {
 
 		if (allocLimit > 0) {
 			// In the meantime a frame has become free
+			requestActive = 0;
 			pager((PagerRequest*) requestsUnshift());
 		} else {
 			startSwapout();

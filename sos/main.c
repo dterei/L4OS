@@ -46,12 +46,14 @@ init_thread(void) {
 
 static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 	int addr = L4_MsgWord(msg, 0);
+	int ip = L4_MsgWord(msg, 1);
+
 	dprintf(3, "*** sosPagerHandler: addr=%p tid=%ld sender=%ld\n",
 			(void*) addr, L4_ThreadNo(tid), L4_SpaceNo(L4_SenderSpace()));
 
 	if ((addr & PAGEALIGN) == 0) {
-		printf("SOS Segmentation fault (addr=%p, tid=%ld)\n",
-			(void*) addr, L4_ThreadNo(tid));
+		printf("SOS Segmentation fault (addr=%p, ip=%p, tid=%ld)\n",
+			(void*) addr, (void*) ip, L4_ThreadNo(tid));
 	}
 
 	addr &= PAGEALIGN;

@@ -303,7 +303,7 @@ get_vfile(pid_t pid, fildes_t file, int ipc) {
 
 	// check values
 	if (file < 0 || file >= PROCESS_MAX_FDS || fds[file] < 0 || fds[file] >= PROCESS_MAX_FILES) {
-		dprintf(0, "!!! File outside of rang!\n");
+		dprintf(1, "!!! File outside of rang!\n");
 		if (ipc) {
 			syscall_reply(process_get_tid(p), SOS_VFS_NOFILE);
 		}

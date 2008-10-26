@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define NUM_SLOTS 128
-#define SLOTSIZE 192
+#define NUM_SLOTS 16
+#define SLOTSIZE 64
 #define ARRSIZE 128
-#define ROUNDS 1024
+#define ROUNDS 8
 
-typedef char test_t;
+typedef int test_t;
 
 static char statArray[ARRSIZE];
 static int statIndex;
@@ -39,6 +39,21 @@ static void thrashHeap(void) {
 			flush(stdout_fd);
 		}
 	}
+
+	printf("\n");
+
+	for (int i = 0; i < NUM_SLOTS; i++) {
+		if (i % 16 == 0) {
+			printf("%d... ", i / 16);
+			flush(stdout_fd);
+		}
+
+		for (int j = 0; j < SLOTSIZE; j++) {
+			buf[i][j] = i*i + j;
+		}
+	}
+
+	printf("\n");
 
 	for (int i = 0; i < NUM_SLOTS; i++) {
 		if (i % 16 == 0) {
