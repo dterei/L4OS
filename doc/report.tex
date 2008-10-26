@@ -33,22 +33,11 @@
 
 \tableofcontents{}
 
-%%%%%%%%
-% TODO %
-%%%%%%%%
-
-\newpage{}
-\section{TODO}
-
-\begin{itemize}
-\item 3: system call interface
-\item 4: NFS
-\end{itemize}
-
 %%%%%%%%%%%%%%%%%%%%%
 % MEMORY MANAGEMENT %
 %%%%%%%%%%%%%%%%%%%%%
 
+\newpage{}
 \section{Memory management}
 
 \subsection{Page table structure}
@@ -177,6 +166,7 @@ Swapping a page out involves the following steps:
 % SYSTEM CALL INTERFACE %
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
+\newpage{}
 \section{System call interface} \label{sub:system_call_interface}
 
 \subsection{Inter-process communication protocol}
@@ -231,7 +221,7 @@ void copyin(void *data, size_t size, int append);
 void copyout(void *data, size_t size, int append);
 \end{verbatim}
 
-For example, when calling \texttt{write} in libsos, the user is in fact issuing a \texttt{SOS\_COPYIN} for the data to write, then a \texttt{SOS\_WRITE} with relevant parameters to write out that buffer.  Similary, when calling \texttt{read} in libsos a \texttt{SOS\_READ} is made, followed by \texttt{SOS\_COPYOUT} to copy the data in to the user's address space.
+For example, when calling \texttt{write} in libsos, the user is in fact issuing a \texttt{SOS\_COPYIN} for the data to write, then a \texttt{SOS\_WRITE} with relevant parameters to write out that buffer.  Similarly, when calling \texttt{read} in libsos a \texttt{SOS\_READ} is made, followed by \texttt{SOS\_COPYOUT} to copy the data in to the user's address space.
 
 \subsubsection{Interface}
 
@@ -244,7 +234,7 @@ The kernel buffer is a static array of a predetermined size, currently twice the
 On receiving a \texttt{SOS\_COPYIN} system call, the following steps are made:
 \begin{enumerate}
 \item The parameters of the copy are set up - this in fact requires extra static memory containing the size and offset of the operation.  Depending on the value of \texttt{append}, the offset may be left at its current value, or reset to 0.
-\item A page fault is ``forced'', by manufacturing a pager request and setting the \texttt{finished} callback to the actual copyin operation.  Conveniently, the page fault is the very same mechanism discussed in Section \ref{sub:demand_paging} such that all the convoluted continutations involved in swapping in and out (and indeed ELF loading, if applicable) all happen with barely any extra complexity.  When the pagefault is completed, the copying begins.
+\item A page fault is ``forced'', by manufacturing a pager request and setting the \texttt{finished} callback to the actual copyin operation.  Conveniently, the page fault is the very same mechanism discussed in Section \ref{sub:demand_paging} such that all the convoluted continuations involved in swapping in and out (and indeed ELF loading, if applicable) all happen with barely any extra complexity.  When the pagefault is completed, the copying begins.
 \item The user's page table is looked up for the actual physical address the relevant virtual address is mapped to.
 \item Since the page fault has brought in the page, and since nothing has occurred in the mean time, the user's page is \emph{guaranteed} to be immediately accessible.  So, data is copied in from the address up to the desired size, \emph{or} until a page boundary is reached.
 \item If the former, the system call simply returns.  If the latter, a page fault is forced with the same process as previously occurred.  This loop continues until the buffer is full or the all the data has been copied in.
@@ -278,97 +268,251 @@ There are, of course, several limitations:
 % VFS %
 %%%%%%%
 
-\section{File system}
+\newpage{}
+\section{File system} \label{vfs}
 
+The VFS layer implemented in our OS personality provides a flexible and powerful file system handling and as roughly based on the UNIX System V VFS.
 
-\subsection{Virtual file system structure}
+\subsection{Virtual file system structure} \label{vfs:vfs_struct}
 
 The virtual file system (hereafter VFS) uses a standard UNIX three layer structure to provide the features that our OS personality requires. Those layers are as follows below.
 
 \begin{itemize}
-\item \texttt{VNodes} are at the core of the VFS providing a standardised interface to all the file systems supported by our OS. An individual VNode represents one file (whether that be an actual file or a device) and provides functions to manipulate the file. Vnodes are created to abstract a file as needed and stored on a single linked list of all open vnodes in the system. VNodes are global and not tied to any particular process.
-\item \texttt{VFiles} are the second layer of the VFS, they are tied to a partciular process and used to represent the state of an open file, such as the permissions it was opened with and the current offset into the file. VFiles are tied to a VNode and it is through them that one VNode can be opened numerous times. VFiles are stored in a fixed size array inside of the PCB.
-\item \texttt{File Descriptors} are used as a key and identifier for a particular VFile, used in syscalls to work with the VFS. Like VFiles they are unique to a particular process and are stored in a fixed size array inside of the PCB. File descriptors are necessary but allow for the extensions to our OS detailed at the end of this section.
+\item \texttt{VNodes} are at the core of the VFS providing a standardised interface to all the file systems supported by our OS personality. An individual \texttt{VNode} represents one 'file' (whether that be an actual file or a device) and provides functions to manipulate the file. \texttt{VNodes} are created as needed and stored on a single linked list of all open \texttt{VNodes} in the system. \texttt{VNodes} are global and not tied to any particular process and can be shared concurrently among them.
+\item \texttt{VFiles} are the second layer of the VFS, they are tied to a particular process and used to represent the state of an open file, such as the permissions it was opened with and the current offset into the file. \texttt{VFiles} are tied to a \texttt{VNode} and it is through them that one \texttt{VNode} can be opened numerous times since they separate out any process specific state. \texttt{VFiles} are stored in a fixed size array inside of the PCB which limits the maximum number of files which a process can open in our system to 16.
+\item \texttt{File Descriptors} are used as a key and identifier for a particular \texttt{VFile}. They are used in system calls to work with the VFS. Like \texttt{VFiles} they are unique to a particular process and are stored in a fixed size array inside of the PCB. File descriptors are not a necessary feature but allow for the extensions to our OS, such as dup, which are detailed in section \ref{vfs:extensions}
 \end{itemize}
 
-Our OS differs from standard UNIX VFS in that it only supports a flat directory structure, directories are not support in any form. There is also no support for dealing with file systems such as mount operations, instead the currently supported file systems have been hard coded into the VFS.
+While our OS supports are reasonable amount of the standard UNIX System V VFS functionality, it lacks some significant features as detailed below:
+\begin{itemize}
+\item No support for directories. The support directory structure is a single unified space.
+\item No support for dynamic file systems. This includes operations such as mounting and unmounting file systems at runtime. Because of this the relation between the implemented file systems is fixed. This is in detailed section \ref{vfs:filesystems}
+\end{itemize}
 
-\subsection{\texttt{VNode} structure}
+\subsection{\texttt{VNode} structure} \label{vfs:vnode_struct}
+
+\texttt{VNodes} are implemented in the code as a struct, which is detailed below. These are managed with a linked list. Call-backs are used in many of the \texttt{VNode} operations to allow for file systems to flexibly call the VFS layer to report the end of their operations. This is required as the file system only deal with \texttt{VNodes} and after most operations the \texttt{VFile} and \texttt{File Descriptor} layers must be modified appropriately.
 
 \begin{verbatim}
 struct VNode_t {
-	char path[MAX_FILE_NAME];
-	stat_t vstat;
-
-	unsigned int Max_Readers;
-	unsigned int Max_Writers;
-	unsigned int readers;
-	unsigned int writers;
-	
-	void *extra; 
-
-	VNode previous;
-	VNode next;
-
-	void (*open)(pid_t pid, VNode self, const char *path, fmode_t mode,
-			void (*open_done)(pid_t pid, VNode self, fmode_t mode, int status));
-
-	void (*close)(pid_t pid, VNode self, fildes_t file, fmode_t mode,
-			void (*close_done)(pid_t pid, VNode self, fildes_t file, fmode_t mode, int status));
-
-	void (*read)(pid_t pid, VNode self, fildes_t file, L4_Word_t pos,
-			char *buf, size_t nbyte, void (*read_done)(pid_t pid, VNode self,
-				fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status));
-
-	void (*write)(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
-			const char *buf, size_t nbyte, void (*write_done)(pid_t pid, VNode self,
-				fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
-
-	void (*flush)(pid_t pid, VNode self, fildes_t file);
-
-	void (*getdirent)(pid_t pid, VNode self, int pos, char *name, size_t nbyte);
-
-	void (*stat)(pid_t pid, VNode self, const char *path, stat_t *buf);
-
-	void (*remove)(pid_t pid, VNode self, const char *path);
+    char path[MAX_FILE_NAME];
+    stat_t vstat;
+    
+    unsigned int Max_Readers;
+    unsigned int Max_Writers;
+    unsigned int readers;
+    unsigned int writers;
+    
+    void *extra; 
+    
+    VNode previous;
+    VNode next;
+    
+    void (*open)(pid_t pid, VNode self, const char *path, fmode_t mode,
+        void (*open_done)(pid_t pid, VNode self, fmode_t mode, int status));
+    
+    void (*close)(pid_t pid, VNode self, fildes_t file, fmode_t mode,
+        void (*close_done)(pid_t pid, VNode self, fildes_t file, fmode_t mode, int status));
+    
+    void (*read)(pid_t pid, VNode self, fildes_t file, L4_Word_t pos,
+        char *buf, size_t nbyte, void (*read_done)(pid_t pid, VNode self,
+            fildes_t file, L4_Word_t pos, char *buf, size_t nbyte, int status));
+    
+    void (*write)(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
+        const char *buf, size_t nbyte, void (*write_done)(pid_t pid, VNode self,
+            fildes_t file, L4_Word_t offset, const char *buf, size_t nbyte, int status));
+    
+    void (*flush)(pid_t pid, VNode self, fildes_t file);
+    
+    void (*getdirent)(pid_t pid, VNode self, int pos, char *name, size_t nbyte);
+    
+    void (*stat)(pid_t pid, VNode self, const char *path, stat_t *buf);
+    
+    void (*remove)(pid_t pid, VNode self, const char *path);
 };
 \end{verbatim}
 
 \begin{itemize}
-\item \texttt{path} stores the path (file name) of the file this VNode represents.
-\item \texttt{vstat} stores statistics about the vnode such as on disk permissions, size and last accessed timestamps.
-\item \texttt{Max\_Readers} specifies an upper limit on the number of times this particular VNode can be opened in read mode. Specified by the filesystem itself or through the system call. This enables an extension feature of locking files (detailed in the VFS Extensions section).
+\item \texttt{path} stores the path (file name) of the file this \texttt{VNode} represents.
+\item \texttt{vstat} stores statistics about the \texttt{VNode} such as on disk permissions, size and last accessed timestamps.
+\item \texttt{Max\_Readers} specifies an upper limit on the number of times this particular \texttt{VNode} can be opened in read mode. Specified by the file system itself or through the system call. This enables an extension feature of locking files (detailed in section \ref{vfs:extensions}).
 \item \texttt{Max\_Writers} is the same as Max\_Readers but for write mode opens.
-\item \texttt{readers} stores a reference count of the number of VFiles currently linked to this VNode with read permissions.
+\item \texttt{readers} stores a reference count of the number of \texttt{VFiles} currently linked to this \texttt{VNode} with read permissions.
 \item \texttt{writers} is the same as readers but for write permissions.
-\item \texttt{extra} allows for individual file systems to attach their own specific data to a VNode.
-\item \texttt{previous} VNodes are stored one a double linked list.
+\item \texttt{extra} allows for individual file systems to attach their own specific data to a \texttt{VNode}.
+\item \texttt{previous} \texttt{VNodes} are stored one a double linked list.
 \item \texttt{next} see previous.
-\item \texttt{open} function pointer to file system specific function to open the VNode. Currently not used.
-\item \texttt{close} function pointer to file system specific function to close the VNode.
-\item \texttt{read} function pointer to file system specific function to read data from the VNode.
-\item \texttt{write} function pointer to file system specific function to write data to the VNode.
-\item \texttt{flush} function pointer to file system specific function to flush out any cache for the vnode to the back device.
-\item \texttt{getdirent} function pointer to file system specific function to list the contents of the VNode. Since directories aren't supported, this is currently not used.
-\item \texttt{stat} function pointer to file system specific function to get the stat information about this VNode.
-\item \texttt{remove} function pointer to file system specific function to remove (delete/unlink) this VNode from its file system.
+\item \texttt{open} function pointer to file system specific function to open the \texttt{VNode}. Currently not used.
+\item \texttt{close} function pointer to file system specific function to close the \texttt{VNode}.
+\item \texttt{read} function pointer to file system specific function to read data from the \texttt{VNode}.
+\item \texttt{write} function pointer to file system specific function to write data to the \texttt{VNode}.
+\item \texttt{flush} function pointer to file system specific function to flush out any cache for the \texttt{VNode} to the back device.
+\item \texttt{getdirent} function pointer to file system specific function to list the contents of the \texttt{VNode}. Since directories aren't supported, this is currently not used.
+\item \texttt{stat} function pointer to file system specific function to get the stat information about this \texttt{VNode}.
+\item \texttt{remove} function pointer to file system specific function to remove (delete/unlink) this \texttt{VNode} from its file system.
 \end{itemize}
 
-\subsection{\texttt{VFile} structure}
+\subsection{\texttt{VFile} structure} \label{vfs:vfile_struct}
+
+A \texttt{VFile} is implemented as a struct and collectively they are managed per process in a fix size array inside of the processes \texttt{PCB}.
 
 \begin{verbatim}
 typedef struct {
-	VNode vnode;
-	fmode_t fmode;
-	L4_Word_t fp;
+    VNode vnode;
+    fmode_t fmode;
+    L4_Word_t fp;
+    L4_Word_t ref;
 } VFile;
 \end{verbatim}
 
+\begin{itemize}
+\item \texttt{vnode} stores a pointer to the \texttt{VNode} that this file is linked to.
+\item \texttt{fmode} stores the access mode that the file was opened with. This is checked against for read and write operations.
+\item \texttt{fp} stores the current offset into the file.
+\item \texttt{ref} stores the number of times this \texttt{VFile} has been referenced. Please see section \ref{vfs:file_ops} for details of how \texttt{ref} is used.
+\end{itemize}
 
-%%%%%%%%%%%%%%%%%%%%%%
-% PROCESS MANAGEMENT %
-%%%%%%%%%%%%%%%%%%%%%%
+\subsection{File Descriptors} \label{vfs:fds}
 
+File descriptors are simply a c int type and are stored as an array in a processes \texttt{PCB}. They store the array element number of the \texttt{VFile} that they refer to.
+
+\subsection{File Operations} \label{vfs:file_ops}
+
+\subsubsection{Opening and Closing Files} \label{vfs:file_ops:openclose}
+
+The file opening mechanism is as follows:
+
+\begin{enumerate}
+\item The file name and mode are checked to ensure they are valid.
+\item An empty file descriptor and \texttt{VFile} slot are found in their respective arrays in the calling processes \texttt{PCB}. If a slot for either can't be found, then the operation finishes unsuccessfully.
+\item The open global \texttt{VNode} list is searched to see if the file is already currently open, if so the next step is invoked. Otherwise the NFS file system is invoked to attempt to open the specified file. If it is successful, then the next step is invoked. Otherwise the operation finishes unsuccessfully.
+\item At this stage we have successfully retrieved a \texttt{VNode} for the specified file. Firstly the permissions of the \texttt{VNode} are checked to ensure that it is allowed to be opened in the mode the process specified, the Maximum reference counters are also checked to ensure this file can be opened by additional processes. Secondly the \texttt{VFile} and file descriptor are setup appropriately. The \texttt{VNodes} reference counts are also increased appropriately, if it is a new \texttt{VNode} then they will have been initialised to zero. The reference count on the \texttt{VFile} is set to one.
+\item The operation returns successfully, informing the calling process of the file descriptor which can be used to access the new file.
+\end{enumerate}
+
+The file closing mechanism is as follows:
+
+\begin{enumerate}
+\item First all the system call parameters are checked to ensure they are valid and refer to an open file.
+\item The \texttt{VFile} is retrieved using the information from the file descriptor passed in with the system call. The reference count of the \texttt{VFile} is reduced by one and if it is now at zero then it is closed and the next step is invoked. Otherwise, the operation returns successfully.
+\item The appropriate reference count(s) of the \texttt{VNode} are reduced and if both of them are now zero, then the \texttt{VNodes} close operation is called. After this is finished, the \texttt{VNode} itself is closed and removed from the global list.
+\end{enumerate}
+
+\subsubsection{Reading and Writing} \label{vfs:read_write}
+
+Reading and writing operations are carried out as per usual with the one exception being the \texttt{console} file system. The \texttt{console} file system implements an additional feature of buffering. This is done to avoid corruptions which were occurring due to the underlying network code being unable to handle a common case of the console rapidly sending individual characters. The details of this are detailed further in section \ref{vfs:console}
+
+\subsection{Supported File Systems} \label{vfs:filesystems}
+
+Our OS personality supports two file systems. These are NFS and a Console file system.
+
+\subsubsection{Console File System} \label{vfs:console}
+
+The console file system is initialised by the VFS layer at boot time and it immediately adds one \texttt{VNode} with the file name \texttt{"console"} to the open \texttt{VNode} list. This ensures that VFS operations on the file \texttt{"console"} will be passed through to the console file system. The console file system only supports this one console device file largely due to limitations with the provided network and serial driver code, the console file system itself could easily support multiple devices. The console file system also implements basic buffering support as first outlined in section \ref{vfs:read_write}. A small buffer of 64 bytes is used, although this is a configurable parameter. The console file is flushed automatically once it becomes full, when a new line ('\textbackslash n') character is encountered, or before a read system call is invoked. It can also be flushed manually as needed though the appropriate system call as detailed in section \ref{vfs:extensions}.
+
+\subsubsection{NFS File System} \label{vfs:nfs}
+
+The NFS file system implementation uses a continuation based, single threaded design with an queue mechanism for handling multiple threads and object orientated data structures. Each NFS File uses the \texttt{extra} void pointer of the respective \texttt{VNode} to store the following additional structure:
+
+\begin{verbatim}
+typedef struct {
+    VNode vnode;
+    struct cookie fh;
+} NFS_File;
+\end{verbatim}
+
+\begin{itemize}
+\item \texttt{vnode} Stores a pointer back to the VNode this \texttt{NFS\_File} is attached to.
+\item \texttt{fh} Stores the NFS file cookie for talking to the NFS server.
+\end{itemize}
+
+Each request for a VFS operation (open, close, read, write...) is stored on a single global queue as a generic \texttt{NFS\_BaseRequest} struct/object, however this is a reduced data type used to handle each request type generally using object orientated techniques of polymorphism, the individual data structures are all detailed as follows:
+
+\begin{verbatim}
+struct NFS_BaseRequest_t {
+   enum NfsRequestType rt;
+   uintptr_t token;
+   VNode vnode;
+   pid_t pid;
+};
+
+typedef struct {
+   NFS_BaseRequest p;
+   fmode_t mode;
+   void (*open_done) (pid_t pid, VNode self, fmode_t mode, int status);
+} NFS_LookupRequest;
+
+typedef struct {
+   NFS_BaseRequest p;
+   fildes_t file;
+   char *buf;
+   L4_Word_t pos;
+   size_t nbyte;
+   void (*read_done)(pid_t pid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
+         size_t nbyte, int status);
+} NFS_ReadRequest;
+
+typedef struct {
+   NFS_BaseRequest p;
+   fildes_t file;
+   char *buf;
+   L4_Word_t offset;
+   size_t nbyte;
+   void (*write_done)(pid_t pid, VNode self, fildes_t file, L4_Word_t offset,
+         const char *buf, size_t nbyte, int status);
+} NFS_WriteRequest;
+
+typedef struct {
+   NFS_BaseRequest p;
+   stat_t *stat;
+   const char *path;
+} NFS_StatRequest;
+
+typedef struct {
+   NFS_BaseRequest p;
+   int pos;
+   char *buf;
+   size_t nbyte;
+   int cpos;
+} NFS_DirRequest;
+
+typedef struct {
+   NFS_BaseRequest p;
+   const char *path;
+} NFS_RemoveRequest;
+\end{verbatim}
+
+By making sure each request struct stores a \texttt{NFS\_BaseRequest} as its first piece of data we can cast them all to a \texttt{NFS\_BaseRequest} and use the \texttt{NfsRequestType} parameter to cast them back. The token parameter of \texttt{NFS\_BaseRequest} is used to uniquely identify each request and is passed around in all the call backs so that the correct request can be found in the request queue. One request is processed at a time to avoid corruption issues occurring as the underlying network and NFS libraries can not handle multiple concurrent requests.
+
+\subsection{VFS Extensions} \label{vfs:extensions}
+
+Our VFS layer has a number of extensions as compared with the required implementation specification. These can be seen through the following extra support system calls as outlined briefly below:
+
+\begin{itemize}
+\item \texttt{int remove(const char* path)} Allows for files to be deleted form the file system. Open files are not allowed to be removed from the system.
+\item \texttt{int dup(fildes\_t fd)} and \texttt{dup2(fildes\_t fd, fildes\_t new\_fd)} Allows a file descriptor to be duplicated, functions as per usual POSIX dup/dup2 specifications with full support, including closing the file is new\_fd is already in use.
+\item \texttt{int lseek(fildes\_t file, fpos\_t pos, int whence)} Allows the file position pointer on a file to be modified, functions as per usual POSIX specification with full support.
+\item \texttt{int flush(fildes\_t file)} Flushes the specified files buffer out to its backing device. This is only supported by the console file system and functions as specified in section \ref{vfs:console}.
+\end{itemize}
+
+\subsubsection{I/O Redirection} \label{vfs:redirect}
+
+A major extension of our VFS in addition to those outlined above is the support for I/O redirection. When a process is created, the standard in, standard error and standard input file streams can be specified if desired rather then using the system defaults. The system call interface for this is as follows:
+
+\begin{verbatim}
+pid_t process_create(const char *path, fildes_t stdout, fildes_t stderr, fildes_t stdin);
+\end{verbatim}
+
+The files to redirect to (all VFS file systems are supported) is first opened by the parent process, which then creates the process passing through the file descriptors. The parent process can close the files though as there is no dependency on it for the proper functioning of I/O redirection since the files are then reopened by the child process.
+
+For redirecting standard input, the VFS layer stores a flag in the child processes PCB detailing that I/O redirection for standard input is active. When this is the case, any open call to "console" which is the way in which standard input is opened according to the specification provided, is ignored and instead the redirected standard input file descriptor is returned. This allows for some exciting features in our OS personality such as the ability to script SOSH by creating a new SOSH sub-process which reads from a file as opposed to from console. Standard out and error are redirected by opening the appropriate files with the correct file descriptors so that calls to \texttt{printf} and \texttt{write(stdout\_fd} will be directed to the appropriate files.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% PROCESS MANAGEMENT %
+%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage{}
 \section{Process management}
 
 \subsection{Process control block}
@@ -418,7 +562,7 @@ typedef struct {
 } ElfloadRequest;
 \end{verbatim}
 
-When an ELF load request comes to the head of the pager's request queue, a sequence of continuations is initated:
+When an ELF load request comes to the head of the pager's request queue, a sequence of continuations is initiated:
 \begin{enumerate}
 \item The ELF file is opened.
 \item A \texttt{stat} is run on the file to check it has execute permissions in-kernel.  The necessity of this is debatable.
@@ -456,7 +600,7 @@ Process deletion involves two steps: killing the process itself, and freeing its
 \item Allocated frames
 \item Slots in the swap file
 \item Page table
-\item Regions and assocated list
+\item Regions and associated list
 \end{itemize}
 \item All processes waiting on either any process or this specific process are woken, see below.  
 \item The PCB is freed.  The pid will then become available for the next process.
@@ -464,7 +608,7 @@ Process deletion involves two steps: killing the process itself, and freeing its
 
 \subsection{Process waiting}
 
-When a process calls \texttt{process\_wait}/\texttt{SOS\_PROCESS\_WAIT}, the \texttt{waitingOn} is set to the desired process.  When any process is deleted, all PCBs are searched for any processes that need to be woken up.  Slightly inefficient perhaps, but very clean and simple.
+When a process calls \texttt{process\_wait}/\texttt{SOS\_PROCESS\_WAIT}, the \texttt{waitingOn} is set to the desired process.  When any process is deleted, all PCB's are searched for any processes that need to be woken up.  Slightly inefficient perhaps, but very clean and simple.
 
 \end{document}
 
