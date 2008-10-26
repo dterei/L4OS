@@ -37,6 +37,9 @@
 // Clear the message registers.  Useful to use before an L4_Reply()
 void msgClearWith(L4_Word_t x);
 
+// Print out the entire contents of a page to the console
+void pagedump(char *addr) {
+
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)
 //

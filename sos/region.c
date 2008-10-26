@@ -83,3 +83,11 @@ void region_set_elffile(Region *r, Swapfile *sf) {
 	r->elffile = sf;
 }
 
+int region_find(void *contents, void *data) {
+	Region *r = (Region*) contents;
+	L4_Word_t addr = (L4_Word_t) data;
+
+	return ((addr >= region_get_base(r)) &&
+			(addr < region_get_base(r) + region_get_size(r)));
+}
+

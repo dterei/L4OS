@@ -588,3 +588,15 @@ msgClearWith(L4_Word_t x)
 	L4_MsgLoad(&clear);
 }
 
+void pagedump(char *addr) {
+	const int PER_ROW = 32;
+	for (int row = 0; row < PAGESIZE; row += PER_ROW) {
+		printf("%04x:", row);
+		for (int col = 0; col < PER_ROW; col += 2) {
+			printf(" %02x", 0x000000ff & *(addr++));
+			printf("%02x", 0x000000ff & *(addr++));
+		}
+		printf("\n");
+	}
+}
+

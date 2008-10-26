@@ -38,4 +38,7 @@ void region_set_size(Region *r, unsigned int size);
 void region_set_filesize(Region *r, unsigned int size);
 void region_set_elffile(Region *r, Swapfile *sf);
 
+// Find a region, designed for list_find
+int region_find(void *contents, void *data);
+
 #endif // sos/region.h

@@ -20,6 +20,17 @@
 
 #define verbose 3
 
+///////////////////////////////////////////////////////////////////////
+// BUNCH OF UNFORUNATELY NECESSARY PROTOTYPES
+///////////////////////////////////////////////////////////////////////
+
+void mmapRead(pid_t pid, L4_Word_t addr);
+
+
+///////////////////////////////////////////////////////////////////////
+// PAGE TABLE
+///////////////////////////////////////////////////////////////////////
+
 // Masks for page table entries
 #define SWAP_MASK (1 << 0)
 #define REF_MASK  (1 << 1)
@@ -32,110 +43,7 @@
 #define FRAME_ALLOC_LIMIT 42 // XXX
 static int allocLimit; // XXX
 
-// The core of the Pager's asynchronous requests
-typedef struct Request {
-	// Stage in request continuations, passed to cont.
-	int stage;
-
-	// OO-style data associated with the request.
-	void *data;
-
-	// Called when this request is first run, returns the stage to start at.
-	int (*init)(void *data);
-
-	// Called each time a continuation arrives for this thread with data from
-	// the Request and the return value from the IPC.
-	// Returns the number of the next stage or FINISHED to finish.
-	int (*cont)(void *data, int stage, int rval);
-
-	// Called when request finishes.
-	void (*finish)(void *data);
-};
-
-// Tracking allocated frames, including default swap file
-static List *alloced; // [(pid, word)]
-static List *swapped; // [(pid, word)]
-static List *mmapped; // [MMap]
-
-static Swapfile *defaultSwapfile;
-
-// Tracking mmapped frames
-typedef struct MMap_t {
-	pid_t pid;
-	L4_Word_t memAddr;
-	L4_Word_t dskAddr;
-	size_t size;
-	int rights;
-	char path[MAX_FILE_NAME];
-} MMap;
-
-static List *requests; // [(rtype_t, rdata)]
-
-static void queueRequests(int n, ...);
-static void queueRequest2(Request *req);
-static void dequeueRequest2(void);
-static void startRequest2(void);
-static void startMMapRead(void);
-static void startRead(void);
-static void startWrite(void);
-
-// For reading and writing
-typedef struct ReadRequest_t {
-	pid_t pid;
-	L4_Word_t dst;
-	L4_Word_t src;
-	int size;
-	int offset;
-	char path[MAX_FILE_NAME];
-	fildes_t fd;
-	int alwaysOpen;
-	int rights;
-} ReadRequest;
-typedef ReadRequest WriteRequest;
-
-typedef enum {
-	STAGE_OPEN,
-	STAGE_STAT,
-	STAGE_LSEEK,
-	STAGE_READ,
-	STAGE_CLOSE
-} read_stage_t;
-typedef read_stage_t write_stage_t;
-
-#define STAGE_WRITE STAGE_READ
-#define allocWriteRequest allocReadRequest
-
-typedef struct Pagefault_t Pagefault;
-struct Pagefault_t {
-	pid_t pid;
-	L4_Word_t addr;
-	int rights;
-	void (*finish)(Pagefault *fault);
-};
-
-// ELF loading
-typedef struct ElfloadRequest_t {
-	char path[MAX_FILE_NAME]; // path to executable
-	pid_t parent;             // pid of the process that made the request
-	pid_t child;              // pid of the process created
-} ElfloadRequest;
-
-static L4_ThreadId_t virtualPager; // automatically L4_nilthread
-static void pager_handler(void);
-
-// For copyin/copyout
-#define LO_HALF_MASK 0x0000ffff
-#define LO_HALF(word) ((word) & 0x0000ffff)
-#define HI_HALF_MASK 0xffff0000
-#define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
-#define HI_SHIFT(word) ((word) << 16)
-
-static L4_Word_t copyInOutData[MAX_THREADS];
-static char copyInOutBuffer[MAX_THREADS * MAX_IO_BUF];
-
-static void copyIn(L4_ThreadId_t tid, void *src, size_t size, int append);
-static void copyOut(L4_ThreadId_t tid, void *dest, size_t size, int append);
-
+// Two level page table structures
 typedef struct Pagetable2_t {
 	L4_Word_t pages[PAGEWORDS];
 } Pagetable2;
@@ -144,6 +52,7 @@ typedef struct Pagetable1_t {
 	Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
 
+// Allocate a new page table object
 Pagetable *pagetable_init(void) {
 	assert(sizeof(Pagetable1) == PAGESIZE);
 	Pagetable1 *pt = (Pagetable1*) frame_alloc(FA_PAGETABLE1);
@@ -155,41 +64,16 @@ Pagetable *pagetable_init(void) {
 	return (Pagetable*) pt;
 }
 
-L4_ThreadId_t pager_get_tid(void) {
-	return virtualPager;
-}
-
-int pager_is_active(void) {
-	return !L4_IsThreadEqual(virtualPager, L4_nilthread);
-}
-
-static void pagedump(char *addr) {
-	(void) pagedump;
-	const int PER_ROW = 32;
-	for (int row = 0; row < PAGESIZE; row += PER_ROW) {
-		printf("%04x:", row);
-		for (int col = 0; col < PER_ROW; col += 2) {
-			printf(" %02x", 0x000000ff & *(addr++));
-			printf("%02x", 0x000000ff & *(addr++));
-		}
-		printf("\n");
-	}
-}
-
-static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
+// Look up a virtual address in a page table and return a pointer to its entry.
+// This will lazily create the lower levels as necessary
+static L4_Word_t *pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 	Pagetable1 *level1 = (Pagetable1*) pt;
+	assert(level1 != NULL);
+	assert(leve11->pages2 != NULL);
 
 	addr /= PAGESIZE;
 	int offset1 = addr / PAGEWORDS;
 	int offset2 = addr - (offset1 * PAGEWORDS);
-
-	if (level1 == NULL) {
-		dprintf(0, "!!! pagetableLookup: level1 is NULL!\n");
-		return NULL;
-	} else if (level1->pages2 == NULL) {
-		dprintf(0, "!!! pagetableLookup: level1->pages2 is NULL!\n");
-		return NULL;
-	}
 
 	if (level1->pages2[offset1] == NULL) {
 		assert(sizeof(Pagetable2) == PAGESIZE);
@@ -203,9 +87,9 @@ static L4_Word_t* pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 	return &level1->pages2[offset1]->pages[offset2];
 }
 
-static void pagetableFree(Process *p) {
-	assert(p != NULL);
-	Pagetable1 *pt1 = (Pagetable1*) process_get_pagetable(p);
+// Free a page table, including all lower levels that have been created
+static void pagetableFree(Pagetable *pt) {
+	Pagetable1 *pt1 = (Pagetable1*) pt;
 	assert(pt1 != NULL);
 
 	for (int i = 0; i < PAGEWORDS; i++) {
@@ -216,6 +100,404 @@ static void pagetableFree(Process *p) {
 
 	frame_free((L4_Word_t) pt1);
 }
+
+
+///////////////////////////////////////////////////////////////////////
+// GENERIC REQUEST HANDLING
+///////////////////////////////////////////////////////////////////////
+
+// Generic object for handling asynchronous continuations
+typedef struct Request {
+	// Stage in request continuations, passed to cont.
+	int stage;
+
+	// OO-style data associated with the request.
+	void *data;
+
+	// Called when this request is first run, returns the stage to start at.
+	// rval is the return value from the last request, or UNDEFINED if isolated
+	int (*init)(void *data, int rval);
+
+	// Called each time a continuation arrives for this thread with data from
+	// the Request and the return value from the IPC.
+	// Returns the number of the next stage or SUCCESS/FAILURE to finish.
+	int (*cont)(void *data, int stage, int rval);
+
+	// Called when request finishes, the return value passed to the next request
+	int (*finish)(void *data, int success);
+};
+
+// Some predefined request stages
+#define UNDEFINED (-3)
+#define FAILURE   (-2)
+#define SUCCESS   (-1)
+
+// Requests, in order they are to be processed
+static List *requests; // [Request]
+
+// Continue the current request
+static void requestContinue(int rval) {
+	Request *req = (Request*) list_peek(requests);
+	int newStage = req->cont(req->data, req->stage, rval);
+	assert(newStage != UNDEFINED);
+
+	if ((newStage == FAILURE) || (newStage == SUCCESS)) {
+		dequeueRequest(req->finish(req->data, newStage));
+	} else {
+		req->stage = newStage;
+	}
+}
+
+// Start the next request in the queue, passing through rval from the last one
+static void requestStart(int rval) {
+	Request *req = (Request*) list_peek(requests);
+	req->stage = req->init(req->data, rval);
+}
+
+// Allocate a request object
+static void requestAlloc(void *data, int (*init)(void*, int),
+		int (*cont)(void*, int), int (*finish)(void*, int)) {
+	Request *req = (Request*) malloc(sizeof(Request));
+	*req = (Request) {UNDEFINED, data, init, cont, finish};
+	return req;
+}
+
+// Queue a request and immediately start if at the head
+static void requestQueue(void *data, int (*init)(void*, int),
+		int (*cont)(void*, int), int (*finish)(void*, int)) {
+	Request *req = requestAlloc(data, init, cont, finish);
+	if (list_null(requests)) {
+		list_push(requests, req);
+		startRequest(UNDEFINED);
+	} else {
+		list_push(requests, req);
+	}
+}
+
+// Push a request to the front of the queue and immediately start
+static void requestImmediate(void *data, int (*init)(void*, int),
+		int (*cont)(void*, int), int (*finish)(void*, int)) {
+	Request *req = requestAlloc(data, init, cont, finish);
+	list_shift(requests, req);
+	startRequest(UNDEFINED);
+}
+
+// Dequeue a request and start the next one if available
+static void requestDequeue(int rval) {
+	free(list_unshift(requests));
+
+	if (!list_null(requests)) {
+		startRequest(rval);
+	}
+}
+
+// Return zero (a useful placeholder for init)
+static void zero(void *data, int rval) {
+	return 0;
+}
+
+
+///////////////////////////////////////////////////////////////////////
+// COPYIN/COPYOUT
+///////////////////////////////////////////////////////////////////////
+
+// Convenience macros
+#define LO_HALF(word) ((word) & 0x0000ffff)
+#define HI_HALF(word) (((word) >> 16) & 0x0000ffff)
+#define HI_SHIFT(word) ((word) << 16)
+
+// Perpetual buffer for communicating between kernel and userspace
+static char copyInOutBuffer[MAX_THREADS * MAX_IO_BUF];
+
+// Data about the status of the copyin/out operations
+static L4_Word_t copyInOutData[MAX_THREADS];
+
+// Like memcpy, but only copies up to the next page boundary.
+// Returns 1 if reached the boundary, 0 otherwise.
+static int memcpyPage(char *dst, char *src, size_t size) {
+	int i = 0;
+
+	while (i < size) {
+		*dst = *src;
+
+		dst++;
+		src++;
+		i++;
+
+		if ((((L4_Word_t) dst) & ~PAGEALIGN) == 0) break;
+		if ((((L4_Word_t) src) & ~PAGEALIGN) == 0) break;
+	}
+
+	return i;
+}
+
+
+///////////////////////////////////////////////////////////////////////
+// (DEMAND) PAGING
+///////////////////////////////////////////////////////////////////////
+
+// For storing information about (delayed) page faults
+typedef struct Pagefault_t {
+	pid_t pid;
+	L4_Word_t addr;
+	int rights;
+} Pagefault;
+
+// All pages that have been allocated to user processes
+static List *alloced; // [(pid, word)]
+
+// All pages that have been swapped out
+static List *swapped; // [(pid, word)]
+
+// Default file that pages are swapped out to
+static Swapfile *defaultSwapfile;
+
+
+///////////////////////////////////////////////////////////////////////
+// MMAP
+///////////////////////////////////////////////////////////////////////
+
+// For tracking mmapped pages
+typedef struct MMap_t {
+	pid_t pid;
+	L4_Word_t memAddr;
+	L4_Word_t dskAddr;
+	size_t size;
+	char path[MAX_FILE_NAME];
+} MMap;
+
+// All mmapped objects
+static List *mmapped; // [MMap]
+
+// For asynchronous reading and writing of mmapped addresses
+typedef struct ReadRequest_t {
+	pid_t pid;
+	L4_Word_t dst;
+	L4_Word_t src;
+	int size;
+	int offset;
+	char path[MAX_FILE_NAME];
+	fildes_t fd;
+	int alwaysOpen;
+	int rights;
+} ReadRequest;
+
+typedef enum ReadStage_t {
+	STAGE_OPEN,
+	STAGE_STAT,
+	STAGE_LSEEK,
+	STAGE_READ,
+	STAGE_CLOSE
+} ReadStage;
+
+static ReadRequest *allocReadRequest(
+		L4_Word_t dst, L4_Word_t src, int size, char *path) {
+	ReadRequest *readReq = (ReadRequest*) malloc(sizeof(ReadRequest));
+
+	readReq->dst = dst;
+	readReq->src = src;
+	readReq->size = size;
+	readReq->offset = 0;
+	strncpy(readReq->path, path, MAX_FILE_NAME);
+	readReq->fd = VFS_NIL_FILE;
+	readReq->rights = FM_READ;
+	readReq->alwaysOpen = FALSE;
+
+	return readReq;
+}
+
+// Writing is the same as reading, for data needed
+typedef ReadRequest WriteRequest;
+typedef ReadStage WriteStage;
+
+#define STAGE_WRITE STAGE_READ
+
+static WriteRequest *allocWriteRequest(
+		L4_Word_t dst, L4_Word_t src, int size, char *path) {
+	ReadRequest *req = allocReadRequest(dst, src, size, path);
+	req->rights = FM_WRITE;
+	return (WriteRequest) req;
+}
+
+// Callbacks for reading, to use with requests
+static int readInit(void *data) {
+	ReadRequest *req = (Request*) data;
+	dprintf(1, "*** %s: path=\"%s\"\n", req->path);
+
+	fildes_t currentFd = vfs_getfd(L4_ThreadNo(sos_my_tid()), req->path);
+
+	if (currentFd != VFS_NIL_FILE) {
+		dprintf(2, "%s: already open at %d\n", __FUNCTION__, currentFd);
+		assert(req->alwaysOpen);
+
+		req->stage = STAGE_OPEN + 1;
+		req->fd = currentFd;
+		lseekNonblocking(req->fd, req->src, SEEK_SET);
+	} else {
+		dprintf(2, "%s: not open\n", __FUNCTION__);
+
+		req->stage = STAGE_OPEN;
+		strncpy(pager_buffer(sos_my_tid()), req->path, MAX_FILE_NAME);
+		openNonblocking(NULL, FM_READ);
+	}
+}
+
+static int readCont(void *data, int stage, int rval) {
+	dprintf(2, "*** %s: rval=%d\n", __FUNCTION__, rval);
+	ReadRequest *req = (ReadRequest*) data;
+
+	switch (stage) {
+		case STAGE_OPEN:
+			dprintf(2, "*** %s: STAGE_OPEN\n", __FUNCTION__);
+
+			if (rval < 0) {
+				return FAILURE;
+			} else {
+				req->fd = rval;
+				req->offset = 0;
+				lseekNonblocking(req->fd, req->src, SEEK_SET);
+				return (stage + 1);
+			}
+
+		case STAGE_LSEEK:
+			dprintf(2, "*** %s: STAGE_LSEEK\n", __FUNCTION__);
+			assert(rval == 0);
+
+			readNonblocking(req->fd, min(IO_MAX_BUFFER, req->size));
+			return (stage + 1);
+
+		case STAGE_READ:
+			dprintf(2, "*** %s: STAGE_READ\n", __FUNCTION__);
+			assert(vfsRval >= 0);
+
+			memcpy((void*) (req->dst + req->offset), pager_buffer(sos_my_tid()), rval);
+			req->offset += rval;
+			assert(req->offset <= rval->size);
+
+			if (req->offset == req->size) {
+				if (req->alwaysOpen) {
+					return SUCCESS;
+				} else {
+					closeNonblocking(req->fd);
+					return (stage + 1);
+				}
+			} else {
+				assert(vfsRval > 0);
+				readNonblocking(req->fd, min(IO_MAX_BUFFER, req->size - req->offset));
+				return stage;
+			}
+
+		case STAGE_CLOSE:
+			dprintf(2, "*** %s: STAGE_CLOSE\n", __FUNCTION__);
+			return SUCCESS;
+
+		default:
+			assert(!"default");
+	}
+}
+
+static int readFinish(void *data, int success) {
+	dprintf(2, "*** %s\n", __FUNCTION__);
+	free(data);
+
+	if (!success) {
+		dprintf(0, "!!! %s: read failed\n", __FUNCTION__);
+		return FAILURE;
+	} else {
+		return SUCCESS;
+	}
+}
+
+// Find an mmapped region, for use with list_find
+static int findMMap(void *contents, void *data) {
+	MMap *mmap = (MMap*) contents;
+	Pair *pair = (Pair*) data; // (pid, word)
+
+	printf("mmap: pid=%d memAddr=%p dskAddr=%p size=%d rights=%d path=%s\n",
+			mmap->pid, (void*) mmap->memAddr, (void*) mmap->dskAddr,
+			mmap->size, mmap->rights, mmap->path);
+
+	if ((mmap->pid == pair->fst) && (pair->snd >= mmap->memAddr) &&
+			(pair->snd < (mmap->memAddr + PAGESIZE))) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+// Read in an mmapped page (by starting a series of callbacks)
+static void mmapRead(pid_t pid, L4_Word_t addr) {
+	Process *p = process_lookup(pid);
+	assert(p != NULL);
+	assert(process_get_state(p) != PS_STATE_ZOMBIE);
+
+	Pair pidAddr = PAIR(pid, addr);
+	MMap *mmap = list_find(mmapped, findMMap, &pidAddr);
+	assert(mmap != NULL);
+
+	// Assign the address straight to a frame, if there aren't enough then
+	// this will sort itself out with the (eventual) page fault
+	L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), addr);
+	assert(*entry & MMAP_MASK);
+	*entry = frame_alloc() | REF_MASK;
+	memset((void*) (*entry & ADDRESS_MASK), 0x00, mmap->size);
+
+	ReadRequest *req = allocReadRequest(
+			*entry & ADDRESS_MASK, mmap->dskAddr, mmap->size, mmap->path);
+
+	// And we don't need the mmap record any more (since it isn't a "real" mmap)
+	list_delete_first(mmapped, findMMap, &pidAddr);
+	free(mmap);
+
+	requestImmediate(req, readInit, readCont, readFinish);
+}
+
+
+// Swap out a page chosen by second chance
+
+
+
+///////////////////////////////////////////////////////////////////////
+// ELF LOADING
+///////////////////////////////////////////////////////////////////////
+
+// Asynchronous request to read the ELF header and set up mmapped regions
+typedef struct ElfloadRequest_t {
+	char path[MAX_FILE_NAME];
+	pid_t parent;
+	pid_t child;
+} ElfloadRequest;
+
+///////////////////////////////////////////////////////////////////////
+// PROCESS MANAGEMENT
+///////////////////////////////////////////////////////////////////////
+
+
+
+///////////////////////////////////////////////////////////////////////
+// PAGER (AS A THREAD)
+///////////////////////////////////////////////////////////////////////
+
+// Thread id of the pager, set once it has started and L4_nilthread otherwise
+static L4_ThreadId_t pagerTid
+
+L4_ThreadId_t pager_get_tid(void) {
+	return pagerTid;
+}
+
+int pager_is_active(void) {
+	return !L4_IsThreadEqual(pagerTid, L4_nilthread);
+}
+
+// Indicates whether the pager is busy in an IPC - for debugging only
+static int pagerBusy;
+
+
+///////////////////////////////////////////////////////////////////////
+// MESSY MESSY MESSY MESSY MESSY MESSY
+///////////////////////////////////////////////////////////////////////
+
+
 
 static void pagerFrameFree(Process *p, L4_Word_t frame) {
 	assert((frame & ~PAGEALIGN) == 0);
@@ -411,14 +693,6 @@ static int memoryUsage(void) {
 	return FRAME_ALLOC_LIMIT - allocLimit;
 }
 
-static int findRegion(void *contents, void *data) {
-	Region *r = (Region*) contents;
-	L4_Word_t addr = (L4_Word_t) data;
-
-	return ((addr >= region_get_base(r)) &&
-			(addr < region_get_base(r) + region_get_size(r)));
-}
-
 static ElfloadRequest *allocElfload(char *path, pid_t caller, pid_t child) {
 	ElfloadRequest *er = (ElfloadRequest *) malloc(sizeof(ElfloadRequest));
 
@@ -524,82 +798,118 @@ static int processDelete(L4_Word_t pid) {
 
 // Handle a page fault.  Will return the type of request needed to complete
 // the page fault, if any.
-static rtype_t pagefaultHandle(Pagefault *fault) {
+static int pagefaultHandle(pid_t pid, L4_Word_t addr, int rights) {
 	Process *p;
 	L4_Word_t frame, *entry;
 
 	dprintf(2, "*** %s: fault on pid=%d, addr=%p rights=%d\n",
-			__FUNCTION__, fault->pid, fault->addr, fault->rights);
+			__FUNCTION__, pid, addr, rights);
 
 	p = process_lookup(fault->pid);
-	if (p == NULL) {
-		// Process died
-		return REQUEST_NONE;
+	if ((p == NULL) || (process_get_state(p) == PS_STATE_ZOMBIE)) {
+		return FAILURE;
 	}
 
-	// Find region it belongs in.
-	dprintf(3, "*** %s: finding region\n", __FUNCTION__);
-	Region *r = list_find(
-			process_get_regions(p), findRegion, (void*) fault->addr);
+	// Find region it belongs in, and check permissions
+	Region *r = list_find(process_get_regions(p), findRegion, (void*) addr);
 
 	if (r == NULL) {
 		printf("Segmentation fault (%d)\n", process_get_pid(p));
-		processDelete(process_get_pid(p));
-		return REQUEST_NONE;
+		process_set_state(p, PS_STATE_ZOMBIE);
+		return REQUEST_PROCESS_DELETE;
+	} else if ((region_get_rights(r) & pr->rights) == 0) {
+		printf("Permission fault (%d)\n", process_get_pid(p));
+		process_set_state(p, PS_STATE_ZOMBIE);
+		return REQUEST_PROCESS_DELETE;
 	}
 
-	// TODO check region rights against the fault rights
-
 	// Place in, or retrieve from, page table.
-	dprintf(3, "*** %s: finding entry\n", __FUNCTION__);
 	entry = pagetableLookup(process_get_pagetable(p), fault->addr);
 	frame = *entry & ADDRESS_MASK;
 	dprintf(3, "*** %s: found entry %p\n", __FUNCTION__, (void*) *entry);
 
-	if (*entry & SWAP_MASK) {
-		dprintf(2, "*** %s: page %p swapped\n", __FUNCTION__, (void*) *entry);
-		return REQUEST_SWAPIN;
-	} else if (*entry & MMAP_MASK) {
+	if (*entry & MMAP_MASK) {
 		dprintf(2, "*** %s: page %p mmapped\n", __FUNCTION__, (void*) *entry);
 		return REQUEST_MMAP_READ;
 	} else if ((frame != 0) && ((*entry & TEMP_MASK) == 0)) {
 		dprintf(3, "*** %s: page %p unmapped\n", __FUNCTION__, (void*) *entry);
 	} else if (region_map_directly(r)) {
 		dprintf(2, "*** %s: mapping directly\n", __FUNCTION__); // bootinfo
-		frame = fault->addr & PAGEALIGN;
+		frame = addr & PAGEALIGN;
 	} else {
 		dprintf(2, "*** %s: allocating frame\n", __FUNCTION__);
 
 		frame = pagerFrameAlloc(p, fault->addr & PAGEALIGN);
-		assert((frame & ~ADDRESS_MASK) == 0); // no flags set
 
 		if (frame == 0) {
 			dprintf(2, "*** %s: no free frames\n", __FUNCTION__);
-			return REQUEST_PAGEFAULT;
+			return REQUEST_SWAPOUT;
 		}
 	}
 
-	// If it was faulting due to the frame only being temporary, copy it across
-	if ((*entry & TEMP_MASK) != 0) {
-		dprintf(2, "*** %s: %p was only temporary\n", __FUNCTION__, *entry);
-		memcpy((void*) frame, (void*) (*entry & ADDRESS_MASK), PAGESIZE);
-		unmapPage(process_get_sid(p), *entry & ADDRESS_MASK);
-		frame_free(*entry & ADDRESS_MASK);
-
-		*entry = frame | REF_MASK;
-		prepareDataOut(p, fault->addr & PAGEALIGN);
-	} else {
-		*entry = frame | REF_MASK;
-	}
-
 	dprintf(3, "*** %s: mapping vaddr=%p pid=%d frame=%p rights=%d\n",
-			__FUNCTION__, (void*) (fault->addr & PAGEALIGN), process_get_pid(p),
+			__FUNCTION__, (void*) (addr & PAGEALIGN), process_get_pid(p),
 			(void*) frame, region_get_rights(r));
 
-	mapPage(process_get_sid(p), fault->addr & PAGEALIGN, frame,
-			region_get_rights(r));
+	mapPage(process_get_sid(p), addr & PAGEALIGN, frame, region_get_rights(r));
+	return SUCCESS;
+}
 
-	return REQUEST_NONE;
+// Allocate a Pagefault object
+static Pagefault *pagefaultAlloc(pid_t pid, L4_Word_t addr, int rights) {
+	Pagefault *pf = (Pagefault*) malloc(sizeof(Pagefault));
+	*pf = (Pagefault) {pid, addr, rights};
+	return pf;
+}
+
+// Finish a pagefault request
+static int pagefaultFinish(void *data, int success) {
+	Pagefault *pf = (Pagefault*) data;
+	if (success) syscall_reply_v(process_get_tid(process_lookup(pf->pid)), 0);
+	free(data);
+	return UNDEFINED;
+}
+
+// Continue a pagefault request - rval is ignored since this is a once-only
+// deal - if the pagefault fails now, need to do whatever the handler says
+static int pagefaultContinue(void *data, int stage, int rval) {
+	dprintf(1, "*** %s: attempt %d\n", __FUNCTION__, stage);
+
+	Pagefault *pf = (Pagefault*) data;
+	int request = pagefaultHandle(pf->pid, pf->addr, pf->rights);
+
+	switch (request) {
+		case FAILURE:
+		case SUCCESS:
+			return request;
+
+		case REQUEST_PROCESS_DELETE:
+			assert(!"process delete");
+			return (stage + 1);
+
+		case REQUEST_MMAP_READ:
+			mmapRead(pf->pid, pf->addr);
+			return (stage + 1);
+
+		case REQUEST_SWAPOUT:
+			swapout();
+			return (stage + 1);
+	}
+}
+
+// Try to handle a pagefault immediately, but delay if it fails
+static void pagefaultImmediate(pid_t pid, L4_Word_t addr, int rights) {
+	int request = pagefaultHandle(pid, addr, rights);
+	if (request == REQUEST_SUCCESS) {
+		syscall_reply_v(process_get_tid(process_lookup(pid)), 0);
+	} else if (request == REQUEST_FAILURE) {
+		; // No point in replying
+	} else if (request == REQUEST_PROCESS_DELETE) {
+		assert(!"process delete");
+	} else {
+		Pagefault *pf = pagefaultAlloc(pid, addr, rights);
+		queueRequest(pf, zero, pagefaultContinue, pagefaultFinish);
+	}
 }
 
 static void panic2(int success) {
@@ -615,22 +925,6 @@ static Request *allocRequest(rtype_t type, void *data) {
 	req->finish = panic2;
 
 	return req;
-}
-
-static ReadRequest *allocReadRequest(
-		L4_Word_t dst, L4_Word_t src, int size, char *path) {
-	ReadRequest *readReq = (ReadRequest*) malloc(sizeof(ReadRequest));
-
-	readReq->dst = dst;
-	readReq->src = src;
-	readReq->size = size;
-	readReq->offset = 0;
-	strncpy(readReq->path, path, MAX_FILE_NAME);
-	readReq->fd = VFS_NIL_FILE;
-	readReq->rights = FM_READ | FM_WRITE;
-	readReq->alwaysOpen = FALSE;
-
-	return readReq;
 }
 
 static void pager2(Pagefault *fault) {
@@ -1080,22 +1374,6 @@ static void startWrite(void) {
 	}
 }
 
-static int findMMap(void *contents, void *data) {
-	MMap *mmap = (MMap*) contents;
-	Pair *pair = (Pair*) data; // (pid, word)
-
-	printf("mmap: pid=%d memAddr=%p dskAddr=%p size=%d rights=%d path=%s\n",
-			mmap->pid, (void*) mmap->memAddr, (void*) mmap->dskAddr,
-			mmap->size, mmap->rights, mmap->path);
-
-	if ((mmap->pid == pair->fst) && (pair->snd >= mmap->memAddr) &&
-			(pair->snd < (mmap->memAddr + PAGESIZE))) {
-		return 1;
-	} else {
-		return 0;
-	}
-}
-
 static void finishMMapRead(int success) {
 	assert(success);
 	dprintf(1, "*** %s\n", __FUNCTION__);
@@ -1341,56 +1619,6 @@ static void startRequest2(void) {
 	}
 }
 
-// Continue the current request
-static void continueRequest(int rval) {
-	Request *req = (Request*) list_peek(requests);
-	int newStage = req->cont(req->data, req->stage, rval);
-
-	if (newStage == FINISHED) {
-		req->finish(req->data);
-		dequeueRequest();
-	} else {
-		req->stage = newStage;
-	}
-}
-
-// Start the next request in the queue
-static void startRequest(void) {
-	Request *req = (Request*) list_peek(requests);
-	req->stage = req->init(req->data);
-}
-
-// Queue a request and immediately start if at the head
-static void queueRequest(void *data, 
-		int (*init)(void*), int (*cont)(void*, int), void (*finish)(void *)) {
-	Request *req = (Request*) malloc(sizeof(Request));
-	req->data = data;
-	req->init = init;
-	req->cont = cont;
-	req->finish = finish;
-
-	if (list_null(requests)) {
-		list_push(requests, req);
-		startRequest();
-	} else {
-		list_push(requests, req);
-	}
-}
-
-// Push a request to the front of the queue and immediately start
-static void pushRequest(void) {
-	;
-}
-
-// Dequeue a request and start the next one if available
-static void dequeueRequest(void) {
-	free(list_unshift(requests));
-
-	if (!list_null(requests)) {
-		startRequest();
-	}
-}
-
 static void vfsHandler(int vfsRval) {
 	dprintf(2, "*** vfsHandler: vfsRval=%d\n", vfsRval);
 
@@ -1430,8 +1658,8 @@ static Pagefault *allocPagefault(pid_t pid, L4_Word_t addr, int rights,
 static void pager_handler(void) {
 	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
 
-	virtualPager = sos_my_tid();
-	dprintf(1, "*** %s: tid=%ld\n", __FUNCTION__, L4_ThreadNo(virtualPager));
+	pagerTid = sos_my_tid();
+	dprintf(1, "*** %s: tid=%ld\n", __FUNCTION__, L4_ThreadNo(pagerTid));
 
 	L4_Msg_t msg;
 	L4_MsgTag_t tag;
@@ -1568,26 +1796,6 @@ static void pager_handler(void) {
 
 char *pager_buffer(L4_ThreadId_t tid) {
 	return &copyInOutBuffer[L4_ThreadNo(tid) * MAX_IO_BUF];
-}
-
-// Like memcpy, but only copies up to the next page boundary.
-// Returns 1 if reached the boundary, 0 otherwise.
-static int memcpyPage(char *dst, char *src, size_t size) {
-	int i = 0;
-
-	while (i < size) {
-		*dst = *src;
-
-		dst++;
-		src++;
-
-		i++;
-
-		if ((((L4_Word_t) dst) & ~PAGEALIGN) == 0) break;
-		if ((((L4_Word_t) src) & ~PAGEALIGN) == 0) break;
-	}
-
-	return i;
 }
 
 static void copyInContinue2(Pagefault *fault) {
