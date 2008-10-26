@@ -60,7 +60,7 @@ typedef struct {
 
 To locate the 32 bit virtual address \texttt{v}, the highest 12 bits are used to index in to the first level of the table (\texttt{Pagetable1}) in order to find the corresponding second level struct.  If this is \texttt{NULL}, this second level is dynamically created.  The middle 12 bits of \texttt{v} are then used to index in to this second level, locating the relevant entry \texttt{e}.  Note that the lowest 12 bits of \texttt{v} are not needed for page table addressing.
 
-The high 24 bits of \texttt{e} give the \emph{page aligned} physical address\footnote{In fact, ppage.} of what \texttt{v} is mapped to.  The lower 12 bits are then used to maintain status bits, for example the reference bit and swapped status.
+The high 24 bits of \texttt{e} give the \emph{page aligned} physical address\footnote{In reality, an L4 ppage.} of what \texttt{v} is mapped to.  The lower 12 bits are then used to maintain status bits, for example the reference bit (0x1), swapped status (0x2), or ELF mask (0x4).
 
 \subsection{Region management}
 
@@ -97,7 +97,7 @@ The page fault mechanism is as follows:
 \item Assuming nothing is delayed, the reference bit is set, the mapping made, and the faulting process woken.
 \end{enumerate}
 
-Specific discussion of the asynchronous paging mechanism, see Section \ref{sub:demand_paging}.
+For specific discussion of the asynchronous paging mechanism, see Section \ref{sub:demand_paging}.
 
 \subsection{Kernel memory}
 
@@ -146,8 +146,8 @@ Swapping in a page involves the following steps:
 \begin{itemize}
 \item The region list is searched, as each region has its own ``swap file''.  This is a slightly overzealous way to generalise both demand paging and ELF loading as swapping in (in the vein of mmap only weaker), but it works.
 \item The page table entry is found for the faulting address.  This contains two releveant pieces of information: the high 24 bits will have been set to the offset of the page in the swap file (\texttt{PAGESIZE} granularity), and the \texttt{SWAP\_MASK} and possible \texttt{ELF\_MASK} bits will have been set.  The difference is discussed in Section \ref{sub:elf_loading}.
-\item A temporary frame is allocated to be read in to from the file.  This means a frame will always be available, being out of memory is not an issue.
-\item The relevant swap file is opened, to being a chain of continuations.  These will subsequently lseek, read for several blocks\footnote{The size of the blocks are limited by NFS, and in fact 4 iterations are needed to read an entire page.}, then close the swap file.
+\item A temporary frame is allocated to be read in to from the file.  This means a frame will always be available, and being out of memory is not an issue.
+\item The relevant swap file is opened and begins a chain of continuations.  These will subsequently lseek, read for several blocks\footnote{The size of the blocks are limited by NFS, and 4 iterations are needed to read an entire page.}, then close the swap file.
 \item When finished, a callback is made - necessary to deal with the differences between completing different types of requests.  For normal swapping in, this callback will free the slot previously taken up on the file.  ELF loading has its own requirements.
 \item Finally, if there are spare frames available a permanent one is allocated, the contents from the temporary frame copied in, and the temporary frame freed.  Otherwise a swapout request must be immediately made.
 \end{itemize}
@@ -211,6 +211,10 @@ typedef enum {
         L4_EXCEPTION = ((L4_Word_t) -5)
 } syscall_t;
 \end{verbatim}
+
+\subsection{Division of work}
+
+As already mentioned, there are two separate entities capable of handling system calls: the root server, and the pager.  The division is made such that the set of calls handled by each do not interfere with one another.
 
 \subsection{Copyin/Copyout} \label{sub:copyin_copyout}
 
