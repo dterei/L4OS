@@ -29,6 +29,7 @@
 
 \title{Advanced Operating Systems - System Documentation}
 \author{\textbf{Group 3} \\ David Terei, Benjamin Kalman}
+\date{October 26th, 2008}
 \maketitle
 
 \tableofcontents{}
@@ -616,6 +617,15 @@ To solve these problems, the lazy loading of ELF files was implemented as a gene
 \item As previously mentioned, the callback for a ``true'' swap in would deallocate a slot in the swapfile.  In the case of ELF loading, the callback needs to zero out the aforementioned area of memory.  It must also unset the \texttt{ELF\_MASK} flag from the page table entries.
 \item To prevent an ELF file from being swapped out to, the pager will never actually consider the swap file in the region list.  This presents a problem if the data section of a process was swapped out to the default swap file, then read back in from the ELF file.  To solve this, the pager will look at the swap file from the region list only if the \texttt{ELF\_MASK} is set for a page table entry.
 \item In actual fact, this could allow easily for read-only section optimisations, and even dirty bit optimisations, but these were not implemented.
+\end{itemize}
+
+\subsubsection{Address space}
+
+Worthy of brief mention is the layout of address spaces.
+\begin{itemize}
+\item Processes are created and their regions added before either the heap or stack regions are defined.
+\item The bottom of the heap is then placed just above the highest region.  It starts with size 0, and user space malloc must communicate with the pager (via \texttt{morecore} and subsequently SOS\_MOREMEM) to grow the region.
+\item The top of the stack is placed half way up the address space (virtual address \texttt{0x7ffff000}) and is statically defined to be 1MB.
 \end{itemize}
 
 \subsection{Process deletion} \label{sub:process_delete}
