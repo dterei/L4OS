@@ -12,6 +12,11 @@
 \usepackage{verbatim}
 \usepackage{listings}
 \usepackage{amsmath}
+\usepackage{hyperref}
+
+\hypersetup{
+    pdfborder={0 0 0}
+}
 
 \begin{document}
 
@@ -67,7 +72,7 @@ typedef struct {
 
 To locate the 32 bit virtual address \texttt{v}, the highest 12 bits are used to index in to the first level of the table (\texttt{Pagetable1}) in order to find the corresponding second level struct.  If this is \texttt{NULL}, this second level is dynamically created.  The middle 12 bits of \texttt{v} are then used to index in to this second level, locating the relevant entry \texttt{e}.  Note that the lowest 12 bits of \texttt{v} are not needed for page table addressing.
 
-The high 24 bits of \texttt{e} give the \emph{page aligned} physical address\footnote{In fact, ppage} of what \texttt{v} is mapped to.  The lower 12 bits are then used to maintain status bits, for example the reference bit and swapped status.
+The high 24 bits of \texttt{e} give the \emph{page aligned} physical address\footnote{In fact, ppage.} of what \texttt{v} is mapped to.  The lower 12 bits are then used to maintain status bits, for example the reference bit and swapped status.
 
 \subsection{Region management}
 
@@ -118,7 +123,7 @@ It is worth noting that there are no kernel threads, with the exception of those
 
 The decision to put the pager in its own thread was made for the following reasons:
 \begin{itemize}
-\item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer''.  See Section \ref{sub:system_call_interface}} orthogonal, so operations in the pager can happen simultaneously with the rootserver without race conditions.
+\item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer'', see Section \ref{sub:system_call_interface}.} orthogonal, so operations in the pager can happen simultaneously with the rootserver without race conditions.
 \item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Asynchronous IO in the pager (to prevent any blocking) is implemented using this method.
 \item It is necessary for the pager to be able to access all of physical memory, most notably for copyin/copyout (see Section \ref{sub:copyin_copyout}).  Without careful management (or a brute force approach), this would cause root task pagefaults.  Instead, this allows the root task to act as the pager for the pager and manage memory accordingly.
 \end{itemize}
@@ -145,7 +150,7 @@ This asynchronous queue is managed as follows:
 \item In either case, when finished the pager request is dequeued.  If the asynchronous request queue is not empty, the next one started and the cycle continues.
 \end{enumerate}
 
-The sequential nature of the blocking requests is so that all replies from the root server are unambiguous\footnote{Also, thread safe}, and indeed happen sequentially such that continuation state is simply a counter.  Additionally, while waiting for a reply from the root server, all other non blocking requests to the pager can be immediately dealt.  Several calls to the pager do not necessarily need to block, the most common being copyin or copyout, and this allows them to be immediately serviced.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
+The sequential nature of the blocking requests is so that all replies from the root server are unambiguous\footnote{Also, thread safe.}, and indeed happen sequentially such that continuation state is simply a counter.  Additionally, while waiting for a reply from the root server, all other non blocking requests to the pager can be immediately dealt.  Several calls to the pager do not necessarily need to block, the most common being copyin or copyout, and this allows them to be immediately serviced.  Incidentally, this also does not introduce artificial overhead as all asynchronous operations involve NFS, which has a fixed bandwidth and attempting multiple requests simultaneously offers no advantage.
 
 \subsubsection{Swapping in}
 
@@ -154,7 +159,7 @@ Swapping in a page involves the following steps:
 \item The region list is searched, as each region has its own ``swap file''.  This is a slightly overzealous way to generalise both demand paging and ELF loading as swapping in (in the vein of mmap only weaker), but it works.
 \item The page table entry is found for the faulting address.  This contains two releveant pieces of information: the high 24 bits will have been set to the offset of the page in the swap file (\texttt{PAGESIZE} granularity), and the \texttt{SWAP\_MASK} and possible \texttt{ELF\_MASK} bits will have been set.  The difference is discussed in Section \ref{sub:elf_loading}.
 \item A temporary frame is allocated to be read in to from the file.  This means a frame will always be available, being out of memory is not an issue.
-\item The relevant swap file is opened, to being a chain of continuations.  These will subsequently lseek, read for several blocks\footnote{The size of the blocks are limited by NFS, and in fact 4 iterations are needed to read an entire page}, then close the swap file.
+\item The relevant swap file is opened, to being a chain of continuations.  These will subsequently lseek, read for several blocks\footnote{The size of the blocks are limited by NFS, and in fact 4 iterations are needed to read an entire page.}, then close the swap file.
 \item When finished, a callback is made - necessary to deal with the differences between completing different types of requests.  For normal swapping in, this callback will free the slot previously taken up on the file.  ELF loading has its own requirements.
 \item Finally, if there are spare frames available a permanent one is allocated, the contents from the temporary frame copied in, and the temporary frame freed.  Otherwise a swapout request must be immediately made.
 \end{itemize}
@@ -164,9 +169,8 @@ Swapping a page out involves the following steps:
 \begin{itemize}
 \item A page is chosen to swap out using the second chance algorithm.  The algorithm is well known so not worth explaining here, but as as reminder the reference bit is kept in the lower 12 bits of every page table entry.  When this bit is unset, the page is also unmapped so that a fault will occur when (or if) later referenced.
 \item A slot in the swap file is allocated in a process similar to frame allocation.  This location (as previously mentioned) is stored in the high 24 bits of the page table entry.  Additionally, the \texttt{SWAP\_MASK} bit is set.
-\item A swap out request is pushed 
-\item The swap out request will open the relevant swap file given in the region list for that entry.  This will actually always be ``.swap'', the .  This begins a chain of continuations which open, lseek, write, then close the file in sequential order.  Writing will actually involve several tries as the NFS buffer is not large enough for an entire page.
-\item On finishing: the frame is freed, swap out request dequeued, and the next request run.  This will either be a page fault (which is now guaranteed to find a frame) or a swap in request (likewise, but discussed below).
+\item A swap out request is pushed to the head of the queue and started by opening the default swap file (``.swap'' rather than the one in the region list - an unfortunate hack).  Like swapping in, a chain of continuations is processed.
+\item On finishing, the frame is free.  Normally the next request is simply dequeued and started (which will be the original pager request), however there is slightly more to do if the swap out was in response to a swap in.  In this case the old temporary frame still exists, so its contents must be copied in to the recently freed frame, \emph{then} the next request run.
 \end{itemize}
 
 
@@ -176,7 +180,100 @@ Swapping a page out involves the following steps:
 
 \section{System call interface}
 
-\subsection{Copyin/Copyout}
+\subsection{Inter-process communication protocol}
+
+The kernel uses a simple IPC protocol: the message tag contains the type of system call, and message registers contain the system call parameters.  For large amounts of data, communication is made through the copyin/copyout mechanism, explained in Section \ref{sub:copyin/copyout}.
+
+The number of system calls is extensive, although many are for debugging and diagnostic purposes:
+
+\begin{verbatim}
+typedef enum {
+        SOS_REPLY,
+        SOS_KERNEL_PRINT,
+        SOS_DEBUG_FLUSH,
+        SOS_MOREMEM,
+        SOS_COPYIN,
+        SOS_COPYOUT,
+        SOS_OPEN,
+        SOS_CLOSE,
+        SOS_READ,
+        SOS_FLUSH,
+        SOS_WRITE,
+        SOS_LSEEK,
+        SOS_GETDIRENT,
+        SOS_STAT,
+        SOS_REMOVE,
+        SOS_PROCESS_CREATE,
+        SOS_PROCESS_DELETE,
+        SOS_MY_ID,
+        SOS_PROCESS_STATUS,
+        SOS_PROCESS_WAIT,
+        SOS_TIME_STAMP,
+        SOS_USLEEP,
+        SOS_MEMUSE,
+        SOS_SWAPUSE,
+        SOS_PHYSUSE,
+        SOS_VPAGER,
+        SOS_MEMLOC,
+        SOS_MMAP,
+        SOS_SHARE_VM,
+        L4_PAGEFAULT = ((L4_Word_t) -2),
+        L4_INTERRUPT = ((L4_Word_t) -1),
+        L4_EXCEPTION = ((L4_Word_t) -5)
+} syscall_t;
+\end{verbatim}
+
+\subsection{Copyin/Copyout} \label{sub:copyin/copyout}
+
+A significant feature for all library code is the copyin/copyout policy used for most system calls.  Whenevever a significant\footnote{Any more than a few words is classed as ``significant''.} amount of data needs to be transferred between user programs and the kernel, the \texttt{copyin}/\texttt{SOS\_COPYIN} or associated \texttt{copyout}/\texttt{SOS\_COPYOUT} system call is made.  These copy data from the user in to a kernel-maintained buffer (copyin), or from the kernel buffer to the user (copyout).
+
+\begin{verbatim}
+void copyin(void *data, size_t size, int append);
+void copyout(void *data, size_t size, int append);
+\end{verbatim}
+
+For example, when calling \texttt{write} in libsos, the user is in fact issuing a \texttt{SOS\_COPYIN} for the data to write, then a \texttt{SOS\_WRITE} with relevant parameters to write out that buffer.  Similary, when calling \texttt{read} in libsos a \texttt{SOS\_READ} is made, followed by \texttt{SOS\_COPYOUT} to copy the data in to the user's address space.
+
+\subsubsection{Interface}
+
+In both cases, \texttt{data} is a pointer to the data in the user's address space, \texttt{size} is the size of the data in bytes, and \texttt{append} indicates whether this data should be appended to what is currently in the kernel's buffer, or overwrite it.  Both system calls are made to the pager thread, not the rootserver.
+
+\subsection{Implementation}
+
+The kernel buffer is a static array of a predetermined size, currently twice the page size.  There is one buffer per thread, but given user threads aren't actually supported this amounts to 256 separate buffers, for a total memory cost of approximately 2MB.
+
+On receiving a \texttt{SOS\_COPYIN} system call, the following steps are made:
+\begin{enumerate}
+\item The parameters of the copy are set up - this in fact requires extra static memory containing the size and offset of the operation.  Depending on the value of \texttt{append}, the offset may be left at its current value, or reset to 0.
+\item A page fault is ``forced'', by manufacturing a pager request and setting the \texttt{finished} callback to the actual copyin operation.  Conveniently, the page fault is the very same mechanism discussed in Section \ref{sub:demand_paging} such that all the convoluted continutations involved in swapping in and out (and indeed ELF loading, if applicable) all happen with barely any extra complexity.  When the pagefault is completed, the copying begins.
+\item The user's page table is looked up for the actual physical address the relevant virtual address is mapped to.
+\item Since the page fault has brought in the page, and since nothing has occurred in the mean time, the user's page is \emph{guaranteed} to be immediately accessible.  So, data is copied in from the address up to the desired size, \emph{or} until a page boundary is reached.
+\item If the former, the system call simply returns.  If the latter, a page fault is forced with the same process as previously occurred.  This loop continues until the buffer is full or the all the data has been copied in.
+\end{enumerate}
+
+Copy out is implemented in the identical way.  Additionally, the rights of the copyout are easily checked by setting the rights of the pagefault to write - such that if the user violates this (i.e. if they are writing to the text segment for example) they will be killed.  Ruthless but correct.
+
+The rights of the copyin are also checked, but it is unlikely that a region be without read permissions (unless it doesn't exist, in which case the process is also killed).
+
+\subsubsection{Advantages}
+
+The copyin/copyout design has several advantages, most of which are already implied above:
+\begin{itemize}
+\item It is safe, in that the kernel (that is, pager) will never block while performing a copy, and never do anything illegal from the user's perspective.
+\item Given that the kernel owns the data in its own buffer, it can be modified at its discretion.  Not only is this nice and (thread) safe, it is especially useful when ``spoofing'' system calls from users that would have otherwise required a copyin or copyout.
+\item Many of the limitations mentioned below are excusable given the small number of buffers actually needed.
+\end{itemize}
+
+\subsubsection{Limitations}
+
+There are, of course, several limitations:
+\begin{itemize}
+\item There is a constant 1MB of memory unavailable for general use.
+\item There is a finite size to the amount of data that can be stored by the kernel (however, it is certainly large enough for most purposes).
+\item Both copyin and copyout share the same buffer, so the order of operations is important.  Particularly, \texttt{printf} will initiate a \texttt{copyin} so any debugging attempted to be made anywhere in this process could cause unexpected results.
+\item Care needs to be taken to word align data in the buffers.
+\end{itemize}
+
 
 %%%%%%%
 % VFS %
