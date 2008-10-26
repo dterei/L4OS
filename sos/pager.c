@@ -25,13 +25,6 @@
 #define ELF_MASK  (1 << 2)
 #define ADDRESS_MASK PAGEALIGN
 
-// The threshhold of free frames until the kernel starts to swap user pages
-#define FRAME_SWAP_THRESHHOLD 128
-
-// The threshhold of free frames until the kernel starts killing processes
-#define FRAME_DOOMSDAY_THRESHHOLD 8
-static int totalPages;
-
 // Limiting the number of user frames
 #define FRAME_ALLOC_LIMIT 1024
 static int allocLimit;
@@ -40,7 +33,6 @@ static int allocLimit;
 static List *alloced; // [(pid, word)]
 static List *swapped; // [(pid, word)]
 
-#define PR_OFFSET_UNDEFINED (-1)
 static Swapfile *defaultSwapfile;
 
 // Asynchronous pager requests
@@ -444,7 +436,7 @@ static PagerRequest *allocPagerRequest(pid_t pid, L4_Word_t addr, int rights,
 	newPr->pid = pid;
 	newPr->addr = addr;
 	newPr->rights = rights;
-	newPr->offset = PR_OFFSET_UNDEFINED;
+	newPr->offset = (-1);
 	newPr->sf = sf;
 	newPr->swapinFinish = panic;
 	newPr->callback = callback;

@@ -15,6 +15,9 @@
 \usepackage{hyperref}
 
 \hypersetup{
+    pdftitle={Advanced Operating Systems - System Documentation},
+    pdfauthor={Group 3: David Terei, Benjamin Kalman},
+    pdfkeywords={Awesome},
     pdfborder={0 0 0}
 }
 
@@ -40,10 +43,6 @@
 \begin{itemize}
 \item 3: system call interface
 \item 4: NFS
-\item 5: demand paging
-\item 6: timer driver?
-\item 7: process management
-\item 8: ELF loading
 \end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%
@@ -91,7 +90,7 @@ struct Region_t {
 \end{verbatim}
 
 \begin{itemize}
-\item \texttt{type} is used to differentiate between the stack, heap, and other regions.  It is important to know which region is the heap in order for the \texttt{moremem} system call to function, see Section \ref{sub:moremem}.
+\item \texttt{type} is used to differentiate between the stack, heap, and other regions.  It is important to know which region is the heap in order for the \texttt{moremem} system call to function.
 \item \texttt{base}, \texttt{size}, and \texttt{rights} are the self explanitory.
 \item \texttt{filesize} is the size of the region as it appears on file, important for ELF loading.
 \item \texttt{mapDirectly} is solely important for programs loaded from bootinfo, which require their text and data sections to be 1:1 mapped to physical memory.
@@ -178,11 +177,11 @@ Swapping a page out involves the following steps:
 % SYSTEM CALL INTERFACE %
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{System call interface}
+\section{System call interface} \label{sub:system_call_interface}
 
 \subsection{Inter-process communication protocol}
 
-The kernel uses a simple IPC protocol: the message tag contains the type of system call, and message registers contain the system call parameters.  For large amounts of data, communication is made through the copyin/copyout mechanism, explained in Section \ref{sub:copyin/copyout}.
+The kernel uses a simple IPC protocol: the message tag contains the type of system call, and message registers contain the system call parameters.  For large amounts of data, communication is made through the copyin/copyout mechanism, explained in Section \ref{sub:copyin_copyout}.
 
 The number of system calls is extensive, although many are for debugging and diagnostic purposes:
 
@@ -223,7 +222,7 @@ typedef enum {
 } syscall_t;
 \end{verbatim}
 
-\subsection{Copyin/Copyout} \label{sub:copyin/copyout}
+\subsection{Copyin/Copyout} \label{sub:copyin_copyout}
 
 A significant feature for all library code is the copyin/copyout policy used for most system calls.  Whenevever a significant\footnote{Any more than a few words is classed as ``significant''.} amount of data needs to be transferred between user programs and the kernel, the \texttt{copyin}/\texttt{SOS\_COPYIN} or associated \texttt{copyout}/\texttt{SOS\_COPYOUT} system call is made.  These copy data from the user in to a kernel-maintained buffer (copyin), or from the kernel buffer to the user (copyout).
 
@@ -238,7 +237,7 @@ For example, when calling \texttt{write} in libsos, the user is in fact issuing 
 
 In both cases, \texttt{data} is a pointer to the data in the user's address space, \texttt{size} is the size of the data in bytes, and \texttt{append} indicates whether this data should be appended to what is currently in the kernel's buffer, or overwrite it.  Both system calls are made to the pager thread, not the rootserver.
 
-\subsection{Implementation}
+\subsubsection{Implementation}
 
 The kernel buffer is a static array of a predetermined size, currently twice the page size.  There is one buffer per thread, but given user threads aren't actually supported this amounts to 256 separate buffers, for a total memory cost of approximately 2MB.
 
@@ -365,11 +364,107 @@ typedef struct {
 } VFile;
 \end{verbatim}
 
+
 %%%%%%%%%%%%%%%%%%%%%%
 % PROCESS MANAGEMENT %
 %%%%%%%%%%%%%%%%%%%%%%
 
 \section{Process management}
+
+\subsection{Process control block}
+
+All data for a single process is stored in a per-process control block\footnote{With the exception of the copy buffers, which are static and so not in the PCB.} (PCB).
+
+\begin{verbatim}
+typedef struct {
+    pid_t             pid; // pid of the process
+    unsigned          size; // size in pages
+    unsigned          stime; // microseconds since booting
+    char              command[MAX_FILE_NAME]; // path to the executable
+    process_state_t   state; // state (start, alive, sleep, wait, zombie)
+    process_type_t    ps_type; // type (process, kernel thread)
+    process_ipcfilt_t ipc_accept; // accepted IPCs (nonblocking, blocking, all)
+} process_t;
+
+struct Process_t {
+    process_t     info; // the information exported to the user
+    Pagetable    *pagetable; // two level page table
+    List         *regions; // region list
+    void         *sp; // stack pointer, only used on startup
+    void         *ip; // instruction pointer, only used on startup
+    timestamp_t   startedAt; // time the process was started
+    VFile         files[PROCESS_MAX_FILES]; // all open files
+    pid_t         waitingOn; // the process this one is waiting on
+};
+\end{verbatim}
+
+\subsection{Process creation and ELF loading} \label{sub:elf_loading}
+
+Process creation involves ELF loading - it also may involve loading from the boot image, however this is simple and not particularly interesting so won't be covered.
+
+Much of the mechanism used for ELF loading has already been covered, as it has been seen as a variation of a swap file and dealt with as such.  There are two distinct stages: the initial parsing of the ELF header, and the subsequent lazy loading of the pages from the executable as needed.
+
+\subsubsection{ELF header parsing}
+
+ELF header parsing is done on the same asynchronous request queue in the pager as pager requests are done.  The relevant struct is:
+
+\begin{verbatim}
+typedef struct {
+    elfload_stage_t stage; // stage in series of callbacks
+    char path[MAX_FILE_NAME]; // path to executable
+    fildes_t fd; // file descriptor (when opened)
+    pid_t parent; // pid of the process that made the request
+    pid_t child; // pid of the process created
+} ElfloadRequest;
+\end{verbatim}
+
+When an ELF load request comes to the head of the pager's request queue, a sequence of continuations is initated:
+\begin{enumerate}
+\item The ELF file is opened.
+\item A \texttt{stat} is run on the file to check it has execute permissions in-kernel.  The necessity of this is debatable.
+\item The ELF header is read in to the pager's copy buffer.  Since the exact size of the header is effectively unknown (albeit known to be quite small), exactly one pass is made.  This is enough to read in over a kilobyte, certainly enough data.  The copy buffer itself can then be cast to an \texttt{Elf32\_Header} and dealt with directly.
+\item Using information from the ELF file via the elf libraries, the PCB of the new processes is filled in as necessary.  Most importantly, the page table entries are pre-filled to have the correct disk offset and masks (\texttt{SWAP\_MASK | ELF\_MASK}).  The region list is also set up to have the ELF file as the swap file for each region\footnote{In hindsight, yes, it would have made more sense to do this differently.}.
+\item The ELF file is closed, and caller of \texttt{process\_create} woken.
+\end{enumerate}
+
+\subsubsection{ELF section lazy loading}
+
+It would be a perfect situation if the ELF sections loaded themselves in the exact way a swap file does, however there are a few small but significant differences.
+\begin{itemize}
+\item An ELF files needs not concept of ``free slots''.
+\item Indeed, an ELF file should never actually be swapped out to at all, as writing over an ELF file (for example, if the data section were to be swapped out) could have strange consequences.
+\item An ELF file has a small gap in memory between the region in memory and the region on disk, and this needs to be zeroed.
+\end{itemize}
+
+To solve these problems, the lazy loading of ELF files was implemented as a generalisation of swapping in, with an extra callback and a few special cases.
+\begin{itemize}
+\item As previously mentioned, the callback for a ``true'' swap in would deallocate a slot in the swapfile.  In the case of ELF loading, the callback needs to zero out the aforementioned area of memory.  It must also unset the \texttt{ELF\_MASK} flag from the page table entries.
+\item To prevent an ELF file from being swapped out to, the pager will never actually consider the swap file in the region list.  This presents a problem if the data section of a process was swapped out to the default swap file, then read back in from the ELF file.  To solve this, the pager will look at the swap file from the region list only if the \texttt{ELF\_MASK} is set for a page table entry.
+\item In actual fact, this could allow easily for read-only section optimisations, and even dirty bit optimisations, but these were not implemented.
+\end{itemize}
+
+\subsection{Process deletion} \label{sub:process_delete}
+
+Process deletion involves two steps: killing the process itself, and freeing its resources.  The steps are:
+
+\begin{enumerate}
+\item The process is killed (\texttt{L4\_ThreadControl}) and all L4-related data is freed.
+\item The process is put in a zombie state.  This enforces the kernel not to pass through replies to that process, useful when spoofing the \texttt{vfs\_close} calls.
+\item All files open by the process are flushed and closed.  This frees up all VFS-related data.
+\item The in-kernel resources are freed:
+\begin{itemize}
+\item Allocated frames
+\item Slots in the swap file
+\item Page table
+\item Regions and assocated list
+\end{itemize}
+\item All processes waiting on either any process or this specific process are woken, see below.  
+\item The PCB is freed.  The pid will then become available for the next process.
+\end{enumerate}
+
+\subsection{Process waiting}
+
+When a process calls \texttt{process\_wait}/\texttt{SOS\_PROCESS\_WAIT}, the \texttt{waitingOn} is set to the desired process.  When any process is deleted, all PCBs are searched for any processes that need to be woken up.  Slightly inefficient perhaps, but very clean and simple.
 
 \end{document}
 

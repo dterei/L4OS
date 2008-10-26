@@ -306,7 +306,11 @@ uint64_t uptime(void);
 
 /* Sleeps for the specified number of microseconds.
  */
-void usleep(int msec);
+void usleep(int usec);
+
+/* Sleeps for the specified number of milliseconds.
+ */
+void sleep(int msec);
 
 /* Get the number of frames in use by user processes */
 int memuse(void);

@@ -317,6 +317,10 @@ void usleep(int usec) {
 	ipc_send_simple_1(L4_rootserver, SOS_USLEEP, YES_REPLY, (L4_Word_t) usec);
 }
 
+void sleep(int msec) {
+	usleep(msec / 1000);
+}
+
 /* Get the number of frames in use by user processes */
 int memuse(void) {
 	return ipc_send_simple_0(vpager(), SOS_MEMUSE, YES_REPLY);
