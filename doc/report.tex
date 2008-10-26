@@ -118,10 +118,13 @@ It is worth noting that there are no kernel threads, with the exception of those
 
 The decision to put the pager in its own thread was made for the following reasons:
 \begin{itemize}
-\item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer''.  See Section \ref{sub:system_call_interface}} orthogonal, so operations in the pager can happen simultaneously with the rootserver, (theoretically) without race conditions.
-\item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Overall, this is used to implement the asynchronous IO used in the pager.
+\item The operations of the pager and the root server are largely\footnote{The root server and pager share a single data structure, the ``copy buffer''.  See Section \ref{sub:system_call_interface}} orthogonal, so operations in the pager can happen simultaneously with the rootserver without race conditions.
+\item With its own syscall loop independent from the root servers, the pager is able to IPC the root server.  This is most used in order to use the generic IO system calls, rather than an additional in-kernel interface.  Indeed, this does require that special ``non blocking'' system calls are able to be made, such that the root server's replies arrive in the pager's syscall loop.  Asynchronous IO in the pager (to prevent any blocking) is implemented using this method.  There must be careful control to ensure all communication between the two are \emph{serialised}, or deadlock can occur.
 \item It is necessary for the pager to be able to access all of physical memory, most notably for copyin/copyout (see Section \ref{sub:copyin_copyout}).  Without careful management (or a brute force approach), this would cause root task pagefaults.  Instead, this allows the root task to act as the pager for the pager and manage memory accordingly.
 \end{itemize}
+
+There are also certain pitfalls:
+
 
 Several other types of system calls are also handled by the pager, including all process management system calls.  This is necessary as process management is closely linked to memory management, and race conditions arise otherwise.  The division of system call work is discussed further in Section \ref{sub:system_call_interface}.
 

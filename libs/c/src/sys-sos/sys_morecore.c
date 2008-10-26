@@ -71,19 +71,19 @@ Header *_kr_malloc_freep = NULL;
 
 #define round_up(address, size) ((((address) + (size-1)) & (~(size-1))))
 
-Header *morecore(unsigned int nu) {
-	uintptr_t nb;
+Header *morecore(unsigned int numUnits) {
+	unsigned int numBytes;
 	uintptr_t cp;
 	Header *up;
 
-	nb = round_up(nu * sizeof(Header), NALLOC);
+	numBytes = round_up(numUnits * sizeof(Header), NALLOC);
 
-	if (!moremem(&cp, nb)) {
+	if (!moremem(&cp, numBytes)) {
 		return NULL;
 	}
 
 	up = (Header*) cp;
-	up->s.size = nb / sizeof(Header);
+	up->s.size = numBytes / sizeof(Header);
 	free((void*) (up + 1));
 
 	return _kr_malloc_freep;
