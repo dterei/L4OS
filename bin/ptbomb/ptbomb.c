@@ -4,9 +4,12 @@
 #define PROGRAM "pt_test2"
 
 int main(int argc, char *argv[]) {
+	char buf[BUFSIZ];
+
 	for (;;) {
 		pid_t id = process_create(PROGRAM);
-		printf("spawned %d\n", id);
+		sprintf(buf, "spawned %d\n", id);
+		kprint(buf);
 	}
 
 	return 0;
