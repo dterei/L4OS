@@ -34,16 +34,58 @@ exec(int argc, char **argv) {
 	pid_t pid;
 	int r;
 	int bg = 0;
+	char *fout = NULL, *ferr = NULL, *fin = NULL;
+	fildes_t fdout = VFS_NIL_FILE, fderr = VFS_NIL_FILE, fdin = VFS_NIL_FILE;
 
-	if (argc < 2 || (argc > 2 && argv[2][0] != '&')) {
+	if (argc < 2) {
 		printf("Usage: exec filename [&]\n");
 		return 1;
 	}
 
-	if ((argc > 2) && (argv[2][0] == '&')) {
-		bg = 1;
+	for (int i = 2; i < argc; i++) {
+		if (strcmp(argv[i], "&") == 0) {
+			bg = 1;
+		// case of '> file'
+		} else if (strcmp(argv[i], ">") == 0 || strcmp(argv[i], "1>") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stdout not specified\n");
+				return 1;
+			}
+			i++;
+			fout = &argv[i][0];
+		// case of '>file'
+		} else if (strncmp(argv[i], "1>", 2) == 0) {
+			if (strlen(argv[i]) < 3) {
+				printf("stdout not specified\n");
+				return 1;
+			}
+			fout = &argv[i][2];
+		} else if (strncmp(argv[i], ">", 1) == 0) {
+			if (strlen(argv[i]) < 2) {
+				printf("stdout not specified\n");
+				return 1;
+			}
+			fout = &argv[i][1];
+		// case of '< file'
+		} else if (strcmp(argv[i], "<") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stdin not specified\n");
+				return 1;
+			}
+			i++;
+			fin = &argv[i][0];
+		// case of '<file'
+		} else if (strncmp(argv[i], "<", 1) == 0) {
+			if (strlen(argv[i]) < 2) {
+				printf("Stdin not specified\n");
+				return 1;
+			}
+			fin = &argv[i][1];
+		}
+
 	}
 
+	char *error_msg = NULL;
 	if (bg == 0) {
 		r = close(in);
 		if (r != 0) {
@@ -51,14 +93,37 @@ exec(int argc, char **argv) {
 		}
 	}
 
-	pid = process_create(argv[1]);
-
-	if (pid >= 0) {
-		if (bg == 0) {
-			process_wait(pid);
+	if (fout != NULL) {
+		fdout = open(fout, FM_WRITE);
+		if (fdout < 0) {
+			error_msg = "Can't open stdout!\n";
 		}
-	} else {
-		printf("Failed!\n");
+	}
+
+	if (ferr != NULL) {
+		fderr = open(ferr, FM_WRITE);
+		if (fderr < 0) {
+			error_msg = "Can't open stdout!\n";
+		}
+	}
+
+	if (fin != NULL) {
+		fdin = open(fin, FM_READ);
+		if (fdin < 0) {
+			error_msg = "Can't open stdout!\n";
+		}
+	}
+
+	if (error_msg == NULL) {
+		pid = process_create2(argv[1], fdout, fderr, fdin);
+
+		if (pid >= 0) {
+			if (bg == 0) {
+				process_wait(pid);
+			}
+		} else {
+			printf("Failed!\n");
+		}
 	}
 
 	if (bg == 0) {
@@ -67,6 +132,15 @@ exec(int argc, char **argv) {
 			exitFailure("can't open console for reading");
 		}
 	}
+
+	if (error_msg != NULL) {
+		printf(error_msg);
+		return 1;
+	}
+
+	if (fdout != VFS_NIL_FILE) close(fdout);
+	if (fderr != VFS_NIL_FILE) close(fderr);
+	if (fdin != VFS_NIL_FILE) close(fdin);
 
 	return 0;
 }
@@ -290,6 +364,7 @@ static int ls(int argc, char **argv) {
 
 	return 0;
 }
+
 static int kill(int argc, char **argv) {
 	if (argc < 2) {
 		printf("usage: %s pid\n", argv[0]);
@@ -300,6 +375,11 @@ static int kill(int argc, char **argv) {
 	}
 
 	return 0;
+}
+
+static int sosh_exit(int argc, char **argv) {
+	printf("Sosh (%d) exiting...\n", my_id());
+	exit(EXIT_SUCCESS);
 }
 
 static int alloc(int argc, char **argv) {
@@ -376,6 +456,7 @@ struct command sosh_commands[] = {
 	{"exec", exec},
 	{"help", help},
 	{"kill", kill},
+	{"exit", sosh_exit},
 	{"ls", ls},
 	{"pid", pid},
 	{"segfault", segfault},

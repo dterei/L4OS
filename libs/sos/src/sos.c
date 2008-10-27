@@ -283,7 +283,8 @@ pid_t process_create(const char *path) {
 /* Create a new process running the executable image "path".
  *
  * Sets the new processes stdout, stderr and stdin to the file descriptors
- * specified.
+ * specified. A value of VFS_NIL_FILE for any of the file descriptors sets
+ * the system default to be used.
  * 
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
  * file).
