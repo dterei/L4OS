@@ -391,6 +391,7 @@ void process_remove(Process *p) {
 
 int process_write_status(process_t *dest, int n) {
 	int count = 0;
+	n = min(n, COPY_BUFSIZ / sizeof(process_t));
 
 	// Everything else has size dynamically updated, so just
 	// write them all out
