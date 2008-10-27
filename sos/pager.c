@@ -765,8 +765,8 @@ static void continueElfload(int vfsRval) {
 				process_set_ip(p, (void*) elf32_getEntryPoint(header));
 
 				process_run(p, YES_TIMESTAMP);
+				assert(er->child == process_get_pid(p));
 				closeNonblocking(er->fd);
-				er->child = process_get_pid(p);
 			}
 
 			er->stage++;
@@ -1337,20 +1337,22 @@ static void virtualPagerHandler(void) {
 
 			case SOS_PROCESS_CREATE:
 				pid = reserve_pid();
+
 				if (pid != NIL_PID) {
 					er = allocElfloadRequest(pager_buffer(tid), process_get_pid(p),
 							L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1), L4_MsgWord(&msg, 2));
+				} else {
+					er = NULL;
 				}
 
-				if (er == NULL || pid == NIL_PID) {
-					dprintf(0, "Out of processes!\n");
+				if (er == NULL) {
+					dprintf(1, "Out of processes!\n");
 					syscall_reply(tid, -1);
 				} else {
 					er->child = pid;
 					queueRequest(REQUEST_ELFLOAD, er);
 				}
-				er = NULL;
-				pid = NIL_PID;
+
 				break;
 
 			case SOS_DEBUG_FLUSH:
