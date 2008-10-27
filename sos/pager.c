@@ -318,7 +318,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	assert(allocLimit >= 0);
 
 	if (allocLimit == 0) {
-		dprintf(1, "*** pagerFrameAlloc: allocLimit reached\n");
+		dprintf(0, "*** pagerFrameAlloc: allocLimit reached\n");
 		frame = 0;
 	} else {
 		frame = frame_alloc(FA_PAGERALLOC);
@@ -1030,7 +1030,7 @@ static void continueSwapout(int vfsRval) {
 				swapfile_close(pr->sf);
 				pr->stage++;
 			} else {
-				int size = min(IO_MAX_BUFFER, pr->size);
+				int size = min(IO_MAX_BUFFER, pr->size - pr->offset);
 				memcpy(pager_buffer(sos_my_tid()),
 						(void*) (pr->addr + pr->offset), size);
 				writeNonblocking(swapfile_get_fd(pr->sf), size);
