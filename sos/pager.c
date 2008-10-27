@@ -318,7 +318,7 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	assert(allocLimit >= 0);
 
 	if (allocLimit == 0) {
-		dprintf(0, "*** pagerFrameAlloc: allocLimit reached\n");
+		dprintf(1, "*** pagerFrameAlloc: allocLimit reached\n");
 		frame = 0;
 	} else {
 		frame = frame_alloc(FA_PAGERALLOC);
