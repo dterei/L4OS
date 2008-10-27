@@ -52,6 +52,7 @@ Process *process_lookup(pid_t key) {
 }
 
 static int processExists(int pid) {
+	assert((pid >= tidOffset) && (pid < MAX_ADDRSPACES));
 	return !((sosProcs[pid] == NULL) || (sosProcs[pid] == PS_PLACEHOLDER));
 }
 
@@ -195,11 +196,10 @@ static pid_t getNextPid(void) {
 	pid_t oldPid = nextPid;
 	int firstIteration = 1;
 
-	//while (sosProcs[nextPid] != NULL) {
-	while (processExists(nextPid)) {
+	while (sosProcs[nextPid] != NULL) {
 		// Detect loop, no more pids!
 		if (!firstIteration && oldPid == nextPid) {
-			dprintf(0, "!!! getNextPid: none left\n");
+			dprintf(1, "!!! getNextPid: none left\n");
 			break;
 		}
 
@@ -213,8 +213,7 @@ static pid_t getNextPid(void) {
 		firstIteration = 0;
 	}
 
-	//if (sosProcs[nextPid] != NULL) {
-	if (processExists(nextPid)) {
+	if (sosProcs[nextPid] != NULL) {
 		return NIL_PID;
 	} else {
 		return nextPid;
@@ -223,8 +222,8 @@ static pid_t getNextPid(void) {
 
 pid_t reserve_pid(void) {
 	pid_t pid = getNextPid();
-	dprintf(3, "reserving pid: %d\n", pid);
 	if (pid != NIL_PID) {
+		assert(!processExists(pid));
 		sosProcs[pid] = PS_PLACEHOLDER;
 	} 
 	return pid;
@@ -235,6 +234,9 @@ void process_prepare(Process *p) {
 	if (p->info.pid == NIL_PID) {
 		p->info.pid = getNextPid();
 	}
+
+	assert(p->info.pid != NIL_PID);
+	assert(!processExists(p->info.pid));
 	sosProcs[p->info.pid] = p;
 
 	if (p->info.ps_type != PS_TYPE_ROOTTHREAD) {
@@ -261,10 +263,11 @@ static L4_ThreadId_t processRunPriority(Process *p, int timestamp, int prio) {
 
 	if (p->info.ps_type == PS_TYPE_ROOTTHREAD) {
 		tid = sos_thread_new_priority(process_get_tid(p), prio, p->ip, p->sp);
-	} else if (pager_is_active()) {
-		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
 	} else {
-		tid = sos_task_new(p->info.pid, L4_Pager(), p->ip, p->sp);
+		assert(pager_is_active());
+		assert(p->info.pid >= 0);
+		assert(p->info.pid < MAX_THREADS);
+		tid = sos_task_new(p->info.pid, pager_get_tid(), p->ip, p->sp);
 	}
 
 	dprintf(1, "*** %s: running process %ld\n", __FUNCTION__, L4_ThreadNo(tid));
@@ -391,8 +394,7 @@ int process_write_status(process_t *dest, int n) {
 
 	// Everything else has size dynamically updated, so just
 	// write them all out
-	for (int i = 0; i < MAX_ADDRSPACES && count < n; i++) {
-		//if (sosProcs[i] != NULL && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
+	for (int i = tidOffset; i < MAX_ADDRSPACES && count < n; i++) {
 		if (processExists(i) && sosProcs[i]->info.ps_type != PS_TYPE_ROOTTHREAD) {
 			sosProcs[i]->info.stime = (time_stamp() - sosProcs[i]->startedAt);
 			*dest = sosProcs[i]->info;
