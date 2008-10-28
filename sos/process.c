@@ -264,6 +264,7 @@ void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 	assert(!processExists(p->info.pid));
 	sosProcs[p->info.pid] = p;
 
+	// Open up stdout, stderr, stdin if not a root thread
 	if (p->info.ps_type != PS_TYPE_ROOTTHREAD) {
 		addBuiltinRegions(p);
 
@@ -400,6 +401,14 @@ void process_wake_all(pid_t pid) {
 void process_close_files(Process *p) {
 	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
 		if (vfs_isopen(process_get_pid(p), fd)) {
+			/* TODO: Cant use blocking send since we aren't calling this currently
+			 * as part of a continuation, so can cause sos and pager to block
+			 * against each other. However this fails obviously under heavy loads.
+			 * So need to change process_delete to be part of the queue.
+			 *
+			 * Also, just send one call to vfs telling it to kill all files. Don't
+			 * do it manually here.
+			 */
 			ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, SOS_IPC_SENDNONBLOCKING, fd,
 					process_get_pid(p));
 			ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, SOS_IPC_SENDNONBLOCKING, fd,
