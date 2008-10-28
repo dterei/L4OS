@@ -197,11 +197,6 @@ static void requestStart(int rval) {
 	}
 }
 
-// Return zero (a useful placeholder for init)
-static int zero(void *data, int rval) {
-	return 0;
-}
-
 
 ///////////////////////////////////////////////////////////////////////
 // (DEMAND) PAGING
@@ -358,39 +353,33 @@ static int pagefaultHandle(pid_t pid, L4_Word_t addr, int rights) {
 	return SUCCESS;
 }
 
-// Finish a pagefault request
-static int pagefaultFinish(void *data, int success) {
-	Pagefault *pf = (Pagefault *) data;
-	if (success) syscall_reply_v(process_get_tid(process_lookup(pf->pid)), 0);
-	free(data);
-	return UNDEFINED;
-}
-
 // Continue a pagefault request - rval is ignored since this is a once-only
 // deal - if the pagefault fails now, need to do whatever the handler says
-static int pagefaultContinue(void *data, int stage, int rval) {
-	dprintf(1, "*** %s: attempt %d\n", __FUNCTION__, stage);
+static int pagefaultInit(void *data, int rval) {
+	dprintf(1, "*** %s\n", __FUNCTION__);
 
 	Pagefault *pf = (Pagefault *) data;
 	int request = pagefaultHandle(pf->pid, pf->addr, pf->rights);
 
 	switch (request) {
-		case FAILURE:
 		case SUCCESS:
-			return request;
+			syscall_reply_v(process_get_tid(process_lookup(pf->pid)), 0);
+		case FAILURE: // deliberate fall-through
+			free(pf);
+			return ABORT;
 
 		case PAGEFAULT_REQUEST_PROCESS_DELETE:
 			assert(!"process delete");
-			return (stage + 1);
+			return UNDEFINED;
 
 		case PAGEFAULT_REQUEST_MMAP_READ:
 			mmapRead(pf->pid, pf->addr);
-			return (stage + 1);
+			return UNDEFINED;
 
 		case PAGEFAULT_REQUEST_SWAPOUT:
 			assert(!"swapout");
 			//swapout();
-			return (stage + 1);
+			return UNDEFINED;
 
 		default:
 			assert("!default");
@@ -412,7 +401,7 @@ static void pagefaultImmediate(pid_t pid, L4_Word_t addr, int rights) {
 		assert(!"process delete");
 	} else {
 		Pagefault *pf = pagefaultAlloc(pid, addr, rights);
-		requestQueue(pf, zero, pagefaultContinue, pagefaultFinish);
+		requestQueue(pf, pagefaultInit, NULL, NULL);
 	}
 }
 
