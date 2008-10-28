@@ -17,8 +17,6 @@
 #include "l4.h"
 #include "libsos.h"
 #include "process.h"
-#include "queue.h"
-
 #include "timer.h"
 
 #define verbose 1
@@ -31,11 +29,20 @@ static L4_ThreadId_t utimer_tid;
 static Process *utimer_p;
 
 typedef struct utimer_entry {
-	LIST_ENTRY(utimer_entry) fChain;
 	L4_Word_t fStart;
 	L4_Word_t fDiff;
 	L4_ThreadId_t fTid;
 } utimer_entry_t;
+
+static int processExpired(void *node, void *key) {
+	utimer_entry_t *t = (utimer_entry_t *) node;
+	L4_Word_t now = *((L4_Word_t *) key);
+	if (t->fDiff <= (now - t->fStart)) {
+		L4_Reply(t->fTid);
+		return 1;	
+	}
+	return 0;
+}
 
 static void
 utimer(void)
@@ -43,27 +50,19 @@ utimer(void)
 	L4_KDB_SetThreadName(sos_my_tid(), "utimer");
 	L4_Accept(L4_UntypedWordsAcceptor);
 
-	LIST_HEAD(, utimer_entry) entryq;
-	LIST_INIT(&entryq);
+	List *entryq;
+	entryq = list_empty();
 
 	for (;;) {
 		L4_Yield();
 
 		// Walk the timer list
-		utimer_entry_t *entry, *next;
 		L4_Word_t now = L4_KDB_GetTick();
-		LIST_FOREACH_SAFE(entry, &entryq, fChain, next) {
-
-			// Has the timer expired?
-			if (entry->fDiff <= (now - entry->fStart)) {
-				LIST_REMOVE(entry, fChain);
-				L4_Reply(entry->fTid);
-			}
-		}
+		list_delete(entryq, processExpired, &now);
 
 		// Wait for a new packet either blocking or non-blocking
 		L4_MsgTag_t tag = L4_Niltag;
-		if (LIST_EMPTY(&entryq))
+		if (list_null(entryq))
 			L4_Set_ReceiveBlock(&tag);
 		else
 			L4_Clear_ReceiveBlock(&tag);
@@ -74,9 +73,9 @@ utimer(void)
 		if (!L4_IpcFailed(tag)) {
 			// Received a time out request queue it
 			L4_Msg_t msg; L4_MsgStore(tag, &msg);	// Get the message
-			entry = (utimer_entry_t *) L4_MsgWord(&msg, 0);
+			utimer_entry_t *entry = (utimer_entry_t *) L4_MsgWord(&msg, 0);
 			entry->fTid  = wait_tid;
-			LIST_INSERT_HEAD(&entryq, entry, fChain);
+			list_shift(entryq, entry);
 		}
 		else if (3 == L4_ErrorCode()) // Receive error # 1
 			continue;	// no-partner - non-blocking
@@ -104,7 +103,7 @@ void
 utimer_sleep(uint32_t microseconds)
 {
 	utimer_entry_t entry =
-	{ {0}, L4_KDB_GetTick(), (uint32_t) US_TO_TICKS(microseconds)};
+	{ L4_KDB_GetTick(), (uint32_t) US_TO_TICKS(microseconds)};
 
 	L4_Msg_t msg; L4_MsgClear(&msg);
 	L4_MsgAppendWord(&msg, (uintptr_t) &entry);

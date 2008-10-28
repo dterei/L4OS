@@ -1,7 +1,6 @@
 /* List of TODO which aren't of high importance or nessecary */
 
 - Move more things to the generic linked list implementation.
-	- Timer driver
 	- Process management (with threads)
 	- irq
 	- Bootinfo
