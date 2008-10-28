@@ -6,10 +6,8 @@ struct Region_t {
 	region_type type;
 	uintptr_t base;
 	unsigned int size;
-	unsigned int filesize;
 	int rights;
 	int mapDirectly;
-	Swapfile *elffile;
 };
 
 Region *region_alloc(region_type type, uintptr_t base,
@@ -21,73 +19,60 @@ Region *region_alloc(region_type type, uintptr_t base,
 	new->size = size;
 	new->rights = rights;
 	new->mapDirectly = dirmap;
-	new->elffile = NULL;
 
 	return new;
 }
 
 void region_free(Region *r) {
-	if (r == NULL) {
-		return;
-	}
-
-	// if region isn't default swap file then free it.
-	if (r->elffile != NULL && !swapfile_is_default(r->elffile)) {
-		swapfile_free(r->elffile);
-	}
-
+	assert(r != NULL);
 	free(r);
 }
 
 region_type region_get_type(Region *r) {
+	assert(r != NULL);
 	return r->type;
 }
 
 uintptr_t region_get_base(Region *r) {
+	assert(r != NULL);
 	return r->base;
 }
 
 unsigned int region_get_size(Region *r) {
+	assert(r != NULL);
 	return r->size;
 }
 
-unsigned int region_get_filesize(Region *r) {
-	return r->filesize;
-}
-
 int region_get_rights(Region *r) {
+	assert(r != NULL);
 	return r->rights;
 }
 
-Swapfile *region_get_elffile(Region *r) {
-	return r->elffile;
-}
-
 int region_map_directly(Region *r) {
+	assert(r != NULL);
 	return r->mapDirectly;
 }
 
 void region_set_rights(Region *r, int rights) {
+	assert(r != NULL);
 	r->rights = rights;
 }
 
 void region_set_size(Region *r, unsigned int size) {
+	assert(r != NULL);
 	r->size = size;
-}
-
-void region_set_filesize(Region *r, unsigned int filesize) {
-	r->filesize = filesize;
-}
-
-void region_set_elffile(Region *r, Swapfile *sf) {
-	r->elffile = sf;
 }
 
 int region_find(void *contents, void *data) {
 	Region *r = (Region*) contents;
+	assert(r != NULL);
 	L4_Word_t addr = (L4_Word_t) data;
 
 	return ((addr >= region_get_base(r)) &&
 			(addr < region_get_base(r) + region_get_size(r)));
+}
+
+int region_find_type(void *contents, void *data) {
+	return (region_get_type((Region *) contents) == (region_type) data);
 }
 

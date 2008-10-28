@@ -56,6 +56,7 @@ L4_Word_t frame_alloc(alloc_codes_t reason) {
 		totalInUse++;
 	} else {
 		// There is no free memory.
+		dprintf(0, "!!! frame_alloc: NO MEMORY\n");
 	}
 
 	dprintf(2, "frames: allocated frame for %d: %p\n", reason, alloc);

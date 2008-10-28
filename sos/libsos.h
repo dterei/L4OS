@@ -38,7 +38,7 @@
 void msgClearWith(L4_Word_t x);
 
 // Print out the entire contents of a page to the console
-void pagedump(char *addr) {
+void pagedump(char *addr);
 
 //
 // dprintf(uint32_t verbose_level, const char *msg, ...)
