@@ -69,7 +69,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 	va_list va;
 	va_start(va, count);
 
-	if (process_get_ipcfilt(p) == PS_IPC_NONBLOCKING) {
+	if (process_get_ipcfilt(p) == PS_IPC_BLOCKING) {
 		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_SEND, 0, NULL, count, va);
 	} else {
 		rval = ipc_send_v(tid, SOS_REPLY, SOS_IPC_REPLY, 0, NULL, count, va);

@@ -362,7 +362,7 @@ void pager_init(void) {
 	// Start the real pager process
 	Process *p = process_run_rootthread("pager", virtualPagerHandler,
 		YES_TIMESTAMP, 254);
-	process_set_ipcfilt(p, PS_IPC_NONBLOCKING);
+	process_set_ipcfilt(p, PS_IPC_BLOCKING);
 
 	// Wait until it has actually started
 	while (!pager_is_active()) L4_Yield();

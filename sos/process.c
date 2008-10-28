@@ -264,6 +264,7 @@ void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 	assert(!processExists(p->info.pid));
 	sosProcs[p->info.pid] = p;
 
+	// Open up stdout, stderr, stdin if not a root thread
 	if (p->info.ps_type != PS_TYPE_ROOTTHREAD) {
 		addBuiltinRegions(p);
 

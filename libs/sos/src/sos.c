@@ -9,9 +9,12 @@
 #include <sos/sos.h>
 #include <sos/ipc.h>
 
+#define YES_REPLY SOS_IPC_CALL
+#define NO_REPLY SOS_IPC_SEND
+
 fildes_t stdout_fd = 0;
 fildes_t stderr_fd = 1;
-fildes_t stdin_fd = 2; // never used, grr
+fildes_t stdin_fd = 2;
 
 char *syscall_show(syscall_t syscall) {
 	switch (syscall) {

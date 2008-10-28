@@ -33,7 +33,7 @@ ipc_create_msg_v(L4_Word_t label, L4_Msg_t *msg, int count, va_list va)
 }
 
 int
-ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		int nRval, L4_Word_t *rvals, int msgLen, va_list va)
 {
 	L4_MsgTag_t tag;
@@ -43,14 +43,12 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 	L4_MsgLoad(&msg);
 
 	int error = 0;
-	switch (reply) {
+	switch (ipc_type) {
 		case SOS_IPC_CALL:
-		case YES_REPLY:
 			tag = L4_Call(tid);
 			break;
 
 		case SOS_IPC_SEND:
-		case NO_REPLY:
 			tag = L4_Send(tid);
 			break;
 
@@ -63,7 +61,7 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 			break;
 
 		default:
-			debug_printf("Invalid ipc send type given! (%d)\n", reply);
+			debug_printf("Invalid ipc send type given! (%d)\n", ipc_type);
 			error = 1;
 	}
 
@@ -81,7 +79,7 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 
 	L4_MsgStore(tag, &msg);
 
-	if (reply == YES_REPLY) {
+	if (ipc_type == SOS_IPC_CALL) {
 		for (int i = 0; i < nRval; i++) {
 			rvals[i] = L4_MsgWord(&msg, i);
 		}
@@ -91,64 +89,64 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
 }
 
 int
-ipc_send(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		int nRval, L4_Word_t *rvals, int msgLen, ...)
 {
 	int r;
 	va_list va;
 
 	va_start(va, msgLen);
-	r = ipc_send_v(tid, label, reply, nRval, rvals, msgLen, va);
+	r = ipc_send_v(tid, label, ipc_type, nRval, rvals, msgLen, va);
 	va_end(va);
 
 	return r;
 }
 
 L4_Word_t
-ipc_send_simple(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_simple(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		int msgLen, ...)
 {
 	L4_Word_t rval;
 	va_list va;
 
 	va_start(va, msgLen);
-	ipc_send_v(tid, label, reply, 1, &rval, msgLen, va);
+	ipc_send_v(tid, label, ipc_type, 1, &rval, msgLen, va);
 	va_end(va);
 
 	return rval;
 }
 
 L4_Word_t
-ipc_send_simple_0(L4_ThreadId_t tid, L4_Word_t label, int reply)
+ipc_send_simple_0(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type)
 {
-	return ipc_send_simple(tid, label, reply, 0);
+	return ipc_send_simple(tid, label, ipc_type, 0);
 }
 
 L4_Word_t
-ipc_send_simple_1(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_simple_1(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1)
 {
-	return ipc_send_simple(tid, label, reply, 1, w1);
+	return ipc_send_simple(tid, label, ipc_type, 1, w1);
 }
 
 L4_Word_t
-ipc_send_simple_2(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_simple_2(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2)
 {
-	return ipc_send_simple(tid, label, reply, 2, w1, w2);
+	return ipc_send_simple(tid, label, ipc_type, 2, w1, w2);
 }
 
 L4_Word_t
-ipc_send_simple_3(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_simple_3(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2, L4_Word_t w3)
 {
-	return ipc_send_simple(tid, label, reply, 3, w1, w2, w3);
+	return ipc_send_simple(tid, label, ipc_type, 3, w1, w2, w3);
 }
 
 L4_Word_t
-ipc_send_simple_4(L4_ThreadId_t tid, L4_Word_t label, int reply,
+ipc_send_simple_4(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2, L4_Word_t w3, L4_Word_t w4)
 {
-	return ipc_send_simple(tid, label, reply, 4, w1, w2, w3, w4);
+	return ipc_send_simple(tid, label, ipc_type, 4, w1, w2, w3, w4);
 }
 

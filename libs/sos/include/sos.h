@@ -119,9 +119,9 @@ typedef enum {
 /* Process IPC accept types (blocking or non blocking) */
 typedef enum {
 	PS_IPC_NONBLOCKING, // Only accept non blocking IPC
-	PS_IPC_ALL, // Accept all IPC
 	PS_IPC_BLOCKING, // Only accept blocking IPC
-	PS_IPC_NONE, // Don't IPC thread at all
+	PS_IPC_ALL, // Accept all IPC
+	PS_IPC_NONE, // Don't accept any IPC at all
 } process_ipcfilt_t;
 
 /* Process info struct */
@@ -141,10 +141,6 @@ char *syscall_show(syscall_t syscall);
 
 /* Get a string representation of a process state */
 char *process_state_show(process_state_t state);
-
-/* For handling syscalls */
-#define YES_REPLY 1
-#define NO_REPLY 0
 
 /* Prepare for a syscall to be made */
 void syscall_prepare(L4_Msg_t *msg);

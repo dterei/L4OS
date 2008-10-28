@@ -10,27 +10,26 @@
 
 /* Provides a nicer interface to IPC that avoids having to deal with
  * L4 specifics like MsgRegisters and loading words. */
-#define NO_REPLY 0 // == IPC_SEND
-#define YES_REPLY 1 // == IPC_CALL
-
-#define SOS_IPC_CALL 2
-#define SOS_IPC_SEND 3
-#define SOS_IPC_REPLY 4
-#define SOS_IPC_SENDNONBLOCKING 5
+typedef enum {
+	SOS_IPC_CALL, // Blocks sending IPC and Waits blocking for a reply.
+	SOS_IPC_SEND, // Blocks sending IPC, doesn't try to receive a reply.
+	SOS_IPC_REPLY, // == SOS_IPC_SENDNONBLOCKING
+	SOS_IPC_SENDNONBLOCKING, // Doesn't block sending IPC, doesn't try to receive a reply.
+} ipc_type_t;
 
 /* Base send function, can take multiple words to send and accepts an
  * array of return values to fill from the reply ipc msg.
  */
-int ipc_send(L4_ThreadId_t tid, L4_Word_t label, int reply, int nRval,
+int ipc_send(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type, int nRval,
 		L4_Word_t *rvals, int msgLen, ...);
 
-int ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, int reply,
+int ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		int nRval, L4_Word_t *rvals, int msgLen, va_list va);
 
 /* Sends an ipc accepting multiple msg words but only returning on return
  * value.
  */
-L4_Word_t ipc_send_simple(L4_ThreadId_t tid, L4_Word_t label, int reply,
+L4_Word_t ipc_send_simple(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		int msgLen, ...);
 
 /* The following bellow are derived from ipc_send_simple but are provided
@@ -44,22 +43,22 @@ L4_Word_t ipc_send_simple(L4_ThreadId_t tid, L4_Word_t label, int reply,
 /* Send an ipc with just a label and no msg words and only returning
  * one return value.
  */
-L4_Word_t ipc_send_simple_0(L4_ThreadId_t tid, L4_Word_t label, int reply);
+L4_Word_t ipc_send_simple_0(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type);
 
 /* Sends an ipc returning one return value and containing one msg word. */
-L4_Word_t ipc_send_simple_1(L4_ThreadId_t tid, L4_Word_t label, int reply,
+L4_Word_t ipc_send_simple_1(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1);
 
 /* Sends an ipc returning one return value and containing two msg word. */
-L4_Word_t ipc_send_simple_2(L4_ThreadId_t tid, L4_Word_t label, int reply,
+L4_Word_t ipc_send_simple_2(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2);
 
 /* Sends an ipc returning one return value and containing three msg word. */
-L4_Word_t ipc_send_simple_3(L4_ThreadId_t tid, L4_Word_t label, int reply,
+L4_Word_t ipc_send_simple_3(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2, L4_Word_t w3);
 
 /* Sends an ipc returning one return value and containing four msg word. */
-L4_Word_t ipc_send_simple_4(L4_ThreadId_t tid, L4_Word_t label, int reply,
+L4_Word_t ipc_send_simple_4(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 		L4_Word_t w1, L4_Word_t w2, L4_Word_t w3, L4_Word_t w4);
 
 #endif
