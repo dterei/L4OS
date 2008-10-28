@@ -365,21 +365,11 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 
 	// check for stdin redirection
 	if (strncmp(path, STDIN_FN, MAX_FILE_NAME) == 0) {
-		fildes_t in = process_get_stdin(p);
-		if (in != VFS_NIL_FILE) {
-			process_ipcfilt_t oldfilt = process_get_ipcfilt(p);
-			process_set_ipcfilt(p, PS_IPC_NONE);
-			VFile *vf = get_vfile(pid, in, 1);
-			process_set_ipcfilt(p, oldfilt);
-
-			if (vf != NULL) {
-				syscall_reply(process_get_tid(p), in);
-				return;
-			} else {
-				// broken so remove and open normal stdin
-				process_set_stdin(p, VFS_NIL_FILE);
-			}
+		char *in = process_get_stdin(p);
+		if (in != NULL) {
+			path = in;
 		}
+		dprintf(0, "Using stdin: %s\n", path);
 	}
 
 	// Check open vnodes (special files are stored here)
@@ -586,7 +576,11 @@ vfs_read_done(pid_t pid, VNode self, fildes_t file, L4_Word_t pos, char *buf,
 
 	// update file
 	vf->fp += nbyte;
-	syscall_reply(PS_GET_TID(pid), status);
+	if (status == 0) {
+		syscall_reply(PS_GET_TID(pid), SOS_VFS_EOF);
+	} else {
+		syscall_reply(PS_GET_TID(pid), status);
+	}
 }
 
 /* Write to a file */

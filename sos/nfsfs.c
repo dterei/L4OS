@@ -515,7 +515,7 @@ nfsfs_close(pid_t pid, VNode self, fildes_t file, fmode_t mode,
 static
 void 
 read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) {
-	dprintf(1, "*** nfsfs_read_cb: %u, %d, %d, %p\n", token, status, bytes_read, data);
+	dprintf(0, "*** nfsfs_read_cb: %u, %d, %d, %p\n", token, status, bytes_read, data);
 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) get_request(token);
 	if (rq == NULL) {
@@ -634,7 +634,7 @@ rq_write_run(NFS_WriteRequest *rq) {
 void
 nfsfs_flush(pid_t pid, VNode self, fildes_t file) {
 	dprintf(1, "*** nfsfs_flush: %d, %p, %d\n", pid, self, file);
-	dprintf(0, "!!! nfsfs_flush: Not implemented for nfs fs\n");
+	dprintf(1, "!!! nfsfs_flush: Not implemented for nfs fs\n");
 	syscall_reply(process_get_tid(process_lookup(pid)), SOS_VFS_NOTIMP);
 }
 

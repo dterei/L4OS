@@ -33,7 +33,7 @@ struct Process_t {
 	// 2nd level, open files
 	VFile         files[PROCESS_MAX_FILES];
 	pid_t         waitingOn;
-	int           fdin; // If set, use stdin redirection
+	char          *fin; // If set, use stdin redirection
 };
 
 // Array of all PCBs
@@ -78,7 +78,7 @@ static Process *processAlloc(void) {
 	p->ip = NULL;
 	vfiles_init(p->fds, p->files);
 	p->waitingOn = WAIT_NOBODY;
-	p->fdin = VFS_NIL_FILE;
+	p->fin = NULL;
 
 	process_set_state(p, PS_STATE_START);
 
@@ -273,20 +273,28 @@ void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 
 		// Set stdin redirection if applicable
 		if (fdin != NULL) {
-			p->fdin = 1;
-			openStdFd(p, fdin, NULL, FM_READ);
+			process_set_stdin(p, fdin);
 		}
 	}
 }
 
 // Get the stdin redirectin setting of a process
-int process_get_stdin(Process *p) {
-	return p->fdin;
+char *process_get_stdin(Process *p) {
+	return p->fin;
 }
 
 // Set the stdin redirectin setting of a process
-int process_set_stdin(Process *p, int in) {
-	return p->fdin = in;
+char *process_set_stdin(Process *p, char *in) {
+	dprintf(0, "process_set_stdin: %p, %s\n", p, in);
+	if (p->fin == NULL) {
+		p->fin = (char *) malloc(sizeof(char) * MAX_FILE_NAME);
+		if (p->fin == NULL) {
+			return NULL;
+		}
+	}
+	strncpy(p->fin, in, MAX_FILE_NAME);
+	dprintf(0, "process_set_stdin: %p, %s\n", p, p->fin);
+	return p->fin;
 }
 
 L4_Word_t process_append_region(Process *p, size_t size, int rights) {

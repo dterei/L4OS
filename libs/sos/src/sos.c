@@ -11,7 +11,7 @@
 
 fildes_t stdout_fd = 0;
 fildes_t stderr_fd = 1;
-fildes_t stdin_fd = (-1); // never used, grr
+fildes_t stdin_fd = 2; // never used, grr
 
 char *syscall_show(syscall_t syscall) {
 	switch (syscall) {
