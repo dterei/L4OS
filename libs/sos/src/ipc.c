@@ -67,7 +67,8 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 
 
 	if (L4_IpcFailed(tag) || error == 1) {
-		debug_printf("### send_ipc to %ld failed: ", L4_ThreadNo(tid));
+		debug_printf("### send_ipc to %ld from %ld failed: ",
+				L4_ThreadNo(tid), sos_my_tid());
 		if (error != 1) {
 			debug_print_L4Err(L4_ErrorCode());
 		} else {

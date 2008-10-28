@@ -150,7 +150,7 @@ exec(int argc, char **argv) {
 				process_wait(pid);
 			}
 		} else {
-			printf("Failed!\n");
+			printf("Can't create new process: %s!\n", argv[1]);
 		}
 	}
 
