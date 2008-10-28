@@ -75,10 +75,10 @@ L4_ThreadId_t process_get_tid(Process *p);
 L4_SpaceId_t process_get_sid(Process *p);
 
 // Get the stdin redirectin setting of a process
-int process_get_stdin(Process *p);
+char *process_get_stdin(Process *p);
 
 // Set the stdin redirectin setting of a process
-int process_set_stdin(Process *p, int in);
+char *process_set_stdin(Process *p, char *in);
 
 // Get the page table of a process
 Pagetable *process_get_pagetable(Process *p);

@@ -14,7 +14,7 @@
 #include <sos/sos.h>
 #include <sos/globals.h>
 
-#define verbose 0
+#define verbose 1
 
 static stat_t sbuf;
 static fildes_t in;
@@ -34,16 +34,74 @@ exec(int argc, char **argv) {
 	pid_t pid;
 	int r;
 	int bg = 0;
+	char *fout = NULL, *ferr = NULL, *fin = NULL;
+	fildes_t fdout = VFS_NIL_FILE, fderr = VFS_NIL_FILE, fdin = VFS_NIL_FILE;
 
-	if (argc < 2 || (argc > 2 && argv[2][0] != '&')) {
+	if (argc < 2) {
 		printf("Usage: exec filename [&]\n");
 		return 1;
 	}
 
-	if ((argc > 2) && (argv[2][0] == '&')) {
-		bg = 1;
+	for (int i = 2; i < argc; i++) {
+		if (strcmp(argv[i], "&") == 0) {
+			bg = 1;
+		// case of '> file' and '1> file'
+		} else if (strcmp(argv[i], ">") == 0 || strcmp(argv[i], "1>") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stdout not specified\n");
+				return 1;
+			}
+			i++;
+			fout = &argv[i][0];
+		// case of '>file'
+		} else if (strncmp(argv[i], ">", 1) == 0) {
+			if (strlen(argv[i]) < 2) {
+				printf("stdout not specified\n");
+				return 1;
+			}
+			fout = &argv[i][1];
+		// case of '1>file'
+		} else if (strncmp(argv[i], "1>", 2) == 0) {
+			if (strlen(argv[i]) < 3) {
+				printf("stdout not specified\n");
+				return 1;
+			}
+			fout = &argv[i][2];
+		// case of '2> file'
+		} else if (strcmp(argv[i], "2>") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stderr not specified\n");
+				return 1;
+			}
+			i++;
+			ferr = &argv[i][0];
+		// case of '2>file'
+		} else if (strncmp(argv[i], "2>", 2) == 0) {
+			if (strlen(argv[i]) < 3) {
+				printf("stderr not specified\n");
+				return 1;
+			}
+			ferr = &argv[i][2];
+		// case of '< file'
+		} else if (strcmp(argv[i], "<") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stdin not specified\n");
+				return 1;
+			}
+			i++;
+			fin = &argv[i][0];
+		// case of '<file'
+		} else if (strncmp(argv[i], "<", 1) == 0) {
+			if (strlen(argv[i]) < 2) {
+				printf("Stdin not specified\n");
+				return 1;
+			}
+			fin = &argv[i][1];
+		}
+
 	}
 
+	char *error_msg = NULL;
 	if (bg == 0) {
 		r = close(in);
 		if (r != 0) {
@@ -51,14 +109,49 @@ exec(int argc, char **argv) {
 		}
 	}
 
-	pid = process_create(argv[1]);
-
-	if (pid >= 0) {
-		if (bg == 0) {
-			process_wait(pid);
+	if (fout != NULL) {
+		if (strcmp(fout, "&2") == 0) {
+			fout = ferr;
 		}
-	} else {
-		printf("Failed!\n");
+	}
+
+	if (ferr != NULL) {
+		if (strcmp(ferr, "&1") == 0) {
+			ferr = fout;
+		}
+	}
+
+	if (fout != NULL) {
+		fdout = open(fout, FM_WRITE);
+		if (fdout < 0) {
+			error_msg = "Can't open stdout!\n";
+		}
+	}
+
+	if (ferr != NULL) {
+		fderr = open(ferr, FM_WRITE);
+		if (fderr < 0) {
+			error_msg = "Can't open stdout!\n";
+		}
+	}
+
+	if (fin != NULL) {
+		fdin = open(fin, FM_READ);
+		if (fdin < 0) {
+			error_msg = "Can't open stdout!\n";
+		}
+	}
+
+	if (error_msg == NULL) {
+		pid = process_create2(argv[1], fdout, fderr, fdin);
+
+		if (pid >= 0) {
+			if (bg == 0) {
+				process_wait(pid);
+			}
+		} else {
+			printf("Failed!\n");
+		}
 	}
 
 	if (bg == 0) {
@@ -67,6 +160,15 @@ exec(int argc, char **argv) {
 			exitFailure("can't open console for reading");
 		}
 	}
+
+	if (error_msg != NULL) {
+		printf(error_msg);
+		return 1;
+	}
+
+	if (fdout != VFS_NIL_FILE) close(fdout);
+	if (fderr != VFS_NIL_FILE) close(fderr);
+	if (fdin != VFS_NIL_FILE) close(fdin);
 
 	return 0;
 }
@@ -147,7 +249,7 @@ static int cat(int argc, char *argv[]) {
 
 	close(fd);
 
-	if (num_read < 0) {
+	if (num_read != SOS_VFS_EOF && num_read < 0) {
 		printf("cat failed: error on read (%d)\n", num_read);
 		printf("Can't read file: %s\n", sos_error_msg(num_read));
 		kprint("error on read\n" );
@@ -161,7 +263,7 @@ static int cat(int argc, char *argv[]) {
 		ret = 1;
 	}
 
-	if (verbose > 0) {
+	if (verbose > 1) {
 		sprintf(buf, "Total Read: %d, Total Write: %d\n", read_tot, write_tot);
 		printf("%s", buf);
 		kprint(buf);
@@ -201,7 +303,7 @@ static int cp(int argc, char **argv) {
 		num_written = write(fd_out, buf, num_read);
 	}
 
-	if (num_read == -1 || num_written == -1) {
+	if ((num_read != SOS_VFS_EOF && num_read < 0) || num_written < 0) {
 		close(fd);
 		close(fd_out);
 		printf("error on cp: %s\n", sos_error_msg(fd));
@@ -210,6 +312,22 @@ static int cp(int argc, char **argv) {
 
 	close(fd);
 	close(fd_out);
+	return 0;
+}
+
+static int rm(int argc, char *argv[]) {
+	if (argc != 2) {
+		printf("usage %s [file]\n", argv[0]);
+		return 1;
+	}
+
+	int r = fremove(argv[1]);
+
+	if (r < 0) {
+		printf("rm(%s) failed: %d\n", argv[1], r);
+		printf("Can't remove file, %s\n", sos_error_msg(r));
+	}
+
 	return 0;
 }
 
@@ -290,6 +408,7 @@ static int ls(int argc, char **argv) {
 
 	return 0;
 }
+
 static int kill(int argc, char **argv) {
 	if (argc < 2) {
 		printf("usage: %s pid\n", argv[0]);
@@ -300,6 +419,11 @@ static int kill(int argc, char **argv) {
 	}
 
 	return 0;
+}
+
+static int sosh_exit(int argc, char **argv) {
+	printf("Sosh (%d) exiting...\n", my_id());
+	exit(EXIT_SUCCESS);
 }
 
 static int alloc(int argc, char **argv) {
@@ -345,6 +469,31 @@ static int segfault(int argc, char **argv) {
 	return *null;
 }
 
+static int sleep(int argc, char *argv[]) {
+	if (argc < 2) {
+		printf("usage: %s msec\n", argv[0]);
+		return 1;
+	}
+
+	int msec = atoi(argv[1]);
+	usleep(msec * 1000);
+	return 0;
+}
+
+static int echo(int argc, char *argv[]) {
+	if (argc < 2) {
+		printf("\n");
+	} else {
+		for (int i = 1; i < argc; i++) {
+			printf("%s ", argv[i]);
+		}
+		if (argv[argc - 1][strlen(argv[argc - 1])] != '\n') {
+			printf("\n");
+		}
+	}
+	return 0;
+}
+
 /*
 static int time(int argc, char **argv) {
 	uint64_t start = 0, finish = 0;
@@ -373,12 +522,16 @@ struct command sosh_commands[] = {
 	{"alloc", alloc},
 	{"cat", cat},
 	{"cp", cp},
+	{"echo", echo},
 	{"exec", exec},
+	{"exit", sosh_exit},
 	{"help", help},
 	{"kill", kill},
 	{"ls", ls},
 	{"pid", pid},
+	{"rm", rm},
 	{"segfault", segfault},
+	{"sleep", sleep},
 	//{"time", time},
 	{"null", NULL}
 };
@@ -396,18 +549,24 @@ int
 main(int sosh_argc, char *sosh_argv[])
 {
 	char buf[IO_MAX_BUFFER];
+	char line[IO_MAX_BUFFER];
 	char *argv[32];
-	int i, r, done, found, new, argc;
-	char *bp, *p = "";
+	int i, r, done, found, new, lineDone, lineMore, argc;
+	char *bp, *p = "", *next;
 
 	in = open("console", FM_READ);
 	if (in < 0) {
+		printf("%s\n", sos_error_msg(in));	
 		exitFailure("can't open console for reading");
 	}
 
 	bp  = buf;
+	next = buf;
 	new = 1;
+	lineDone = 1;
+	lineMore = 0;
 	done = 0;
+	r = 0;
 
 	printf("\n[SOS Starting]\n");
 
@@ -419,24 +578,37 @@ main(int sosh_argc, char *sosh_argv[])
 		found = 0;
 
 		while (!found && !done) {
-			r = read(in, bp, IO_MAX_BUFFER-1+buf-bp);
+			if (lineDone || lineMore) {
+				if (verbose > 1) {
+					printf("reading from stdin\n");
+				}
+				r = read(in, bp, IO_MAX_BUFFER-1+buf-bp);
+				next = bp;
+				lineDone = 0;
+				lineMore = 0;
+			}
+			if (r == SOS_VFS_EOF) {
+				sosh_exit(0, NULL);
+			}
 			if (r<0) {
 				printf("Console read failed!\n");
+				printf("%s\n", sos_error_msg(r));	
 				done=1;
 				break;
 			}
 			bp[r] = '\0';		/* terminate */
 			if (verbose > 1) {
-				printf("sosh: just read %s, %d", bp, r);
+				printf("sosh: just read %s, %d\n", bp, r);
 				if (bp[r-1] != '\n') {
 					printf("\n");
 				}
 			}
-			for (p=bp; p<bp+r; p++) {
+			for (p=next; p<bp+r; p++) {
 				if (*p == '\03') {	/* ^C */
 					printf("^C\n");
 					p   = buf;
 					new = 1;
+					lineDone = 1;
 					break;
 				} else if (*p == '\04') {   /* ^D */
 					p++;
@@ -451,27 +623,45 @@ main(int sosh_argc, char *sosh_argv[])
 					p--;
 					r--;
 				} else if (*p == '\n') {    /* ^J */
-					*p    = 0;
+					*p    = '\0';
 					found = p>buf;
-					p     = buf;
 					new   = 1;
+					strncpy(line, next, p - next + 1);
+					if (p - next + 1 == r) {
+						if (verbose > 1) {
+							printf("line done\n");
+						}
+						lineDone = 1;
+					} else {
+						printf("\n");
+					}
+					next = p + 1;
 					break;
-				} else if (verbose > 0)  {
+				} else if (verbose > 2)  {
 					printf("%c",*p);
 				}
 			}
-			bp = p;
-			if (bp == buf) {
-				break;
+			if (verbose > 2) {
+				printf("Get more line\n");
 			}
+			if (!found && !done) {
+				lineMore = 1;
+			}
+		}
+		if (verbose > 2) {
+			printf("input grabbed\n");
 		}
 
 		if (!found) {
+			if (verbose > 2) {
+				printf("input not found, get new line\n");
+			}
+			lineDone = 1;
 			continue;
 		}
 
 		argc = 0;
-		p = buf;
+		p = line;
 
 		if (verbose > 1) {
 			printf("Command (pre space filter): %s\n", p);
@@ -501,7 +691,7 @@ main(int sosh_argc, char *sosh_argv[])
 			continue;
 		}
 
-		if (verbose > 0) {
+		if (verbose > 1) {
 			printf("Command (post space filter): %s\n", argv[0]);
 		}
 

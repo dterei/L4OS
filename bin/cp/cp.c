@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 		num_written = write(fd_out, buf, num_read);
 	}
 
-	if (num_read == -1 || num_written == -1) {
+	if ((num_read != SOS_VFS_EOF && num_read < 0) || num_written < 0) {
 		close(fd);
 		close(fd_out);
 		printf("error on cp: %s\n", sos_error_msg(fd));

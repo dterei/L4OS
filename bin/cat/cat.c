@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 
 	close(fd);
 
-	if (num_read < 0) {
+	if (num_read != SOS_VFS_EOF && num_read < 0) {
 		printf("cat failed: error on read (%d)\n", num_read);
 		printf("Can't read file: %s\n", sos_error_msg(num_read));
 		kprint("error on read\n" );
