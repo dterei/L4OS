@@ -515,7 +515,7 @@ nfsfs_close(pid_t pid, VNode self, fildes_t file, fmode_t mode,
 static
 void 
 read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) {
-	dprintf(0, "*** nfsfs_read_cb: %u, %d, %d, %p\n", token, status, bytes_read, data);
+	dprintf(1, "*** nfsfs_read_cb: %u, %d, %d, %p\n", token, status, bytes_read, data);
 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) get_request(token);
 	if (rq == NULL) {

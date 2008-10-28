@@ -369,7 +369,7 @@ vfs_open(pid_t pid, const char *path, fmode_t mode,
 		if (in != NULL) {
 			path = in;
 		}
-		dprintf(0, "Using stdin: %s\n", path);
+		dprintf(1, "Using stdin: %s\n", path);
 	}
 
 	// Check open vnodes (special files are stored here)

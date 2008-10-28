@@ -45,7 +45,7 @@ exec(int argc, char **argv) {
 	for (int i = 2; i < argc; i++) {
 		if (strcmp(argv[i], "&") == 0) {
 			bg = 1;
-		// case of '> file'
+		// case of '> file' and '1> file'
 		} else if (strcmp(argv[i], ">") == 0 || strcmp(argv[i], "1>") == 0) {
 			if (!(i + 1 < argc)) {
 				printf("Stdout not specified\n");
@@ -54,18 +54,34 @@ exec(int argc, char **argv) {
 			i++;
 			fout = &argv[i][0];
 		// case of '>file'
-		} else if (strncmp(argv[i], "1>", 2) == 0) {
-			if (strlen(argv[i]) < 3) {
-				printf("stdout not specified\n");
-				return 1;
-			}
-			fout = &argv[i][2];
 		} else if (strncmp(argv[i], ">", 1) == 0) {
 			if (strlen(argv[i]) < 2) {
 				printf("stdout not specified\n");
 				return 1;
 			}
 			fout = &argv[i][1];
+		// case of '1>file'
+		} else if (strncmp(argv[i], "1>", 2) == 0) {
+			if (strlen(argv[i]) < 3) {
+				printf("stdout not specified\n");
+				return 1;
+			}
+			fout = &argv[i][2];
+		// case of '2> file'
+		} else if (strcmp(argv[i], "2>") == 0) {
+			if (!(i + 1 < argc)) {
+				printf("Stderr not specified\n");
+				return 1;
+			}
+			i++;
+			ferr = &argv[i][0];
+		// case of '2>file'
+		} else if (strncmp(argv[i], "2>", 2) == 0) {
+			if (strlen(argv[i]) < 3) {
+				printf("stderr not specified\n");
+				return 1;
+			}
+			ferr = &argv[i][2];
 		// case of '< file'
 		} else if (strcmp(argv[i], "<") == 0) {
 			if (!(i + 1 < argc)) {
@@ -90,6 +106,18 @@ exec(int argc, char **argv) {
 		r = close(in);
 		if (r != 0) {
 			exitFailure("can't close console\n");
+		}
+	}
+
+	if (fout != NULL) {
+		if (strcmp(fout, "&2") == 0) {
+			fout = ferr;
+		}
+	}
+
+	if (ferr != NULL) {
+		if (strcmp(ferr, "&1") == 0) {
+			ferr = fout;
 		}
 	}
 
