@@ -624,7 +624,7 @@ main(int sosh_argc, char *sosh_argv[])
 					r--;
 				} else if (*p == '\n') {    /* ^J */
 					*p    = '\0';
-					found = p>buf;
+					found = 1;
 					new   = 1;
 					strncpy(line, next, p - next + 1);
 					if (p - next + 1 == r) {
