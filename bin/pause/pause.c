@@ -19,14 +19,11 @@ int main(int argc, char *argv[]) {
 	while (!done) {
 		int r = read(in, buf, 1);
 		if (r == SOS_VFS_EOF) {
-			done = 1;
-		} else if (r > 0) {
-			if (buf[0] == '\n') {
-				done = 1;
-			}
-		} else {
-			printf(PAUSE_MSG);
+			break;
+		} else if (r > 0 && buf[0] == '\n') {
+			break;
 		}
+		printf(PAUSE_MSG);
 	}
 
 	return 0;
