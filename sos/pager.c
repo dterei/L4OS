@@ -18,7 +18,7 @@
 #include "swapfile.h"
 #include "syscall.h"
 
-#define verbose 4
+#define verbose 3
 
 ///////////////////////////////////////////////////////////////////////
 // UNFORUNATELY NECESSARY PROTOTYPES
@@ -642,6 +642,13 @@ static MMap *allocMMap(pid_t pid, L4_Word_t memAddr, size_t size, char *path) {
 	return mmap;
 }
 
+// Print an MMap object (for use with list_iterate)
+static void printMMap(void *contents, void *data) {
+	MMap *mmap = (MMap*) contents;
+	printf("MMap: pid=%d memAddr=%p size=%u path=%s\n",
+			mmap->pid, (void *) mmap->memAddr, mmap->size, mmap->path);
+}
+
 // All mmapped objects
 static List *mmapped; // [MMap]
 
@@ -658,14 +665,16 @@ typedef struct IORequest_t {
 	int rights;
 } IORequest;
 
+// The possible stages of IO (note: don't assume they are sequential)
 typedef enum {
-	STAGE_OPEN,
-	STAGE_STAT,
-	STAGE_LSEEK,
-	STAGE_READ,
-	STAGE_CLOSE
+	IO_STAGE_OPEN,
+	IO_STAGE_STAT,
+	IO_STAGE_LSEEK,
+	IO_STAGE_READ,
+	IO_STAGE_CLOSE
 } IOStage;
 
+// Allocate a new IO request object (used by both read and write)
 static IORequest *allocIORequest(
 		L4_Word_t dst, L4_Word_t src, int size, char *path) {
 	IORequest *req = (IORequest *) malloc(sizeof(IORequest));
@@ -685,7 +694,7 @@ static IORequest *allocIORequest(
 // Callbacks for reading, to use with requests
 static int readInit(void *data, int rval) {
 	IORequest *req = (IORequest *) data;
-	dprintf(1, "*** %s: path=\"%s\"\n", req->path);
+	dprintf(1, "*** %s: path=\"%s\"\n", __FUNCTION__, req->path);
 
 	fildes_t currentFd = vfs_getfd(L4_ThreadNo(sos_my_tid()), req->path);
 
@@ -696,14 +705,14 @@ static int readInit(void *data, int rval) {
 		req->fd = currentFd;
 		lseekNonblocking(req->fd, req->src, SEEK_SET);
 
-		return (STAGE_OPEN + 1);
+		return IO_STAGE_LSEEK;
 	} else {
 		dprintf(2, "%s: not open\n", __FUNCTION__);
 
 		strncpy(pager_buffer(sos_my_tid()), req->path, MAX_FILE_NAME);
 		openNonblocking(NULL, FM_READ);
 
-		return STAGE_OPEN;
+		return IO_STAGE_OPEN;
 	}
 }
 
@@ -712,8 +721,8 @@ static int readCont(void *data, int stage, int rval) {
 	IORequest *req = (IORequest *) data;
 
 	switch (stage) {
-		case STAGE_OPEN:
-			dprintf(2, "*** %s: STAGE_OPEN\n", __FUNCTION__);
+		case IO_STAGE_OPEN:
+			dprintf(2, "*** %s: IO_STAGE_OPEN\n", __FUNCTION__);
 
 			if (rval < 0) {
 				return FAILURE;
@@ -721,21 +730,22 @@ static int readCont(void *data, int stage, int rval) {
 				req->fd = rval;
 				req->offset = 0;
 				lseekNonblocking(req->fd, req->src, SEEK_SET);
-				return (stage + 1);
+				return IO_STAGE_LSEEK;
 			}
 
-		case STAGE_LSEEK:
-			dprintf(2, "*** %s: STAGE_LSEEK\n", __FUNCTION__);
+		case IO_STAGE_LSEEK:
+			dprintf(2, "*** %s: IO_STAGE_LSEEK\n", __FUNCTION__);
 			assert(rval == 0);
 
 			readNonblocking(req->fd, min(IO_MAX_BUFFER, req->size));
-			return (stage + 1);
+			return IO_STAGE_READ;
 
-		case STAGE_READ:
-			dprintf(2, "*** %s: STAGE_READ\n", __FUNCTION__);
+		case IO_STAGE_READ:
+			dprintf(2, "*** %s: IO_STAGE_READ\n", __FUNCTION__);
 			assert(rval >= 0);
 
-			memcpy((void *) (req->dst + req->offset), pager_buffer(sos_my_tid()), rval);
+			memcpy((void *) (req->dst + req->offset),
+					pager_buffer(sos_my_tid()), rval);
 			req->offset += rval;
 			assert(req->offset <= req->size);
 
@@ -744,15 +754,16 @@ static int readCont(void *data, int stage, int rval) {
 					return SUCCESS;
 				} else {
 					closeNonblocking(req->fd);
-					return (stage + 1);
+					return IO_STAGE_CLOSE;
 				}
 			} else {
 				assert(rval > 0);
-				readNonblocking(req->fd, min(IO_MAX_BUFFER, req->size - req->offset));
-				return stage;
+				readNonblocking(req->fd,
+						min(IO_MAX_BUFFER, req->size - req->offset));
+				return IO_STAGE_READ;
 			}
 
-		case STAGE_CLOSE:
+		case IO_STAGE_CLOSE:
 			dprintf(2, "*** %s: STAGE_CLOSE\n", __FUNCTION__);
 			return SUCCESS;
 
@@ -868,12 +879,19 @@ static void setAddrMMap(Process *p, L4_Word_t memAddr, L4_Word_t dskAddr,
 // and add to the mmapped list, once per page
 static void setRegionMMap(Region *r, Process *p, L4_Word_t dskAddr,
 		size_t dskSize, char *path) {
-	assert((dskAddr & ~PAGEALIGN) == 0);
 	assert(dskSize <= region_get_size(r));
+	assert((region_get_base(r) & ~PAGEALIGN) == (dskAddr & ~PAGEALIGN));
 
-	for (size_t size = 0; size < region_get_size(r); size += PAGESIZE) {
-		setAddrMMap(p, region_get_base(r) + size, dskAddr + size,
-				min(PAGESIZE, dskSize - size), path);
+	// Regions can be nasty and start in the middle of the page, so make
+	// it look normal by page aligning it, and extending the size accordingly
+	L4_Word_t rBase = region_get_base(r) & PAGEALIGN;
+	L4_Word_t rSize = region_get_size(r) + (region_get_base(r) & ~PAGEALIGN);
+	L4_Word_t dBase = dskAddr & PAGEALIGN;
+	L4_Word_t dSize = dskSize + (dskAddr & ~PAGEALIGN);
+
+	for (size_t size = 0; size < rSize; size += PAGESIZE) {
+		setAddrMMap(p, rBase + size, dBase + size,
+				min(PAGESIZE, dSize - size), path);
 	}
 }
 
@@ -920,8 +938,9 @@ static int elfloadInit(void *data, int rval) {
 				L4_Word_t diskAddr = elf32_getProgramHeaderOffset(req->header, i);
 
 				process_add_region(p, r);
-				setRegionMMap(r, p, diskAddr & PAGEALIGN,
+				setRegionMMap(r, p, diskAddr,
 						elf32_getProgramHeaderFileSize(req->header, i), req->path);
+				if (verbose > 1) list_iterate(mmapped, printMMap, NULL);
 			}
 
 			process_prepare(p); // note: opens stdout/stderr via IPC
@@ -1616,7 +1635,7 @@ static void startRead(void) {
 	assert(req->type == REQUEST_READ);
 	ReadRequest *readReq = (ReadRequest *) req->data;
 
-	dprintf(1, "*** startRead: path=\"%s\"\n", readReq->path);
+	dprintf(1, "*** startRead: path=\"%s\"\n", __FUNCTION__, readReq->path);
 	fildes_t currentFd = vfs_getfd(L4_ThreadNo(sos_my_tid()), readReq->path);
 
 	if (currentFd != VFS_NIL_FILE) {
