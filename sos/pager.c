@@ -335,7 +335,6 @@ static int pagefaultHandle(pid_t pid, L4_Word_t addr, int rights) {
 		if (frame == 0) {
 			assert(*entry == 0);
 			frame = pagerFrameAlloc(p, addr & PAGEALIGN);
-			*entry = frame;
 		}
 
 		if (frames_free() < FRAMES_ALWAYS_FREE) {
@@ -349,6 +348,7 @@ static int pagefaultHandle(pid_t pid, L4_Word_t addr, int rights) {
 
 	// TODO dirty bit optimisation, fun :-)
 
+	*entry = frame | REF_MASK;
 	mapPage(process_get_sid(p), addr & PAGEALIGN, frame, region_get_rights(r));
 	return SUCCESS;
 }
@@ -516,24 +516,31 @@ static int copyCont(void *data, int stage, int rval) {
 	// Relevant data about this operation
 	size_t size = LO_HALF(copyInOutData[process_get_pid(req->p)]);
 	off_t offset = HI_HALF(copyInOutData[process_get_pid(req->p)]);
+	L4_Word_t src = req->src;
+	L4_Word_t dst = req->dst;
 	L4_Word_t *entry;
 
 	// Cache issues if the data is from the user
 	if (req->op == COPY_IN) {
+		assert(pagefaultHandle(process_get_pid(req->p), req->src, FM_READ) == SUCCESS);
 		entry = pagetableLookup(process_get_pagetable(req->p), req->src);
+		src = (*entry & ADDRESS_MASK) + (req->src & ~PAGEALIGN);
 		prepareDataIn(req->p, *entry & ADDRESS_MASK);
+	} else {
+		assert(pagefaultHandle(process_get_pid(req->p), req->dst, FM_WRITE) == SUCCESS);
+		entry = pagetableLookup(process_get_pagetable(req->p), req->dst);
+		dst = (*entry & ADDRESS_MASK) + (req->dst & ~PAGEALIGN);
 	}
 
 	// Copy data up to the next page
 	dprintf(3, "*** %s: copying dst=%p src=%p size=%d offset=%d\n",
-			__FUNCTION__, (void *) req->dst, (void *) req->src, size, offset);
-	offset += memcpyPage((char *) req->dst, (char *) req->src, size - offset);
+			__FUNCTION__, (void *) dst, (void *) src, size, offset);
+	offset += memcpyPage((char *) dst, (char *) src, size - offset);
 	assert(offset <= size);
 	copyInOutData[process_get_pid(req->p)] = size | HI_SHIFT(offset);
 
 	// Cache issues if the data is to the user
 	if (req->op == COPY_OUT) {
-		entry = pagetableLookup(process_get_pagetable(req->p), req->dst);
 		prepareDataOut(req->p, *entry & ADDRESS_MASK);
 	}
 

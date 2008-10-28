@@ -15,7 +15,7 @@
 #include "syscall.h"
 #include "vfs.h"
 
-#define verbose 1
+#define verbose 3
 
 void
 syscall_reply(L4_ThreadId_t tid, L4_Word_t rval)
