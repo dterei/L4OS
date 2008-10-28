@@ -520,15 +520,17 @@ static int copyCont(void *data, int stage, int rval) {
 	L4_Word_t dst = req->dst;
 	L4_Word_t *entry;
 
-	// Cache issues if the data is from the user
+	// Alignment/cache/vm issues depend on whether it's a copy in or out
 	if (req->op == COPY_IN) {
 		assert(pagefaultHandle(process_get_pid(req->p), req->src, FM_READ) == SUCCESS);
 		entry = pagetableLookup(process_get_pagetable(req->p), req->src);
 		src = (*entry & ADDRESS_MASK) + (req->src & ~PAGEALIGN);
+		dst += offset;
 		prepareDataIn(req->p, *entry & ADDRESS_MASK);
 	} else {
 		assert(pagefaultHandle(process_get_pid(req->p), req->dst, FM_WRITE) == SUCCESS);
 		entry = pagetableLookup(process_get_pagetable(req->p), req->dst);
+		src += offset;
 		dst = (*entry & ADDRESS_MASK) + (req->dst & ~PAGEALIGN);
 	}
 
@@ -885,9 +887,7 @@ static void pager_handler(void) {
 		p = process_lookup(L4_ThreadNo(tid));
 		L4_MsgStore(tag, &msg);
 
-		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace) &&
-				(TAG_SYSLAB(tag) != SOS_COPYIN) &&
-				(TAG_SYSLAB(tag) != SOS_COPYOUT)) {
+		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace)) {
 			dprintf(2, "*** %s: tid=%ld tag=%s\n", __FUNCTION__,
 					L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
 		}

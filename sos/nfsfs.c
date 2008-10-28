@@ -329,19 +329,12 @@ remove_request(NFS_BaseRequest *rq) {
 	run_head_request();
 }
 
-/* Convert the NFS mode (xwr) to unix mode (rwx) */
-static
-fmode_t
-mode_nfs2unix(fmode_t mode) {
-	return mode;
-}
-
 /* Copy the relavent entriees from attr to buf */
 static
 void
 cp_stats(stat_t *stat, fattr_t *attr) {
 	stat->st_type  = attr->type;
-	stat->st_fmode = mode_nfs2unix(attr->mode);
+	stat->st_fmode = attr->mode;
 	stat->st_size  = attr->size;
 	// fill in compatible time stamps
 	stat->st_ctime = attr->ctime.seconds * 1000 + attr->ctime.useconds / 1000;

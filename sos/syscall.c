@@ -72,10 +72,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 }
 
 static char *wordAlign(char *s) {
-	unsigned int x = (unsigned int) s;
-	x--;
-	x += sizeof(L4_Word_t) - (x % sizeof(L4_Word_t));
-	return (char*) x;
+	return (char *) round_up((L4_Word_t) s, sizeof(L4_Word_t));
 }
 
 int
