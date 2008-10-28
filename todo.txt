@@ -5,5 +5,5 @@ the process using the most frames and try again.
 - Replace assertions with killing/deleting the offending process.  Since, the
 failed assertions will probably be due to the process doing something stupid.
 
-- Check closing and opening of files at process startup and shutdown is safe.
+- Fix up closing of files.
 

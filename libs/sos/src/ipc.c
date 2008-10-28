@@ -3,15 +3,16 @@
  *
  * See header file (<sos/ipc.h>) for explanation of functions and purpose.
  */
-
 #include <stdarg.h>
 
 #include <l4/ipc.h>
 #include <l4/message.h>
 #include <l4/types.h>
+#include <l4/thread.h>
 
 #include <sos/debug.h>
 #include <sos/ipc.h>
+#include <sos/sos.h>
 
 #define MAGIC_THAT_MAKES_LABELS_WORK 4
 
@@ -67,13 +68,16 @@ ipc_send_v(L4_ThreadId_t tid, L4_Word_t label, ipc_type_t ipc_type,
 
 
 	if (L4_IpcFailed(tag) || error == 1) {
+		L4_ThreadId_t stid;
+		stid.raw = L4_UserDefinedHandle();
 		debug_printf("### send_ipc to %ld from %ld failed: ",
-				L4_ThreadNo(tid), sos_my_tid());
+				L4_ThreadNo(tid), L4_ThreadNo(stid));
 		if (error != 1) {
 			debug_print_L4Err(L4_ErrorCode());
 		} else {
 			debug_printf("bad IPC send type\n");
 		}
+		debug_printf("Error Send Msg: %d = %s\n", label, syscall_show(label));
 		
 		return 1;
 	}
