@@ -83,7 +83,7 @@ static void processDelete(pid_t, pid_t);
 #define FRAMES_ALWAYS_FREE 128
 
 // For debugging
-#define ARTIFICIAL_FRAME_LIMIT ((L4_Word_t) (-1))
+#define ARTIFICIAL_FRAME_LIMIT INT_MAX
 
 // Two level page table structures
 typedef struct Pagetable2_t {
@@ -1514,7 +1514,11 @@ static void pager_handler(void) {
 
 // Initialise important data structures, and the actual pager thread of course
 void pager_init(void) {
+#ifdef NDEBUG
+	printf("WARNING: ASSERTIONS HAVE BEEN TURNED OFF\n");
+#else
 	assert(!pager_is_active());
+#endif
 
 	// Set up lists
 	alloced = list_empty();
