@@ -85,6 +85,9 @@ void process_close_files(Process *p);
 // Kill a thread
 L4_Word_t thread_kill(L4_ThreadId_t tid);
 
+// Are we allowed to kill a process?
+int process_can_kill(Process *p);
+
 // Kill a process if we're allowed to
 int process_kill(Process *p);
 

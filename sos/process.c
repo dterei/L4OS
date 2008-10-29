@@ -351,10 +351,16 @@ L4_Word_t thread_kill(L4_ThreadId_t tid) {
 				L4_nilthread, L4_nilthread, L4_nilthread, 0, NULL);
 }
 
+int process_can_kill(Process *p) {
+	assert(p != NULL);
+	return (process_get_pid(p) > tidOffset
+			&& p->info.ps_type != PS_TYPE_ROOTTHREAD);
+}
+
 int process_kill(Process *p) {
 	assert(p != NULL);
 
-	if (process_get_pid(p) > tidOffset && p->info.ps_type != PS_TYPE_ROOTTHREAD) {
+	if (process_can_kill(p)) {
 		// Isn't a kernel-allocated process, and isn't the pager.  Also we
 		// don't want anybody killing threads (and they shouldn't be visible)
 		please(thread_kill(process_get_tid(p)));

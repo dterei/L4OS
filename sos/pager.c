@@ -5,7 +5,7 @@
  *
  * Design is a list of "requests" (aka events, in a way) handled generically -
  * that is, through the request(Start|Continue|Queue|Dequeue) functions. These
- * are OO style, where each request has a three-stage continuation system:
+ * are OO style, where each request has a three-stage callback system:
  * initialisation, continuation (which will be repeated an arbitrary number of
  * times), and finalisation (which must free resources).  At any point these
  * may be aborted, and the next request immediately started - otherwise each
@@ -64,7 +64,8 @@ static void mmapRead(pid_t pid, L4_Word_t addr);
 // Masks for page table entries
 #define REF_MASK   (1 << 0)
 #define MMAP_MASK  (1 << 1)
-#define DIRTY_MASK (1 << 2)
+#define SWAP_MASK  (1 << 2)
+#define DIRTY_MASK (1 << 3)
 #define ADDRESS_MASK PAGEALIGN
 
 // Kernel always needs frames, so give it some room for things like
@@ -80,6 +81,9 @@ typedef struct Pagetable2_t {
 typedef struct Pagetable1_t {
 	Pagetable2 *pages2[PAGEWORDS];
 } Pagetable1;
+
+// Default file that pages are swapped out to
+static Swapfile *defaultSwapfile;
 
 // Allocate a new page table object
 Pagetable *pagetable_init(void) {
@@ -118,15 +122,22 @@ static L4_Word_t *pagetableLookup(Pagetable *pt, L4_Word_t addr) {
 
 // Free a page table, including all lower levels that have been created
 static void pagetableFree(Pagetable *pt) {
-	(void) pagetableFree;
-
 	Pagetable1 *pt1 = (Pagetable1 *) pt;
 	assert(pt1 != NULL);
 
 	for (int i = 0; i < PAGEWORDS; i++) {
-		if (pt1->pages2[i] != NULL) {
-			// TODO free swappout pages
-			frame_free((L4_Word_t) pt1->pages2[i]);
+		Pagetable2 *pt2 = pt1->pages2[i];
+
+		if (pt2 != NULL) {
+			// Free the swap slots of swapped out pages
+			for (int j = 0; j < PAGEWORDS; j++) {
+				if (pt2->pages[j] & SWAP_MASK) {
+					assert(pt2->pages[j] & MMAP_MASK);
+					swapslot_free(defaultSwapfile, pt2->pages[j] & ADDRESS_MASK);
+				}
+			}
+
+			frame_free((L4_Word_t) pt2);
 		}
 	}
 
@@ -549,13 +560,11 @@ static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
 	return frame;
 }
 
-// Default file that pages are swapped out to
-static Swapfile *defaultSwapfile;
-
 // Set up a page to swap out
 static void swapout(void) {
 	(void) writeInit;
 	(void) writeCont;
+	// set the swap mask
 }
 
 // Handle a page fault, doing the mapping and all that if it can.
@@ -938,7 +947,7 @@ static void mmapRead(pid_t pid, L4_Word_t addr) {
 	assert(*entry & MMAP_MASK);
 	L4_Word_t dskAddr = *entry & ADDRESS_MASK;
 
-	*entry = frame_alloc(FA_MMAP_READ) | REF_MASK;
+	*entry = frame_alloc(FA_MMAP_READ) | REF_MASK; // note: unsets mmap/swap mask
 	memset((void *) (*entry & ADDRESS_MASK), 0x00, PAGESIZE); // for ELF loading
 
 	IORequest *req = allocIORequest(
@@ -1082,6 +1091,19 @@ static int elfloadInit(void *data, int rval) {
 // PROCESS MANAGEMENT
 ///////////////////////////////////////////////////////////////////////
 
+// Request for deleting a process
+typedef struct ProcessDelete_t {
+	pid_t caller;
+	pid_t victim;
+} ProcessDelete;
+
+// Allocate a process delete object
+static ProcessDelete *allocProcessDelete(pid_t caller, pid_t victim) {
+	ProcessDelete *pd = (ProcessDelete *) malloc(sizeof(ProcessDelete));
+	*pd = (ProcessDelete) {caller, victim};
+	return pd;
+}
+
 // Grow the heap region of a process by (at least) the specified amount
 static int heapGrow(uintptr_t *base, unsigned int nb) {
 	dprintf(2, "*** heapGrow(%p, %lx)\n", base, nb);
@@ -1103,6 +1125,98 @@ static int heapGrow(uintptr_t *base, unsigned int nb) {
 
 	// Have the option of returning 0 to signify no more memory.
 	return 1;
+}
+
+// Free allocated frames (for use with list_delete)
+static int framesFree(void *contents, void *data) {
+	Pair *curr = (Pair *) contents; // (pid, word)
+	Process *p = (Process *) data;
+
+	if ((pid_t) curr->fst == process_get_pid(p)) {
+		L4_Word_t *entry = pagetableLookup(process_get_pagetable(p), curr->snd);
+		assert((*entry & MMAP_MASK) == 0);
+		frame_free(*entry & ADDRESS_MASK);
+		free(curr);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+// Free mmapped frames (for use with list_delete)
+static int mmappedFree(void *contents, void *data) {
+	MMap *curr = (MMap *) contents;
+	Process *p = (Process *) data;
+
+	if (curr->pid == process_get_pid(p)) {
+		free(curr);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+// Free allocated regions (for use with list_iterate)
+static void regionsFree(void *contents, void *data) {
+	region_free((Region *) contents);
+}
+
+// There is only the init callback for process deletion since the reason
+// it needs to go in the queue is for the sequential safety.
+static int processDeleteInit(void *data, int rval) {
+	dprintf(2, "*** %s\n", __FUNCTION__);
+	ProcessDelete *pd = (ProcessDelete *) data;
+	Process *p = process_lookup(pd->victim);
+
+	assert(p != NULL);
+	assert(process_get_state(p) == PS_STATE_ZOMBIE);
+	assert(process_can_kill(p));
+
+	// This will terminate the thread, and free L4's resources
+	assert(process_kill(p) == 0);
+
+	// Flush and close open files
+	process_close_files(p);
+	process_remove(p);
+
+	// Free allocated resources
+	Pair args = PAIR(process_get_pid(p), ADDRESS_ALL);
+	list_delete(alloced, framesFree, p);
+	list_delete(mmapped, mmappedFree, &args);
+	pagetableFree(process_get_pagetable(p));
+	list_iterate(process_get_regions(p), regionsFree, NULL);
+	list_destroy(process_get_regions(p));
+
+	// Wake all waiting processes
+	process_wake_all(process_get_pid(p));
+
+	// And done
+	free(p);
+
+	return ABORT;
+}
+
+// Set up a request to delete a process (yes, a REQUEST, for safety)
+static void processDelete(pid_t caller, pid_t victim) {
+	// Check we can kill the process
+	Process *p = process_lookup(victim);
+
+	if ((p == NULL) || !process_can_kill(p)) {
+		syscall_reply(process_get_tid(process_lookup(caller)), (-1));
+	}
+
+	// If victim is already a zombie then we don't need to do anything
+	// (and in fact can reply with a failure to the caller), otherwise
+	// the victim is now a zombie :-)
+	if (process_get_state(p) == PS_STATE_ZOMBIE) {
+		syscall_reply(process_get_tid(process_lookup(caller)), (-1));
+	} else {
+		process_set_state(p, PS_STATE_ZOMBIE);
+	}
+
+	// Now we must wait until it is actually destroyed and freed
+	requestQueue(allocProcessDelete(caller, victim),
+			processDeleteInit, NULL, NULL);
 }
 
 
@@ -1203,19 +1317,9 @@ static void pager_handler(void) {
 							(process_t *) pager_buffer(tid), L4_MsgWord(&msg, 0)));
 				break;
 
-				/*
-
 			case SOS_PROCESS_DELETE:
-				// Dont try to reply to a thread we are deleting
-				// TODO do we really need this condition?  It will get handled...
-				if (L4_ThreadNo(tid) == L4_MsgWord(&msg, 0)) {
-					processDelete(L4_MsgWord(&msg, 0));
-				} else {
-					syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
-				}
+				processDelete(process_get_pid(p), L4_MsgWord(&msg, 0));
 				break;
-
-				*/
 
 			case SOS_PROCESS_CREATE:
 				pid = reserve_pid();
@@ -1236,7 +1340,7 @@ static void pager_handler(void) {
 						(void *) L4_MsgWord(&msg, 0), (void *) L4_MsgWord(&msg, 1),
 						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4),
 						process_get_pid(p));
-				//processDelete(process_get_pid(p));
+				processDelete(NIL_PID, process_get_pid(p));
 				break;
 
 			default:

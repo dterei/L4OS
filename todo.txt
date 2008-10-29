@@ -34,3 +34,9 @@ none left then kill the process using the most memory.
 
 - Clear mmapped things on process delete
 
+- As well as checking for null process, check the process isn't a zombie.
+Might want to use a "processActive" helper function or soemething.  Probably need
+to do this on every "init" callback (at which point should be abandoned)
+
+- Set (and unset) swap mask appropriately (alongside mmap mask!)
+
