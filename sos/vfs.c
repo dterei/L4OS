@@ -805,19 +805,3 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 	}
 }
 
-/* Get the file descriptor of an open file, or VFS_NIL_FILE if it isn't open */
-fildes_t vfs_getfd(pid_t pid, const char *path) {
-	Process *p = process_lookup(pid);
-	assert(p != NULL);
-	VFile *files = process_get_ofiles(p);
-	assert(files != NULL);
-
-	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
-		if ((files[i].vnode != NULL) && (strcmp(files[i].vnode->path, path) == 0)) {
-			return i;
-		}
-	}
-
-	return VFS_NIL_FILE;
-}
-

@@ -401,9 +401,17 @@ void process_wake_all(pid_t pid) {
 void process_close_files(Process *p) {
 	for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
 		if (vfs_isopen(process_get_pid(p), fd)) {
-			ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, SOS_IPC_SEND, fd,
+			/* TODO: Cant use blocking send since we aren't calling this currently
+			 * as part of a continuation, so can cause sos and pager to block
+			 * against each other. However this fails obviously under heavy loads.
+			 * So need to change process_delete to be part of the queue.
+			 *
+			 * Also, just send one call to vfs telling it to kill all files. Don't
+			 * do it manually here.
+			 */
+			ipc_send_simple_2(L4_rootserver, PSOS_FLUSH, SOS_IPC_SENDNONBLOCKING, fd,
 					process_get_pid(p));
-			ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, SOS_IPC_SEND, fd,
+			ipc_send_simple_2(L4_rootserver, PSOS_CLOSE, SOS_IPC_SENDNONBLOCKING, fd,
 					process_get_pid(p));
 		}
 	}
@@ -414,29 +422,29 @@ L4_Word_t thread_kill(L4_ThreadId_t tid) {
 				L4_nilthread, L4_nilthread, L4_nilthread, 0, NULL);
 }
 
-int process_can_kill(Process *p) {
+int process_kill(Process *p) {
 	assert(p != NULL);
-	return (process_get_pid(p) > tidOffset
-			&& p->info.ps_type != PS_TYPE_ROOTTHREAD);
-}
 
-void process_kill(Process *p) {
-	assert(p != NULL);
-	assert(process_can_kill(p));
+	if (process_get_pid(p) > tidOffset && p->info.ps_type != PS_TYPE_ROOTTHREAD) {
+		// Isn't a kernel-allocated process, and isn't the pager.  Also we
+		// don't want anybody killing threads (and they shouldn't be visible)
+		please(thread_kill(process_get_tid(p)));
 
-	// Isn't a kernel-allocated process, and isn't the pager.  Also we
-	// don't want anybody killing threads (and they shouldn't be visible)
-	please(thread_kill(process_get_tid(p)));
-
-	// Delete address space
-	please(L4_SpaceControl(process_get_sid(p), L4_SpaceCtrl_delete,
+		// Delete address space
+		please(L4_SpaceControl(process_get_sid(p), L4_SpaceCtrl_delete,
 				L4_rootclist, L4_Nilpage, 0, NULL));
 
-	// Incidentally, we reuse the caps and cap list so no need to free
+		// Incidentally, we reuse the caps and cap list so no need to free
 
-	// Reuse if it's now the lowest pid
-	if (process_get_pid(p) < nextPid) {
-		nextPid = process_get_pid(p);
+		// Reuse if it's now the lowest pid
+		if (process_get_pid(p) < nextPid) {
+			nextPid = process_get_pid(p);
+		}
+
+		return 0;
+	} else {
+		// Invalid process
+		return (-1);
 	}
 }
 

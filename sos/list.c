@@ -51,17 +51,6 @@ int list_null(List *list) {
 	}
 }
 
-static void *reduceLength(void *contents, void *data) {
-	(*((int *) data))++;
-	return data;
-}
-
-int list_length(List *list) {
-	int length = 0;
-	list_reduce(list, reduceLength, &length);
-	return length;
-}
-
 void *list_peek(List *list) {
 	assert(list != NULL);
 	return list->head->contents;

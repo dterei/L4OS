@@ -75,7 +75,7 @@ int swapfile_is_open(Swapfile *sf) {
 }
 
 int swapfile_is_default(Swapfile *sf) {
-	return (strncmp(sf->data.path, SWAPFILE_FN, MAX_FILE_NAME) == 0);
+	return strncmp(sf->data.path, SWAPFILE_FN, MAX_FILE_NAME) == 0 ? 1 : 0;
 }
 
 void swapfile_close(Swapfile *sf) {
