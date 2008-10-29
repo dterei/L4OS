@@ -36,7 +36,7 @@ char *syscall_show(syscall_t syscall) {
 		case SOS_PROCESS_WAIT: return "SOS_PROCESS_WAIT";
 		case SOS_TIME_STAMP: return "SOS_TIME_STAMP";
 		case SOS_USLEEP: return "SOS_USLEEP";
-		case SOS_MEMUSE: return "SOS_MEMUSE";
+		case SOS_MEMFREE: return "SOS_MEMFREE";
 		case SOS_SWAPUSE: return "SOS_SWAPUSE";
 		case SOS_PHYSUSE: return "SOS_PHYSUSE";
 		case SOS_VPAGER: return "SOS_VPAGER";
@@ -318,8 +318,8 @@ void usleep(int usec) {
 }
 
 /* Get the number of frames in use by user processes */
-int memuse(void) {
-	return ipc_send_simple_0(vpager(), SOS_MEMUSE, YES_REPLY);
+int memfree(void) {
+	return ipc_send_simple_0(vpager(), SOS_MEMFREE, YES_REPLY);
 }
 
 int swapuse(void) {

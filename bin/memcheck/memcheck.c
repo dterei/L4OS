@@ -10,7 +10,7 @@
 int main(int argc, char *argv[]) {
 	char buf[64];
 
-	sprintf(buf, ">>> memcheck: there are %d frames in use\n", memuse());
+	sprintf(buf, ">>> memcheck: there are %d frames free\n", memfree());
 	dprintf(1, buf);
 
 	sprintf(buf, ">>> memcheck: tid of vpager is %ld\n", L4_ThreadNo(vpager()));
@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 	dprintf(1, buf);
 	process_wait(WAIT_FOR);
 
-	sprintf(buf, ">>> memcheck: there are now %d frames in use\n", memuse());
+	sprintf(buf, ">>> memcheck: there are now %d frames free\n", memfree());
 	dprintf(1, buf);
 
 	return 0;

@@ -1295,6 +1295,11 @@ static void pager_handler(void) {
 								L4_MsgWord(&msg, 0) & PAGEALIGN)));
 				break;
 
+			case SOS_MEMFREE:
+				frames_print_allocation();
+				syscall_reply(tid, frames_free());
+				break;
+
 			case SOS_SWAPUSE:
 				syscall_reply(tid, swapfile_get_usage(defaultSwapfile));
 				break;
@@ -2139,145 +2144,6 @@ static void vfsHandler(int vfsRval) {
 		default:
 			assert(!"default");
 	}
-}
-
-static void pager_handler(void) {
-	L4_Accept(L4_AddAcceptor(L4_UntypedWordsAcceptor, L4_NotifyMsgAcceptor));
-
-	pagerTid = sos_my_tid();
-	dprintf(1, "*** %s: tid=%ld\n", __FUNCTION__, L4_ThreadNo(pagerTid));
-
-	L4_Msg_t msg;
-	L4_MsgTag_t tag;
-	L4_ThreadId_t tid = L4_nilthread;
-	Process *p;
-	ElfloadRequest *elfReq;
-	pid_t pid = NIL_PID;
-	L4_Word_t tmp;
-
-	for (;;) {
-		tag = L4_Wait(&tid);
-
-		tid = sos_sid2tid(L4_SenderSpace());
-		p = process_lookup(L4_ThreadNo(tid));
-		L4_MsgStore(tag, &msg);
-
-		if (!L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace) &&
-				(TAG_SYSLAB(tag) != SOS_COPYIN) &&
-				(TAG_SYSLAB(tag) != SOS_COPYOUT)) {
-			dprintf(2, "*** %s: tid=%ld tag=%s\n", __FUNCTION__,
-					L4_ThreadNo(tid), syscall_show(TAG_SYSLAB(tag)));
-		}
-
-		switch (TAG_SYSLAB(tag)) {
-			case L4_PAGEFAULT:
-				pager2(allocPagefault(
-							process_get_pid(p), L4_MsgWord(&msg, 0),
-							L4_Label(tag) & 0x7, pagefaultFinish));
-				break;
-
-			case SOS_COPYIN:
-				copyIn(tid,
-						(void *) L4_MsgWord(&msg, 0),
-						(size_t) L4_MsgWord(&msg, 1),
-						(int) L4_MsgWord(&msg, 2));
-				break;
-
-			case SOS_COPYOUT:
-				copyOut(tid,
-						(void *) L4_MsgWord(&msg, 0),
-						(size_t) L4_MsgWord(&msg, 1),
-						(int) L4_MsgWord(&msg, 2));
-				break;
-
-			case SOS_REPLY:
-				assert(L4_IsSpaceEqual(L4_SenderSpace(), L4_rootspace));
-				continueRequest(L4_MsgWord(&msg, 0));
-				break;
-
-			case SOS_MOREMEM:
-				syscall_reply(tid, heapGrow(
-						(uintptr_t *) pager_buffer(tid), L4_MsgWord(&msg, 0)));
-				break;
-
-			case SOS_MEMLOC:
-				syscall_reply(tid, *(pagetableLookup(process_get_pagetable(p),
-								L4_MsgWord(&msg, 0) & PAGEALIGN)));
-				break;
-
-			case SOS_MEMUSE:
-				syscall_reply(tid, memoryUsage());
-				break;
-
-			case SOS_SWAPUSE:
-				syscall_reply(tid, swapfile_get_usage(defaultSwapfile));
-				break;
-
-			case SOS_PHYSUSE:
-				syscall_reply(tid, frames_allocated());
-				break;
-
-			case SOS_PROCESS_WAIT:
-				tmp = L4_MsgWord(&msg, 0);
-				if (tmp == ((L4_Word_t) -1)) {
-					process_wait_any(process_lookup(L4_ThreadNo(tid)));
-				} else {
-					process_wait_for(process_lookup(tmp),
-							process_lookup(L4_ThreadNo(tid)));
-				}
-				break;
-
-			case SOS_PROCESS_STATUS:
-				syscall_reply(tid, process_write_status(
-							(process_t *) pager_buffer(tid), L4_MsgWord(&msg, 0)));
-				break;
-
-			case SOS_PROCESS_DELETE:
-				// dont try to reply to a thread we are deleting
-				if (L4_ThreadNo(tid) == L4_MsgWord(&msg, 0)) {
-					processDelete(L4_MsgWord(&msg, 0));
-				} else {
-					syscall_reply(tid, processDelete(L4_MsgWord(&msg, 0)));
-				}
-				break;
-
-			case SOS_PROCESS_CREATE:
-				pid = reserve_pid();
-
-				if (pid != NIL_PID) {
-					elfReq = allocElfload(
-							pager_buffer(tid), process_get_pid(p), pid);
-					queueRequest2(allocRequest(REQUEST_ELFLOAD, elfReq));
-				} else {
-					dprintf(0, "Out of processes\n");
-					syscall_reply(tid, -1);
-				}
-
-				break;
-
-			case SOS_DEBUG_FLUSH:
-				pagerFlush();
-				syscall_reply_v(tid, 0);
-				break;
-
-			case L4_EXCEPTION:
-				dprintf(0, "Exception (ip=%p sp=%p id=0x%lx cause=0x%lx pid=%d)\n",
-						(void *) L4_MsgWord(&msg, 0), (void *) L4_MsgWord(&msg, 1),
-						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4),
-						process_get_pid(p));
-				processDelete(process_get_pid(p));
-				break;
-
-			default:
-				dprintf(0, "!!! pager: unhandled syscall tid=%ld id=%d name=%s\n",
-						L4_ThreadNo(tid), TAG_SYSLAB(tag), syscall_show(TAG_SYSLAB(tag)));
-		}
-
-		dprintf(3, "*** pager_handler: finished %s from %d\n",
-				syscall_show(TAG_SYSLAB(tag)), process_get_pid(p));
-	}
-
-	dprintf(0, "!!! pager_handler: loop failed!\n");
 }
 
 #endif

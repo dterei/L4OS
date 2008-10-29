@@ -36,7 +36,7 @@ typedef enum {
         SOS_PROCESS_WAIT,
         SOS_TIME_STAMP,
         SOS_USLEEP,
-        SOS_MEMUSE,
+        SOS_MEMFREE,
         SOS_SWAPUSE,
         SOS_PHYSUSE,
         SOS_VPAGER,
@@ -308,8 +308,8 @@ uint64_t uptime(void);
  */
 void usleep(int msec);
 
-/* Get the number of frames in use by user processes */
-int memuse(void);
+/* Get the number of free frames */
+int memfree(void);
 
 /* Get the number of pages in use by the swap file */
 int swapuse(void);

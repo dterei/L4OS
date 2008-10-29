@@ -14,7 +14,7 @@ typedef enum {
 	FA_PAGETABLE1,
 	FA_PAGETABLE2,
 	FA_ALLOCFRAMES,
-	FA_PAGERALLOC,
+	FA_PAGERALLOC, // must be last
 } alloc_codes_t;
 
 // Initialise the frame table
@@ -37,5 +37,8 @@ int frames_free(void);
 
 // Query how many frames there are in total
 int frames_total(void);
+
+// Print out allocation of frames based on reason
+void frames_print_allocation(void);
 
 #endif // sos/frames.h
