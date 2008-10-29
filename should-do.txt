@@ -1,15 +1,5 @@
-/* List of TODO which aren't of high importance or nessecary */
-
 - Move more things to the generic linked list implementation.
 	- Process management (with threads)
 	- irq
 	- Bootinfo
-
-- Move process deleting back to process.c (from pager.c) if possible.  Still
-want to minimise the interface to the pager though.
-
-- Don't ever close the default swapfile, and only ever open it
-
-- More testing of killing processes at awkward times, for example in the middle
-of swapping in or swapping out.
 

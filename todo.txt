@@ -1,9 +1,13 @@
-- Use a smarter way of limiting frames.  Namely, when they "start running out"
-begin to swap out user frames.  If a kernel frame alloc ever fails, then kill
-the process using the most frames and try again.
+- New pager is dying mysteriously.  Either funny memory corruption, or race
+conditions with VFS.  Or some combination of both.  Or just a plain bug.
+Try running forkbomb2 and leaving it for 5 minutes, or run nuke and leave it
+for 30 seconds.
 
-- Replace assertions with killing/deleting the offending process.  Since, the
-failed assertions will probably be due to the process doing something stupid.
+- Argv/argc passing
 
-- Fix up closing of files.
+- Dirty bit optimisation
+
+- ed
+
+- Shared memory
 
