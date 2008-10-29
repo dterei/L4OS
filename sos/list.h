@@ -18,6 +18,9 @@ int list_destroy(List *list);
 // Test if list is empty
 int list_null(List *list);
 
+// Find the length of a list, O(n)
+int list_length(List *list);
+
 // Peek at the head of the list
 void *list_peek(List *list);
 
