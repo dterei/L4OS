@@ -110,4 +110,7 @@ int vfs_isopen(pid_t pid, fildes_t fd);
 /* Grab a vfile from a fd (internal SOS function) */
 VFile *get_vfile(pid_t pid, fildes_t file, int ipc);
 
+/* Get the file descriptor of an open file, or VFS_NIL_FILE if it isn't open */
+fildes_t vfs_getfd(pid_t pid, const char *path);
+
 #endif // sos/vfs.h

@@ -37,7 +37,7 @@ syscall_reply_v(L4_ThreadId_t tid, int count, ...)
 
 	// ignore if a reponse to the roottask, probably a faked syscall
 	if (L4_IsThreadEqual(tid, L4_rootserver) || L4_IsNilThread(tid)) {
-		dprintf(0, "!!! syscall_reply_v: ignoring reply to roottask\n");
+		dprintf(1, "!!! syscall_reply_v: ignoring reply to roottask\n");
 		return;
 	}
 

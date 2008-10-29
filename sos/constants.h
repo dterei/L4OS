@@ -18,7 +18,7 @@
 #define ADDRESS_ALL ((L4_Word_t) (-1))
 #define ADDRESS_NONE ((L4_Word_t) (-2))
 
-#define VIRTUAL_PAGER_PRIORITY 250
+#define PAGER_PRIORITY 250
 
 #define CONSOLE_BUF_SIZ 128
 #define COPY_BUFSIZ (PAGESIZE * 4)

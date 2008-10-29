@@ -33,28 +33,24 @@ static void *sub(void *contents, void *data) {
 	return (void*) ((int) data) - ((int) contents);
 }
 
-/*
-static void printInt(void *contents, void *data) {
-	int *index = (int*) data;
-
-	printf("%d: %d\n", *index, (int) contents);
-	(*index)++;
-}
-*/
-
 int main(int argc, char *argv[]) {
 	TEST {
 		List *list = list_empty();
+		assert(list_null(list));
+		assert(list_length(list) == 0);
 
 		for (int i = 0; i < RANGE; i++) {
 			list_push(list, (void*) i);
 		}
+
+		assert(list_length(list) == RANGE);
 
 		for (int i = 0; i < RANGE; i++) {
 			assert(list_unshift(list) == (void*) i);
 		}
 
 		assert(list_null(list));
+		assert(list_length(list) == 0);
 		assert(list_destroy(list) == 0);
 	}
 
@@ -152,7 +148,9 @@ int main(int argc, char *argv[]) {
 			list_push(list, (void*) i);
 		}
 
+		assert(list_length(list) == RANGE);
 		list_delete(list, deleteEven, NULL);
+		assert(list_length(list) == RANGE / 2);
 
 		for (int i = 1; i < RANGE; i += 2) {
 			assert(list_unshift(list) == (void*) i);
@@ -169,7 +167,9 @@ int main(int argc, char *argv[]) {
 			list_push(list, (void*) i);
 		}
 
+		assert(list_length(list) == RANGE);
 		list_delete(list, deleteOdd, NULL);
+		assert(list_length(list) == RANGE / 2);
 
 		for (int i = 0; i < RANGE; i += 2) {
 			assert(list_unshift(list) == (void*) i);
