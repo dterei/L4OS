@@ -550,7 +550,7 @@ static void prepareDataOut(Process *p, L4_Word_t vaddr) {
 }
 
 // Allocate a frame and add to the list
-static L4_Word_t pagerFrameAlloc(Process *p, L4_Word_t page) {
+static L4_Word_t userFrameAlloc(Process *p, L4_Word_t page) {
 	L4_Word_t frame = frame_alloc(FA_PAGERALLOC);
 	dprintf(1, "*** %s: allocated frame %p\n", __FUNCTION__, (void *) frame);
 
@@ -608,7 +608,7 @@ static int pagefaultHandle(pid_t pid, L4_Word_t addr, int rights) {
 		// start swapping out some frames
 		if (frame == 0) {
 			assert(*entry == 0);
-			frame = pagerFrameAlloc(p, addr & PAGEALIGN);
+			frame = userFrameAlloc(p, addr & PAGEALIGN);
 		}
 
 		if (frames_free() < FRAMES_ALWAYS_FREE) {
@@ -947,7 +947,8 @@ static void mmapRead(pid_t pid, L4_Word_t addr) {
 	assert(*entry & MMAP_MASK);
 	L4_Word_t dskAddr = *entry & ADDRESS_MASK;
 
-	*entry = frame_alloc(FA_MMAP_READ) | REF_MASK; // note: unsets mmap/swap mask
+	// This will (rightfully) unset the MMAP/SWAP mask too
+	*entry = userFrameAlloc(p, addr & ADDRESS_MASK) | REF_MASK;
 	memset((void *) (*entry & ADDRESS_MASK), 0x00, PAGESIZE); // for ELF loading
 
 	IORequest *req = allocIORequest(
