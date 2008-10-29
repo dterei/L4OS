@@ -54,7 +54,6 @@ static void sosPagerHandler(L4_ThreadId_t tid, L4_Msg_t *msg) {
 	if ((addr & PAGEALIGN) == 0) {
 		printf("SOS Segmentation fault (addr=%p, ip=%p, tid=%ld)\n",
 			(void*) addr, (void*) ip, L4_ThreadNo(tid));
-		L4_KDB_Enter("segfault");
 	}
 
 	addr &= PAGEALIGN;
@@ -140,7 +139,7 @@ syscall_loop(void) {
 
 			case L4_EXCEPTION:
 				dprintf(0, "!!! syscall_loop exception: pid=%d ip=%lx sp=%lx\n",
-						tid.raw & 0x7, L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
+						L4_SpaceNo(L4_SenderSpace()), L4_MsgWord(&msg, 0), L4_MsgWord(&msg, 1));
 				dprintf(0, "    cpsr=%lx exception=%lx cause=%lx\n",
 						L4_MsgWord(&msg, 2), L4_MsgWord(&msg, 3), L4_MsgWord(&msg, 4));
 				send = 0;
