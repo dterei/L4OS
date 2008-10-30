@@ -165,9 +165,12 @@ remove_vnode(VNode vnode) {
 static
 VNode
 find_vnode(const char *path) {
+	assert(path != NULL);
+
 	for (VNode vnode = GlobalVNodes; vnode != NULL; vnode = vnode->next) {
 		dprintf(1, "*** vfs_open: vnode list item: %s, %p, %p, %p***\n",
 				vnode->path, vnode, vnode->next, vnode->previous);
+		assert(vnode->path != NULL);
 		if (strcmp(vnode->path, path) == 0) {
 			dprintf(1, "*** vfs_open: found already open vnode: %s ***\n", vnode->path);
 			return vnode;
@@ -807,14 +810,18 @@ vfs_dup(pid_t pid, fildes_t forig, fildes_t fdup) {
 
 /* Get the file descriptor of an open file, or VFS_NIL_FILE if it isn't open */
 fildes_t vfs_getfd(pid_t pid, const char *path) {
+	assert(path != NULL);
 	Process *p = process_lookup(pid);
 	assert(p != NULL);
 	VFile *files = process_get_ofiles(p);
 	assert(files != NULL);
 
 	for (int i = 0; i < PROCESS_MAX_FILES; i++) {
-		if ((files[i].vnode != NULL) && (strcmp(files[i].vnode->path, path) == 0)) {
-			return i;
+		if ((files[i].vnode != NULL)) {
+			assert(files[i].vnode->path != NULL);
+			if (strcmp(files[i].vnode->path, path) == 0) {
+				return i;
+			}
 		}
 	}
 

@@ -298,31 +298,35 @@ create_request(enum NfsRequestType rt, VNode vn, pid_t pid) {
 static
 void
 remove_request(NFS_BaseRequest *rq) {
-	// remove from lists
-	list_delete_first(NfsRequests, search_requests, &(rq->token));
+	if (rq != NULL) {
+		// remove from lists
+		list_delete_first(NfsRequests, search_requests, &(rq->token));
 
-	// free memory
-	switch (rq->rt) {
-		case RT_LOOKUP:
-			free((NFS_LookupRequest *) rq);
-			break;
-		case RT_READ:
-			free((NFS_ReadRequest *) rq);
-			break;
-		case RT_WRITE:
-			free((NFS_WriteRequest *) rq);
-			break;
-		case RT_STAT:
-			free((NFS_StatRequest *) rq);
-			break;
-		case RT_DIR:
-			free((NFS_DirRequest *) rq);
-			break;
-		case RT_REMOVE:
-			free((NFS_RemoveRequest *) rq);
-			break;
-		default:
-			dprintf(0, "!!! nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
+		// free memory
+		switch (rq->rt) {
+			case RT_LOOKUP:
+				free((NFS_LookupRequest *) rq);
+				break;
+			case RT_READ:
+				free((NFS_ReadRequest *) rq);
+				break;
+			case RT_WRITE:
+				free((NFS_WriteRequest *) rq);
+				break;
+			case RT_STAT:
+				free((NFS_StatRequest *) rq);
+				break;
+			case RT_DIR:
+				free((NFS_DirRequest *) rq);
+				break;
+			case RT_REMOVE:
+				free((NFS_RemoveRequest *) rq);
+				break;
+			default:
+				dprintf(0, "!!! nfsfs.c: remove_request: invalid request type %d\n", rq->rt);
+		}
+	} else {
+		dprintf(0, "!!! %s: warning, remove NULL request\n", __FUNCTION__);
 	}
 
 	// run next request in queue
@@ -520,6 +524,7 @@ read_cb(uintptr_t token, int status, fattr_t *attr, int bytes_read, char *data) 
 	NFS_ReadRequest *rq = (NFS_ReadRequest *) get_request(token);
 	if (rq == NULL) {
 		dprintf(0, "!!! nfsfs: Corrupt read callback, no matching token: %d\n", token);
+		remove_request(NULL);
 		return;
 	}
 

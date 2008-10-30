@@ -270,6 +270,8 @@ void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 
 		// Open stdout
 		openStdFd(p, fdout, STDOUT_FN, FM_WRITE);
+
+		/*
 		// Open stderr, dup if same as stdout
 		if ((fdout == NULL && fderr == NULL) || strcmp(fdout, fderr) == 0) {
 			dprintf(2, "Using dup to open stderr\n");
@@ -278,6 +280,7 @@ void process_prepare2(Process *p, char* fdout, char* fderr, char* fdin) {
 		} else {
 			openStdFd(p, fderr, STDOUT_FN, FM_WRITE);
 		}
+		*/
 
 		// Set stdin redirection if applicable
 		if (fdin != NULL) {

@@ -1098,13 +1098,12 @@ static char *getFdPath(pid_t parent, fildes_t fd) {
 		return NULL;
 	}
 
-	Process *p = process_lookup(parent);
-	assert(p != NULL);
 	VFile *vf = get_vfile(parent, fd, 0);
 
 	if (vf == NULL || vf->vnode == NULL) {
 		return NULL;
 	} else {
+		assert(vf->vnode->path != NULL);
 		char *str = (char*) malloc(MAX_FILE_NAME);
 		strncpy(str, vf->vnode->path, MAX_FILE_NAME);
 		return str;
