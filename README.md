@@ -1,4 +1,4 @@
-# L4OS Operating System
+# SOS -- Simple Operating System (L4OS)
 
 This is a monolithic kernel built on-top of the OK Labs L4
 microkernel. It was done as part of the UNSW Advanced Operaing Sytems
