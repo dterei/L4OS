@@ -1,6 +1,0 @@
-- Pulling the network in the pager - mmap should block forever, while all
-pagefualts should still continue (assumin they don't require the network).
-
-- Killing processes at awkward times, for example in the middle of requests,
-or in the middle of actual NFS requests.  Etc.
-

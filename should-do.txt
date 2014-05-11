@@ -1,5 +1,0 @@
-- Move more things to the generic linked list implementation.
-	- Process management (with threads)
-	- irq
-	- Bootinfo
-
